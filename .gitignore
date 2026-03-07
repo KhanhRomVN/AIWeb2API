@@ -1,0 +1,57 @@
+# Common folders/files to ignore
+dist
+node_modules
+out
+src-tauri/target
+backend.log
+server.log
+njsscan.sarif
+.eslintcache
+*.log*
+*.tsbuildinfo
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+!.env.example
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Project specific ignores
+/backend/database.sqlite
+/backend/database.sqlite-shm
+/backend/database.sqlite-wal
+/backend/dist/
+/backend/dist-bin/
+/backend/node_modules/
+/backend/pids
+/backend/*.pid
+/backend/*.seed
+/backend/*.pid.lock
+/backend/lib-cov
+/backend/coverage
+/backend/.nyc_output
+
+# CLI specific
+/cli/dist/
+/cli/node_modules/
+
+# Temp/Draft files in various locations
+/temp/
+/simple_backend/node_modules/
+
+# Agent specific
+.agent/
+.claude/
+
+# temp

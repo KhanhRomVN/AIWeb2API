@@ -1,0 +1,4 @@
+{
+  "references": [{ "path": "./tsconfig.renderer.json" }, { "path": "./tsconfig.tauri.json" }],
+  "files": []
+}

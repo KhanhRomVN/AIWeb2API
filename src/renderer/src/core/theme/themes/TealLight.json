@@ -1,0 +1,139 @@
+{
+  "name": "TealLight",
+  "monaco": {
+    "base": "vs",
+    "inherit": true,
+    "rules": [
+      {
+        "foreground": "64748b",
+        "token": "comment"
+      },
+      {
+        "foreground": "0d9488",
+        "token": "constant"
+      },
+      {
+        "foreground": "14b8a6",
+        "token": "entity"
+      },
+      {
+        "foreground": "0f766e",
+        "token": "keyword"
+      },
+      {
+        "foreground": "0f766e",
+        "token": "storage"
+      },
+      {
+        "foreground": "059669",
+        "token": "string"
+      },
+      {
+        "foreground": "059669",
+        "token": "meta.verbatim"
+      },
+      {
+        "foreground": "0d9488",
+        "token": "support"
+      },
+      {
+        "foreground": "dc2626",
+        "fontStyle": "italic",
+        "token": "invalid.deprecated"
+      },
+      {
+        "foreground": "0f172a",
+        "background": "ef4444",
+        "token": "invalid.illegal"
+      },
+      {
+        "foreground": "14b8a6",
+        "fontStyle": "italic",
+        "token": "entity.other.inherited-class"
+      },
+      {
+        "foreground": "14b8a6",
+        "token": "string constant.other.placeholder"
+      },
+      {
+        "foreground": "0f172a",
+        "token": "meta.function-call.py"
+      },
+      {
+        "foreground": "64748b",
+        "token": "meta.tag"
+      },
+      {
+        "foreground": "64748b",
+        "token": "meta.tag entity"
+      },
+      {
+        "foreground": "0f172a",
+        "token": "entity.name.section"
+      }
+    ],
+    "colors": {
+      "editor.foreground": "#0f172a",
+      "editor.background": "#f0fdfa",
+      "editor.selectionBackground": "#99f6e4",
+      "editor.lineHighlightBackground": "#ccfbf1",
+      "editorCursor.foreground": "#14b8a6",
+      "editorWhitespace.foreground": "#5eead4"
+    }
+  },
+  "tailwind": {
+    "primary": "20 184 166",
+    "background": "240 253 250",
+    "textPrimary": "15 23 42",
+    "textSecondary": "71 85 105",
+    "border": "153 246 228",
+    "borderHover": "94 234 212",
+    "borderFocus": "45 212 191",
+    "cardBackground": "255 255 255",
+    "inputBackground": "255 255 255",
+    "inputBorderDefault": "153 246 228",
+    "inputBorderHover": "94 234 212",
+    "inputBorderFocus": "20 184 166",
+    "dialogBackground": "255 255 255",
+    "dropdownBackground": "255 255 255",
+    "dropdownItemHover": "204 251 241",
+    "dropdownBorder": "153 246 228",
+    "dropdownBorderHover": "94 234 212",
+    "sidebarBackground": "204 251 241",
+    "sidebarItemHover": "153 246 228",
+    "sidebarItemFocus": "94 234 212",
+    "buttonBg": "20 184 166",
+    "buttonBgHover": "13 148 136",
+    "buttonText": "255 255 255",
+    "buttonBorder": "13 148 136",
+    "buttonBorderHover": "15 118 110",
+    "buttonSecondBg": "153 246 228",
+    "buttonSecondBgHover": "94 234 212",
+    "bookmarkItemBg": "153 246 228",
+    "bookmarkItemText": "15 23 42",
+    "drawerBackground": "255 255 255",
+    "clockGradientFrom": "20 184 166",
+    "clockGradientTo": "13 148 136",
+    "cardShadow": "0 1px 3px 0 rgb(20 184 166 / 0.1)",
+    "dialogShadow": "0 25px 50px -12px rgb(20 184 166 / 0.25)",
+    "dropdownShadow": "0 10px 15px -3px rgb(20 184 166 / 0.1)",
+    "tableHeaderBg": "204 251 241",
+    "tableHoverHeaderBg": "204 251 241",
+    "tableBodyBg": "255 255 255",
+    "tableHoverItemBodyBg": "153 246 228",
+    "tableFocusItemBodyBg": "94 234 212",
+    "tableFooterBg": "204 251 241",
+    "tableHoverFooterBg": "204 251 241",
+    "tableBorder": "153 246 228",
+    "tabBackground": "255 255 255",
+    "tabBorder": "153 246 228",
+    "tabHoverBorder": "94 234 212",
+    "tabItemBackground": "transparent",
+    "tabItemHoverBg": "204 251 241",
+    "tabItemFocusBg": "153 246 228",
+    "tabItemBorder": "transparent",
+    "tabItemHoverBorder": "94 234 212",
+    "tabItemFocusBorder": "20 184 166",
+    "divider": "229 231 235"
+  }
+}
