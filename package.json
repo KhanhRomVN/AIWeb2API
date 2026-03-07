@@ -1,6 +1,6 @@
 {
   "name": "elara",
-  "version": "1.1.12",
+  "version": "1.0.1",
   "publishConfig": {
     "access": "public"
   },
@@ -23,8 +23,11 @@
     "frontend": "vite",
     "dev:server": "cd backend && npm run dev",
     "watch:server": "tail -f server.log",
-    "build:backend": "cd backend && npm install && npm run build:bin",
-    "build": "npm run typecheck && npm run tauri build",
+    "build:frontend": "vite build",
+    "build:linux": "tauri build",
+    "build:windows": "tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin",
+    "collect:dist": "node scripts/collect-artifacts.js",
+    "build": "npm run build:linux && npm run build:windows && npm run collect:dist",
     "preview": "npm run tauri preview",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
