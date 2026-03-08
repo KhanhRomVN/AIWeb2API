@@ -1,23 +1,21 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  MessageSquare,
   BookOpen,
   Boxes,
   FoldHorizontal,
   UnfoldHorizontal,
   Settings,
   Palette,
-  Globe,
   Wifi,
-  Power,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '../../shared/lib/utils';
 import AppIcon from '../../assets/icon.png';
 import { useBackendConnection } from '../contexts/BackendConnectionContext';
-import ThemeDrawer from '../theme/components/ThemeDrawer';
+import { useUI } from '../contexts/UIContext';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -25,18 +23,8 @@ interface SidebarProps {
 }
 
 const Sidebar = memo(({ isCollapsed, setIsCollapsed }: SidebarProps) => {
-  const {
-    isConnected,
-    currentUrl,
-    isServerRunning,
-    serverPort,
-    stopServer,
-    startServer,
-    serverError,
-    backendMode,
-    setBackendMode,
-  } = useBackendConnection();
-  const [isThemeDrawerOpen, setIsThemeDrawerOpen] = React.useState(false);
+  const { isConnected, currentUrl, serverUpdate } = useBackendConnection();
+  const { setIsThemeDrawerOpen } = useUI();
 
   const navItems = [
     {
@@ -57,12 +45,6 @@ const Sidebar = memo(({ isCollapsed, setIsCollapsed }: SidebarProps) => {
       href: '/models',
       icon: Boxes,
       color: '#f59e0b', // Amber
-    },
-    {
-      title: 'Playground',
-      href: '/playground',
-      icon: MessageSquare,
-      color: '#8b5cf6', // Violet
     },
     {
       title: 'Tutorial',
@@ -208,181 +190,106 @@ const Sidebar = memo(({ isCollapsed, setIsCollapsed }: SidebarProps) => {
         ))}
       </nav>
 
-      {/* Settings/Collapse Footer (Only in Collapsed Mode OR Version info in Open Mode) */}
-      <div
-        className={cn(
-          'mt-auto transition-all duration-300',
-          isCollapsed ? 'flex flex-col items-center gap-2' : 'border-t border-border/50s',
+      {/* Footer Container */}
+      <div className="mt-auto flex flex-col shrink-0 overflow-hidden">
+        {/* Version Update Section */}
+        {serverUpdate?.available && (
+          <div
+            className={cn(
+              'w-full transition-all duration-300',
+              isCollapsed ? 'p-2' : 'py-0', // No padding in expanded mode as requested
+            )}
+            title={serverUpdate.message}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-3 text-amber-500 bg-amber-500/10 transition-all',
+                isCollapsed ? 'rounded-lg h-10 justify-center' : 'px-4 py-3',
+              )}
+            >
+              <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-lg bg-amber-500/20">
+                <AlertCircle className={cn('h-4 w-4 shrink-0', isCollapsed && 'h-5 w-5')} />
+              </div>
+              {!isCollapsed && (
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-80">
+                    Update Available
+                  </span>
+                  <span className="text-xs font-bold truncate">v{serverUpdate.latest}</span>
+                </div>
+              )}
+            </div>
+          </div>
         )}
-      >
-        {isCollapsed ? (
-          <div className="flex flex-col items-center gap-2 w-full">
-            <button
-              onClick={() => setIsThemeDrawerOpen(true)}
-              className="w-10 h-10 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-            >
-              <Palette className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setIsCollapsed(false)}
-              className="w-10 h-10 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-all"
-            >
-              <UnfoldHorizontal className="w-5 h-5" />
-            </button>
 
-            <div className="flex flex-col items-center py-2 w-full">
-              {backendMode === 'remote' ? (
+        {/* Separator Border */}
+        <div className="border-t border-border/50" />
+
+        {/* Status & Actions Section */}
+        <div
+          className={cn(
+            'transition-all duration-300',
+            isCollapsed ? 'flex flex-col items-center gap-3 p-2 pb-4' : 'p-4',
+          )}
+        >
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-2 w-full">
+              <button
+                onClick={() => setIsThemeDrawerOpen(true)}
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+              >
+                <Palette className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setIsCollapsed(false)}
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-all"
+              >
+                <UnfoldHorizontal className="w-5 h-5" />
+              </button>
+
+              <div
+                className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center transition-all group relative mt-2',
+                  isConnected ? 'text-emerald-500 bg-emerald-500/10' : 'text-red-500 bg-red-500/10',
+                )}
+              >
+                <Wifi className="w-4 h-4" />
+                <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 px-2 py-1 bg-popover border border-border text-popover-foreground text-[10px] rounded shadow-md opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50">
+                  {isConnected ? 'Connected' : 'Disconnected'}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3 transition-all">
                 <div
                   className={cn(
-                    'p-2 rounded-lg transition-all group relative',
-                    isConnected ? 'text-emerald-500' : 'text-red-500',
+                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+                    isConnected
+                      ? 'bg-emerald-500/10 text-emerald-500'
+                      : 'bg-red-500/10 text-red-500',
                   )}
                 >
                   <Wifi className="w-4 h-4" />
-                  <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 px-2 py-1 bg-popover border border-border text-popover-foreground text-[10px] rounded shadow-md opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50">
-                    {isConnected ? 'API Connected' : 'API Disconnected'}
-                  </div>
                 </div>
-              ) : (
-                <button
-                  onClick={() => (isServerRunning ? stopServer() : startServer())}
-                  className={cn(
-                    'p-2 rounded-lg transition-all group relative',
-                    isServerRunning && isConnected
-                      ? 'text-emerald-500'
-                      : serverError
-                        ? 'text-red-500'
-                        : 'text-muted-foreground hover:bg-muted/10',
-                  )}
-                  title={isServerRunning ? 'Stop Server' : 'Start Server'}
-                >
-                  <Power className="w-4 h-4" />
-                  <div className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 px-2 py-1 bg-popover border border-border text-popover-foreground text-[10px] rounded shadow-md opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50">
-                    {isServerRunning ? 'Local Server Running' : 'Local Server Stopped'}
-                  </div>
-                </button>
-              )}
-            </div>
-
-            {/* Compact Toggle Mode at bottom */}
-            <div className="flex flex-col gap-0.5 mt-1 w-full px-2">
-              <button
-                onClick={() => setBackendMode('local')}
-                className={cn(
-                  'w-full h-9 flex items-center justify-center rounded-lg transition-all hover:bg-emerald-500/10 hover:text-emerald-500',
-                  backendMode === 'local' ? 'text-emerald-500 font-black' : 'text-muted-foreground',
-                )}
-                title="Local Mode"
-              >
-                <Boxes className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setBackendMode('remote')}
-                className={cn(
-                  'w-full h-9 flex items-center justify-center rounded-lg transition-all hover:bg-blue-500/10 hover:text-blue-500',
-                  backendMode === 'remote' ? 'text-blue-500 font-black' : 'text-muted-foreground',
-                )}
-                title="Remote Mode"
-              >
-                <Globe className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {/* Status Section for Expanded Mode */}
-            <div className="flex flex-col gap-2">
-              {backendMode === 'local' ? (
-                <div className="flex items-center gap-3 p-2">
-                  <button
-                    onClick={() => (isServerRunning ? stopServer() : startServer())}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                    REMOTE API
+                  </span>
+                  <span
                     className={cn(
-                      'w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0',
-                      isServerRunning && isConnected
-                        ? 'bg-emerald-500/10 text-emerald-500'
-                        : serverError
-                          ? 'bg-red-500/10 text-red-500'
-                          : 'text-muted-foreground hover:bg-muted/10',
-                    )}
-                    title={isServerRunning ? 'Stop Server' : 'Start Server'}
-                  >
-                    <Power className="w-4 h-4" />
-                  </button>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                      LOCAL SERVER
-                    </span>
-                    <span className="text-xs font-medium text-foreground truncate">
-                      Port: {serverPort}
-                    </span>
-                    {serverError && (
-                      <span className="text-[10px] text-red-500 font-medium animate-pulse truncate">
-                        {serverError}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 p-2 transition-all">
-                  <div
-                    className={cn(
-                      'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
-                      isConnected
-                        ? 'bg-emerald-500/10 text-emerald-500'
-                        : 'bg-red-500/10 text-red-500',
+                      'text-xs font-medium truncate',
+                      isConnected ? 'text-foreground' : 'text-red-500/80',
                     )}
                   >
-                    <Wifi className="w-4 h-4" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                      REMOTE API
-                    </span>
-                    <span
-                      className={cn(
-                        'text-xs font-medium truncate',
-                        isConnected ? 'text-foreground' : 'text-red-500/80',
-                      )}
-                    >
-                      {currentUrl}
-                    </span>
-                  </div>
+                    {currentUrl}
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
-
-            {/* Toggle Mode (Bottom) */}
-            <div className="flex w-ful border-t">
-              <button
-                onClick={() => setBackendMode('local')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-2.5 text-[11px] transition-all tracking-tight hover:bg-emerald-500/10 hover:text-emerald-500',
-                  backendMode === 'local'
-                    ? 'text-emerald-500 font-black bg-emerald-500/10 shadow-sm'
-                    : 'font-bold text-muted-foreground',
-                )}
-              >
-                <Boxes className="w-3.5 h-3.5" />
-                LOCAL
-              </button>
-              <button
-                onClick={() => setBackendMode('remote')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-2.5 text-[11px] transition-all tracking-tight hover:bg-blue-500/10 hover:text-blue-500',
-                  backendMode === 'remote'
-                    ? 'text-blue-500 font-black bg-blue-500/10 shadow-sm'
-                    : 'font-bold text-muted-foreground',
-                )}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                REMOTE
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      <ThemeDrawer isOpen={isThemeDrawerOpen} onClose={() => setIsThemeDrawerOpen(false)} />
     </div>
   );
 });

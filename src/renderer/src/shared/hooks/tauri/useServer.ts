@@ -12,26 +12,18 @@ export const useServer = () => {
     } catch (e) {
       // ignore
     }
-    console.log(`[useServer] Starting server on port ${port}...`);
-    try {
-      const res = await invoke<string>('server_start', { port: parseInt(port) });
-      console.log('[useServer] Server start command executed successfully:', res);
-      return { success: true, port: parseInt(port), message: res };
-    } catch (e) {
-      console.error('[useServer] Failed to start server via Tauri invoke:', e);
-      return {
-        success: false,
-        port: parseInt(port),
-        message:
-          typeof e === 'string'
-            ? e
-            : 'Failed to start elara-server. Ensure it is installed globally via npm.',
-      };
-    }
+    return {
+      success: false,
+      port: parseInt(port),
+      message: 'Elara-server is not running. Please start it manually via "elara-server".',
+    };
   };
 
-  const stopServer = () => invoke('server_stop');
-  const getStatus = () => invoke('server_get_status');
+  const stopServer = async () => {
+    return { success: false, message: 'Server management is disabled in remote-only mode.' };
+  };
+
+  const getStatus = () => Promise.resolve(false);
   const getPlatformInfo = () => invoke('get_platform_info');
   const saveEnvToSystem = (envVars: Record<string, string>) =>
     invoke('save_env_to_system', { envVars });
@@ -50,44 +42,6 @@ export const useServer = () => {
     callBackend('/v1/server/claudecode-sync', 'POST', options);
   const executeClaudeCodeRestore = () => callBackend('/v1/server/claudecode-restore', 'POST');
 
-  const checkServerVersion = async () => {
-    try {
-      // 1. Get installed version
-      const listCmd = 'npm list -g @khanhromvn/elara-server --json';
-      const listOutput = await invoke<string>('shell_execute', { command: listCmd });
-      let installedVersion = '0.0.0';
-      try {
-        const listData = JSON.parse(listOutput);
-        installedVersion =
-          listData.dependencies?.['@khanhromvn/elara-server']?.version ||
-          listData.dependencies?.['elara-server']?.version ||
-          '0.0.0';
-      } catch (e) {
-        // Fallback to regex if JSON parse fails
-        const match = listOutput.match(/@(?:khanhromvn\/)?elara-server@([\d\.]+)/);
-        if (match) installedVersion = match[1];
-      }
-
-      // 2. Get latest version
-      const viewCmd = 'npm view @khanhromvn/elara-server version';
-      const latestVersion = (await invoke<string>('shell_execute', { command: viewCmd })).trim();
-
-      return {
-        isMatch: installedVersion === latestVersion,
-        installedVersion,
-        latestVersion,
-      };
-    } catch (error) {
-      console.error('Failed to check server version:', error);
-      return {
-        isMatch: true, // Fail-safe: don't block if we can't check
-        installedVersion: 'unknown',
-        latestVersion: 'unknown',
-        error: String(error),
-      };
-    }
-  };
-
   return {
     startServer,
     stopServer,
@@ -102,6 +56,5 @@ export const useServer = () => {
     getClaudeCodeSyncStatus,
     executeClaudeCodeSync,
     executeClaudeCodeRestore,
-    checkServerVersion,
   };
 };

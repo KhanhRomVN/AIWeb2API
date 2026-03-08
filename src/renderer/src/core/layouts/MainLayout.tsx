@@ -1,11 +1,16 @@
 import { Outlet } from 'react-router-dom';
-import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import { cn } from '../../shared/lib/utils';
 import { useUI } from '../contexts/UIContext';
+import ThemeDrawer from '../theme/components/ThemeDrawer';
 
 const MainLayout = () => {
-  const { isMainSidebarCollapsed, setIsMainSidebarCollapsed } = useUI();
+  const {
+    isMainSidebarCollapsed,
+    setIsMainSidebarCollapsed,
+    isThemeDrawerOpen,
+    setIsThemeDrawerOpen,
+  } = useUI();
 
   return (
     <div className="flex min-h-screen bg-sidebar-background">
@@ -20,6 +25,8 @@ const MainLayout = () => {
           <Outlet />
         </div>
       </div>
+
+      <ThemeDrawer isOpen={isThemeDrawerOpen} onClose={() => setIsThemeDrawerOpen(false)} />
     </div>
   );
 };

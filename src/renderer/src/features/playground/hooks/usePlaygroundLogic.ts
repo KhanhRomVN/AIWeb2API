@@ -4,9 +4,8 @@ import { Message, Account, PendingAttachment, ConversationTab } from '../types';
 import { getCachedModels, fetchAndCacheModels } from '../../../utils/model-cache';
 import { getApiBaseUrl } from '../../../utils/apiUrl';
 import { fetchProviders } from '../../../config/providers';
-import { useServer } from '../../../shared/hooks/tauri/useServer';
 import { useWorkspaces } from '../../../shared/hooks/tauri/useWorkspaces';
-import { callBackend, BACKEND_PORT } from '../../../shared/utils/backend';
+import { callBackend } from '../../../shared/utils/backend';
 
 export const usePlaygroundLogic = ({
   activeTab,
@@ -17,7 +16,6 @@ export const usePlaygroundLogic = ({
   activeTabId?: string;
   onUpdateTab?: (id: string, data: Partial<ConversationTab>) => void;
 }) => {
-  const { startServer } = useServer();
   const { listWorkspaces, unlinkWorkspace } = useWorkspaces();
 
   // Load state from localStorage on mount
@@ -180,9 +178,6 @@ export const usePlaygroundLogic = ({
       );
 
       try {
-        await startServer();
-        const port = BACKEND_PORT;
-
         // Process uploads in parallel
         itemsToUpload.forEach(async (att) => {
           try {
@@ -348,8 +343,7 @@ export const usePlaygroundLogic = ({
   useEffect(() => {
     const loadProviders = async () => {
       try {
-        await startServer();
-        const allProviders = await fetchProviders(BACKEND_PORT);
+        const allProviders = await fetchProviders(8888);
         setProvidersList(allProviders);
       } catch (error) {
         console.error('Failed to fetch providers:', error);
@@ -368,8 +362,6 @@ export const usePlaygroundLogic = ({
       }
 
       try {
-        await startServer();
-
         // Find the correct provider ID from the list
         // selectedProvider might hold name or ID
         const providerConfig = providersList.find(
@@ -408,8 +400,6 @@ export const usePlaygroundLogic = ({
       if (!selectedProvider) return;
 
       try {
-        await startServer();
-
         // Find the correct provider ID from the list
         // selectedProvider currently holds the provider NAME (e.g. "QwQ")
         // but we need the ID (e.g. "qwq") for the API call
@@ -447,7 +437,7 @@ export const usePlaygroundLogic = ({
         }
 
         // Only fetch if no cache
-        const models = await fetchAndCacheModels(providerId, '', BACKEND_PORT);
+        const models = await fetchAndCacheModels(providerId, '', 8888);
         if (models.length > 0) {
           updateModels(models);
         }
@@ -532,10 +522,6 @@ export const usePlaygroundLogic = ({
     setLoading(true);
 
     try {
-      const serverStatus = await startServer();
-      if (!serverStatus.success) throw new Error('Server not running');
-      const port = BACKEND_PORT;
-
       const account = accounts.find((acc) => acc.id === selectedAccount);
 
       // Check if provider requires account

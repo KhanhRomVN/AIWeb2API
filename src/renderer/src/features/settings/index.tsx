@@ -5,41 +5,30 @@ import { cn } from '../../shared/lib/utils';
 import { useBackendConnection } from '../../core/contexts/BackendConnectionContext';
 
 const SettingsPage = () => {
-  const { isConnected, isServerRunning, stopServer, backendMode } = useBackendConnection();
+  const { isConnected, currentUrl } = useBackendConnection();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [initialConfig, setInitialConfig] = useState({
-    serverPort: '',
-    apiUrl: '',
-  });
-  const [generalConfig, setGeneralConfig] = useState({
-    serverPort: localStorage.getItem('ELARA_SERVER_PORT') || '8888',
-    apiUrl: localStorage.getItem('ELARA_API_URL') || '',
-  });
+  const [initialUrl, setInitialUrl] = useState('');
+  const [apiUrl, setApiUrl] = useState(localStorage.getItem('ELARA_API_URL') || '');
 
   useEffect(() => {
-    const port = localStorage.getItem('ELARA_SERVER_PORT') || '8888';
     const url = localStorage.getItem('ELARA_API_URL') || '';
-    setInitialConfig({ serverPort: port, apiUrl: url });
+    setInitialUrl(url);
     setLoading(false);
   }, []);
 
-  const hasChanges =
-    generalConfig.serverPort !== initialConfig.serverPort ||
-    generalConfig.apiUrl !== initialConfig.apiUrl;
+  const hasChanges = apiUrl !== initialUrl;
 
   const saveGeneralConfig = async () => {
     try {
       setSaving(true);
-      // Save General Config to localStorage
-      localStorage.setItem('ELARA_SERVER_PORT', generalConfig.serverPort);
-      if (generalConfig.apiUrl.trim()) {
-        localStorage.setItem('ELARA_API_URL', generalConfig.apiUrl.trim());
+      if (apiUrl.trim()) {
+        localStorage.setItem('ELARA_API_URL', apiUrl.trim());
       } else {
         localStorage.removeItem('ELARA_API_URL');
       }
 
-      setInitialConfig({ ...generalConfig });
+      setInitialUrl(apiUrl);
       window.dispatchEvent(new Event('storage')); // Notify other components
       window.dispatchEvent(new Event('elara-api-url-changed'));
       toast.success('Settings updated successfully');
@@ -124,68 +113,10 @@ const SettingsPage = () => {
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-8">
-          <div className="w-full max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="flex flex-row items-start gap-12">
-              {/* Server Port Column */}
-              <div
-                className={cn(
-                  'flex-1 space-y-4 transition-all duration-300',
-                  backendMode === 'remote'
-                    ? 'opacity-40 grayscale pointer-events-none'
-                    : 'opacity-100',
-                )}
-              >
-                <div className="flex items-center gap-2 ml-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                    Local Server Configuration <span className="text-destructive">*</span>
-                  </label>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <div className="relative flex-1">
-                    <input
-                      type="number"
-                      disabled={backendMode === 'remote'}
-                      value={generalConfig.serverPort}
-                      onChange={(e) =>
-                        setGeneralConfig({ ...generalConfig, serverPort: e.target.value })
-                      }
-                      placeholder="8888"
-                      className={cn(
-                        'w-full px-4 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-sm',
-                        backendMode === 'remote' && 'bg-muted/30 border-transparent',
-                      )}
-                    />
-                  </div>
-                  {backendMode === 'local' && isServerRunning && (
-                    <button
-                      onClick={() => stopServer()}
-                      className="p-2.5 h-[42px] w-[42px] rounded-lg border border-destructive/20 bg-destructive/5 text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm shrink-0 group flex items-center justify-center"
-                      title="Shutdown Elara Server"
-                    >
-                      <PowerOff className="w-4 h-4 transition-transform group-hover:scale-110" />
-                    </button>
-                  )}
-                </div>
-                {backendMode === 'local' && isServerRunning && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in duration-300">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <p className="text-[10px] text-emerald-600 font-bold uppercase">
-                      Server is running on port {generalConfig.serverPort}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Backend URL Column */}
-              <div
-                className={cn(
-                  'flex-1 space-y-4 transition-all duration-300',
-                  backendMode === 'local'
-                    ? 'opacity-40 grayscale pointer-events-none'
-                    : 'opacity-100',
-                )}
-              >
+          <div className="w-full max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="space-y-6">
+              {/* Backend URL Section */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-2 ml-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
@@ -195,25 +126,21 @@ const SettingsPage = () => {
                 <div className="relative">
                   <input
                     type="text"
-                    disabled={backendMode === 'local'}
-                    value={generalConfig.apiUrl}
-                    onChange={(e) => setGeneralConfig({ ...generalConfig, apiUrl: e.target.value })}
+                    value={apiUrl}
+                    onChange={(e) => setApiUrl(e.target.value)}
                     placeholder="e.g. http://127.0.0.1:8888"
-                    className={cn(
-                      'w-full px-11 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono transition-all shadow-sm',
-                      backendMode === 'local' && 'bg-muted/30 border-transparent',
-                    )}
+                    className="w-full px-11 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono transition-all shadow-sm"
                   />
                   <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 </div>
-                {backendMode === 'remote' && isConnected && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/5 border border-blue-500/10 animate-in fade-in duration-300">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                    <p className="text-[10px] text-blue-600 font-bold uppercase text-nowrap">
-                      Connected to custom backend
-                    </p>
-                  </div>
-                )}
+                <p className="text-[10px] text-muted-foreground px-1">
+                  Current connection:{' '}
+                  <span
+                    className={cn('font-bold', isConnected ? 'text-emerald-500' : 'text-red-500')}
+                  >
+                    {currentUrl}
+                  </span>
+                </p>
               </div>
             </div>
           </div>

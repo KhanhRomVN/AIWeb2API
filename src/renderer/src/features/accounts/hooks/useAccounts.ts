@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Account, Pagination, FlatAccount } from '../types';
 import { StatsPeriod } from '../../models/types';
-import { useServer } from '../../../shared/hooks/tauri/useServer';
 import { callBackend } from '../../../shared/utils/backend';
 import { toast } from 'sonner';
 
 const PROVIDER_CACHE_KEY = 'elara_provider_configs_cache';
 
 export const useAccounts = () => {
-  const { startServer } = useServer();
   const [accounts, setAccounts] = useState<FlatAccount[]>([]);
   const [providerConfigs, setProviderConfigs] = useState<any[]>(() => {
     try {
@@ -18,7 +16,6 @@ export const useAccounts = () => {
       return [];
     }
   });
-  const [serverPort, setServerPort] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Filter & Pagination states
@@ -53,23 +50,8 @@ export const useAccounts = () => {
   const [deleteItem, setDeleteItem] = useState<{ id: string; email?: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    const initServer = async () => {
-      try {
-        const res = await startServer();
-        if (res.success) {
-          setServerPort(8888);
-        }
-      } catch (e) {
-        console.error('Error starting server:', e);
-      }
-    };
-    initServer();
-  }, [startServer]);
-
   const fetchAccounts = useCallback(
     async (page = 1, limit = 30, silent = false) => {
-      if (!serverPort) return;
       if (!silent) setLoading(true);
       try {
         let pConfigs = providerConfigs;
@@ -140,14 +122,12 @@ export const useAccounts = () => {
         if (!silent) setLoading(false);
       }
     },
-    [serverPort, searchQuery, period, offset, providerFilter, emailFilter],
+    [searchQuery, period, offset, providerFilter, emailFilter],
   );
 
   useEffect(() => {
-    if (serverPort) {
-      fetchAccounts(1, pagination.limit);
-    }
-  }, [serverPort, fetchAccounts]);
+    fetchAccounts(1, pagination.limit);
+  }, [fetchAccounts]);
 
   // Client-side filtering for ranges and multi-email
   const filteredAccounts = useMemo(() => {
@@ -184,7 +164,6 @@ export const useAccounts = () => {
   }, [accounts, emailFilter, successRateRange, totalReqRange, totalTokenRange]);
 
   const executeDelete = async () => {
-    if (!serverPort) return;
     setDeleteLoading(true);
     try {
       if (deleteItem) {
@@ -239,7 +218,6 @@ export const useAccounts = () => {
     allStats, // Expose all stats for global range calculation
     allAccounts, // Expose all accounts for email options
     loading,
-    serverPort,
     providerConfigs,
     searchQuery,
     setSearchQuery,

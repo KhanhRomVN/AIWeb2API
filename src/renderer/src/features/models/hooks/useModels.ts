@@ -1,15 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Provider, FlatModel, ModelSequence, SortKey, SortDirection, StatsPeriod } from '../types';
-import { useServer } from '../../../shared/hooks/tauri/useServer';
 import { callBackend } from '../../../shared/utils/backend';
 
 export const useModels = () => {
-  const { startServer } = useServer();
   const [flatModels, setFlatModels] = useState<FlatModel[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [sequences, setSequences] = useState<ModelSequence[]>([]);
   const [loading, setLoading] = useState(false);
-  const [serverPort, setServerPort] = useState<number | null>(null);
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,23 +20,8 @@ export const useModels = () => {
   const [sortKey, setSortKey] = useState<SortKey>('');
   const [sortDirection, setSortDirection] = useState<SortDirection>('none');
 
-  useEffect(() => {
-    const initServer = async () => {
-      try {
-        const res = await startServer();
-        if (res.success) {
-          setServerPort(8888); // Standardized port
-        }
-      } catch (e) {
-        console.error('Error starting server:', e);
-      }
-    };
-    initServer();
-  }, [startServer]);
-
   const fetchData = useCallback(
     async (silent = false) => {
-      if (!serverPort) return;
       if (!silent) setLoading(true);
       try {
         const [providersData, sequencesData, statsData] = await Promise.all([
@@ -94,13 +76,11 @@ export const useModels = () => {
         if (!silent) setLoading(false);
       }
     },
-    [serverPort, period, offset],
+    [period, offset],
   );
   useEffect(() => {
-    if (serverPort) {
-      fetchData();
-    }
-  }, [serverPort, fetchData]);
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -197,7 +177,6 @@ export const useModels = () => {
     providers,
     sequences,
     loading,
-    serverPort,
     searchQuery,
     setSearchQuery,
     selectedProviderId,

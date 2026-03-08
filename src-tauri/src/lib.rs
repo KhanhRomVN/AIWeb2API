@@ -390,68 +390,27 @@ fn list_files(path: String, recursive: bool) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 async fn server_start(port: u16, state: State<'_, BackendState>) -> Result<String, String> {
-    let mut running = state.is_running.lock().unwrap();
-    if *running {
-        return Ok("Server already running".to_string());
-    }
-
-    // Check if port is already in use
-    use std::net::TcpListener;
-    if TcpListener::bind(format!("127.0.0.1:{}", port)).is_err() {
-        return Err(format!("Port {} is already in use by another process", port));
-    }
-
-    let mut cmd = if cfg!(target_os = "windows") {
-        let mut c = std::process::Command::new("cmd");
-        c.args(&["/C", "elara-server", "-p", &port.to_string()]);
-        c
-    } else {
-        let mut c = std::process::Command::new("elara-server");
-        c.arg("-p");
-        c.arg(port.to_string());
-        c
-    };
-
-    println!("[Tauri] Attempting to start server on port: {}", port);
-    let child = cmd.spawn().map_err(|e| {
-        format!(
-            "Failed to start elara-server: {}. Please install it via 'npm install -g @khanhromvn/elara-server'",
-            e
-        )
-    })?;
-
-    let pid = child.id();
-    *state.sidecar_id.lock().unwrap() = Some(pid);
-    *running = true;
-
-    Ok(format!("Started backend with PID: {}", pid))
+    Ok("Local server management is disabled. Please run 'elara-server' manually.".to_string())
 }
 
 #[tauri::command]
-async fn server_stop(state: State<'_, BackendState>) -> Result<String, String> {
-    let mut running = state.is_running.lock().unwrap();
-    if !*running {
-        return Ok("Server not running".to_string());
-    }
-
-    let mut id_lock = state.sidecar_id.lock().unwrap();
-    if let Some(pid) = *id_lock {
-        // Simple kill for now, could be improved
-        #[cfg(unix)]
-        {
-            use std::process::Command;
-            let _ = Command::new("kill").arg(pid.to_string()).status();
-        }
-        #[cfg(windows)]
-        {
-            use std::process::Command;
-            let _ = Command::new("taskkill").args(&["/F", "/PID", &pid.to_string()]).status();
-        }
-    }
+async fn check_global_server_install() -> bool {
+    use std::process::Command;
+    let cmd = if cfg!(target_os = "windows") {
+        Command::new("where").arg("elara-server").output()
+    } else {
+        Command::new("which").arg("elara-server").output()
+    };
     
-    *id_lock = None;
-    *running = false;
-    Ok("Server stopped".to_string())
+    match cmd {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+#[tauri::command]
+async fn server_stop(_state: State<'_, BackendState>) -> Result<String, String> {
+    Ok("Local server management is disabled.".to_string())
 }
 
 #[tauri::command]
@@ -560,6 +519,13 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 
+            // Explicitly set the main window icon for Linux window managers
+            if let Some(window) = app.get_webview_window("main") {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                }
+            }
+
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
@@ -607,7 +573,8 @@ pub fn run() {
             unwatch_dir,
             shell_execute,
             get_system_stats,
-            get_process_list
+            get_process_list,
+            check_global_server_install
         ])
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {

@@ -9,22 +9,7 @@ export const BACKEND_PORT = 8888;
 export const BACKEND_URL = `http://localhost:8888`;
 
 export const callBackend = async (url: string, method: string = 'GET', body?: any) => {
-  const mode = localStorage.getItem('ELARA_BACKEND_MODE') || 'local';
-
-  // 1. Strict check for Local Mode: server MUST be managed by Tauri
-  if (mode === 'local') {
-    try {
-      const isManagedRunning = await invoke<boolean>('server_get_status');
-      if (!isManagedRunning) {
-        console.warn(`[Backend] Call to ${url} blocked: Local server not managed/running.`);
-        return { success: false, error: 'Local server not started' };
-      }
-    } catch (e) {
-      console.error('[Backend] Failed to verify managed server status:', e);
-      return { success: false, error: 'Security check failed' };
-    }
-  }
-
+  // Always use remote mode (no check for Tauri-managed server)
   try {
     const options: any = { method };
     if (body) {

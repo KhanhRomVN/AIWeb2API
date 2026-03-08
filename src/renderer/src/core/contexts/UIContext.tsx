@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 interface UIContextType {
   isMainSidebarCollapsed: boolean;
   setIsMainSidebarCollapsed: (collapsed: boolean) => void;
+  isThemeDrawerOpen: boolean;
+  setIsThemeDrawerOpen: (open: boolean) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -11,6 +13,7 @@ export const UIProvider = ({ children }: { children: ReactNode }) => {
   const [isMainSidebarCollapsed, setIsMainSidebarCollapsed] = useState(() => {
     return localStorage.getItem('elara_main_sidebar_collapsed') === 'true';
   });
+  const [isThemeDrawerOpen, setIsThemeDrawerOpen] = useState(false);
 
   const handleSetCollapsed = (collapsed: boolean) => {
     setIsMainSidebarCollapsed(collapsed);
@@ -22,6 +25,8 @@ export const UIProvider = ({ children }: { children: ReactNode }) => {
       value={{
         isMainSidebarCollapsed,
         setIsMainSidebarCollapsed: handleSetCollapsed,
+        isThemeDrawerOpen,
+        setIsThemeDrawerOpen,
       }}
     >
       {children}

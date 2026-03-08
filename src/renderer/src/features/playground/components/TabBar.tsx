@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import { cn } from '../../../shared/lib/utils';
 import { ConversationTab } from '../types';
+import AppIcon from '../../../assets/icon.png';
 interface TabBarProps {
   tabs: ConversationTab[];
   activeTabId: string;
@@ -45,21 +46,21 @@ export const TabBar = ({
               : 'bg-transparent text-muted-foreground hover:bg-muted/50 border-t border-t-transparent',
           )}
         >
-          {tab.selectedProvider && (
-            <div className="w-4 h-4 shrink-0 flex items-center justify-center">
-              {(() => {
-                const provider = providersList.find(
-                  (p) =>
-                    p.provider_name === tab.selectedProvider ||
-                    (p.provider_id || '').toLowerCase() ===
-                      (tab.selectedProvider || '').toLowerCase(),
-                );
-                return provider?.icon ? (
-                  <img src={provider.icon} alt={tab.selectedProvider} className="w-4 h-4" />
-                ) : null;
-              })()}
-            </div>
-          )}
+          <div className="w-4 h-4 shrink-0 flex items-center justify-center">
+            {(() => {
+              const provider = providersList.find(
+                (p) =>
+                  p.provider_name === tab.selectedProvider ||
+                  (p.provider_id || '').toLowerCase() ===
+                    (tab.selectedProvider || '').toLowerCase(),
+              );
+              return provider?.icon ? (
+                <img src={provider.icon} alt={tab.selectedProvider} className="w-4 h-4" />
+              ) : (
+                <img src={AppIcon} alt="Elara" className="w-4 h-4" />
+              );
+            })()}
+          </div>
           <span className="text-sm truncate flex-1">{tab.title || 'New Chat'}</span>
           <button
             onClick={(e) => {

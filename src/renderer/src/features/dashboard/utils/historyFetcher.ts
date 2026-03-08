@@ -35,22 +35,7 @@ export const fetchAllHistory = async (
   lastTimestamp: number = 0,
 ): Promise<TokenUsageData[]> => {
   const allUsage: TokenUsageData[] = [];
-  const mode = localStorage.getItem('ELARA_BACKEND_MODE') || 'local';
-
-  // Strict check for Local Mode
-  if (mode === 'local') {
-    try {
-      const isManagedRunning = await invoke<boolean>('server_get_status');
-      if (!isManagedRunning) {
-        console.warn('[HistoryFetcher] Aborting history fetch: Local server not managed/running.');
-        return [];
-      }
-    } catch (e) {
-      console.error('[HistoryFetcher] Failed to verify managed server status:', e);
-      return [];
-    }
-  }
-
+  // Fetch from the configured remote API (always)
   for (const account of accounts) {
     if (account.status !== 'Active') continue;
 
