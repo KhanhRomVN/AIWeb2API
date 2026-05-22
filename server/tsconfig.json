@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "es2016",
+    "ignoreDeprecations": "5.0",
+    "baseUrl": "./src",
+    "paths": {
+      "@src": ["./src/*"]
+    },
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "src/config", "tsup.config.ts"],
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts"]
+}

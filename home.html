@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Elara — AI Development Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #16161f;
+  --surface: #1c1c28;
+  --surface2: #22222f;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0f0f8;
+  --text2: #9898b8;
+  --text3: #5a5a7a;
+  --accent: #7c6af0;
+  --accent2: #a090f8;
+  --accent3: #5548d4;
+  --glow: rgba(124,106,240,0.15);
+  --glow2: rgba(124,106,240,0.08);
+  --green: #3ecf8e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --pink: #ec4899;
+  --cyan: #06b6d4;
+  --nav-h: 64px;
+}
+[data-theme="light"] {
+  --bg: #f8f8fc;
+  --bg2: #f0f0f8;
+  --bg3: #e8e8f4;
+  --surface: #ffffff;
+  --surface2: #f4f4fc;
+  --border: rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.14);
+  --text: #0f0f1a;
+  --text2: #4a4a6a;
+  --text3: #8888aa;
+  --accent: #6054e0;
+  --accent2: #7c6af0;
+  --accent3: #4a3ec0;
+  --glow: rgba(96,84,224,0.1);
+  --glow2: rgba(96,84,224,0.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Syne',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.6;
+  overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+button{font-family:'Syne',sans-serif;cursor:pointer;border:none;background:none}
+img{display:block;max-width:100%}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:99px}
+
+/* ===== PAGES ===== */
+.page{display:none;min-height:100vh}
+.page.active{display:block}
+
+/* ===== NAV ===== */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:var(--nav-h);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 clamp(1.5rem,5vw,4rem);
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+}
+[data-theme="light"] nav{background:rgba(248,248,252,0.9)}
+[data-theme="dark"] nav{background:rgba(10,10,15,0.9)}
+.nav-logo{
+  display:flex;align-items:center;gap:10px;
+  font-size:1.2rem;font-weight:700;letter-spacing:-0.02em;
+}
+.logo-mark{
+  width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent),var(--accent3));
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.85rem;font-weight:800;color:#fff;
+  box-shadow:0 4px 12px var(--glow);
+}
+.nav-links{
+  display:flex;align-items:center;gap:2rem;
+  list-style:none;
+}
+.nav-links a{
+  font-size:0.875rem;font-weight:500;
+  color:var(--text2);transition:color .2s;
+}
+.nav-links a:hover{color:var(--text)}
+.nav-links a.active-link{color:var(--accent2)}
+.nav-actions{display:flex;align-items:center;gap:0.75rem}
+.btn{
+  display:inline-flex;align-items:center;gap:0.5rem;
+  padding:0.55rem 1.25rem;border-radius:8px;
+  font-family:'Syne',sans-serif;font-size:0.875rem;font-weight:600;
+  transition:all .2s;cursor:pointer;
+}
+.btn-ghost{
+  color:var(--text2);border:1px solid var(--border2);
+  background:transparent;
+}
+.btn-ghost:hover{background:var(--surface);color:var(--text);border-color:var(--border2)}
+.btn-primary{
+  background:var(--accent);color:#fff;border:1px solid transparent;
+  box-shadow:0 4px 14px var(--glow);
+}
+.btn-primary:hover{background:var(--accent2);box-shadow:0 6px 20px var(--glow);transform:translateY(-1px)}
+.btn-lg{padding:0.85rem 2rem;font-size:1rem;border-radius:10px}
+.btn-xl{padding:1rem 2.5rem;font-size:1.05rem;border-radius:12px}
+.theme-toggle{
+  width:36px;height:36px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--border2);background:transparent;
+  color:var(--text2);transition:all .2s;font-size:1rem;
+}
+.theme-toggle:hover{background:var(--surface);color:var(--text)}
+.mobile-menu-btn{
+  display:none;width:36px;height:36px;border-radius:8px;
+  align-items:center;justify-content:center;
+  border:1px solid var(--border2);font-size:1.1rem;
+  color:var(--text2);
+}
+.mobile-menu{
+  display:none;position:fixed;top:var(--nav-h);left:0;right:0;
+  background:var(--bg);border-bottom:1px solid var(--border);
+  padding:1.5rem clamp(1.5rem,5vw,4rem);z-index:99;
+  flex-direction:column;gap:1rem;
+}
+.mobile-menu.open{display:flex}
+.mobile-menu a{
+  font-size:1rem;font-weight:500;color:var(--text2);
+  padding:0.5rem 0;border-bottom:1px solid var(--border);
+}
+.mobile-menu a:last-child{border-bottom:none}
+
+/* ===== HERO ===== */
+.hero{
+  padding-top:calc(var(--nav-h) + 5rem);
+  padding-bottom:6rem;
+  padding-left:clamp(1.5rem,5vw,4rem);
+  padding-right:clamp(1.5rem,5vw,4rem);
+  text-align:center;
+  position:relative;overflow:hidden;
+}
+.hero-glow{
+  position:absolute;top:20%;left:50%;transform:translateX(-50%);
+  width:min(800px,100vw);height:400px;
+  background:radial-gradient(ellipse at center, var(--glow) 0%, transparent 70%);
+  pointer-events:none;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:0.4rem 1rem;border-radius:99px;
+  background:var(--surface);border:1px solid var(--border2);
+  font-size:0.8rem;font-weight:600;color:var(--accent2);
+  margin-bottom:2rem;
+}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+.hero h1{
+  font-size:clamp(2.5rem,7vw,5.5rem);
+  font-weight:800;line-height:1.05;letter-spacing:-0.04em;
+  max-width:900px;margin:0 auto 1.5rem;
+}
+.hero h1 span{
+  background:linear-gradient(135deg,var(--accent2),var(--pink),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero p{
+  font-size:clamp(1rem,2.5vw,1.25rem);
+  color:var(--text2);max-width:600px;margin:0 auto 3rem;
+  font-weight:400;
+}
+.hero-actions{
+  display:flex;align-items:center;justify-content:center;
+  gap:1rem;flex-wrap:wrap;margin-bottom:4rem;
+}
+.hero-meta{
+  display:flex;align-items:center;justify-content:center;
+  gap:2rem;flex-wrap:wrap;
+  color:var(--text3);font-size:0.8rem;font-weight:500;
+}
+.hero-meta span{display:flex;align-items:center;gap:0.4rem}
+
+/* ===== APP PREVIEW ===== */
+.app-preview{
+  max-width:1100px;margin:0 auto;
+  position:relative;
+}
+.preview-frame{
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:16px;overflow:hidden;
+  box-shadow:0 40px 80px rgba(0,0,0,0.4),0 0 0 1px var(--border);
+}
+[data-theme="light"] .preview-frame{
+  box-shadow:0 40px 80px rgba(0,0,0,0.15),0 0 0 1px var(--border);
+}
+.preview-titlebar{
+  background:var(--bg3);padding:0.75rem 1rem;
+  display:flex;align-items:center;gap:0.5rem;
+  border-bottom:1px solid var(--border);
+}
+.traffic-light{width:12px;height:12px;border-radius:50%}
+.tl-red{background:#ff5f57}.tl-yellow{background:#febc2e}.tl-green{background:#28c840}
+.preview-titlebar span{
+  font-size:0.75rem;color:var(--text3);margin-left:auto;margin-right:auto;
+}
+.preview-body{
+  display:grid;grid-template-columns:220px 1fr;min-height:420px;
+}
+.preview-sidebar{
+  background:var(--bg2);border-right:1px solid var(--border);
+  padding:1rem;
+}
+.preview-nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:0.6rem 0.75rem;border-radius:8px;
+  font-size:0.8rem;font-weight:500;color:var(--text3);
+  margin-bottom:4px;cursor:default;
+}
+.preview-nav-item.active{
+  background:var(--glow2);color:var(--accent2);
+  border:1px solid rgba(124,106,240,0.2);
+}
+.preview-nav-icon{
+  width:20px;height:20px;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.7rem;background:var(--surface);
+}
+.preview-nav-item.active .preview-nav-icon{background:rgba(124,106,240,0.2)}
+.preview-main{padding:1.5rem;display:flex;flex-direction:column;gap:1rem}
+.chat-msg{display:flex;gap:10px;align-items:flex-start}
+.chat-avatar{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.65rem;font-weight:700;
+}
+.avatar-user{background:var(--accent);color:#fff}
+.avatar-ai{background:linear-gradient(135deg,var(--green),var(--cyan));color:#fff}
+.chat-bubble{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:0.6rem 0.85rem;
+  font-size:0.78rem;color:var(--text2);max-width:85%;
+  line-height:1.5;
+}
+.chat-bubble.user{background:var(--glow2);border-color:rgba(124,106,240,0.2);color:var(--text)}
+.chat-bubble code{
+  background:var(--bg);padding:0.15rem 0.3rem;border-radius:4px;
+  font-size:0.7rem;color:var(--accent2);font-family:monospace;
+}
+.preview-input{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:10px;padding:0.75rem 1rem;
+  font-size:0.78rem;color:var(--text3);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.preview-send{
+  width:28px;height:28px;border-radius:6px;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;
+}
+
+/* ===== SECTIONS ===== */
+section{padding:5rem clamp(1.5rem,5vw,4rem)}
+.section-label{
+  display:inline-block;font-size:0.75rem;font-weight:700;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--accent2);margin-bottom:1rem;
+}
+.section-title{
+  font-size:clamp(1.8rem,4vw,3rem);font-weight:800;
+  letter-spacing:-0.03em;line-height:1.1;
+  margin-bottom:1rem;max-width:700px;
+}
+.section-sub{
+  color:var(--text2);font-size:1.05rem;max-width:550px;
+  margin-bottom:3rem;
+}
+.text-center{text-align:center}
+.text-center .section-title,.text-center .section-sub{margin-left:auto;margin-right:auto}
+
+/* ===== PROVIDERS ===== */
+.providers-scroll{
+  display:flex;gap:1.5rem;overflow-x:auto;
+  padding:0.5rem 0 1rem;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.providers-scroll::-webkit-scrollbar{display:none}
+.provider-chip{
+  display:flex;align-items:center;gap:10px;
+  padding:0.75rem 1.25rem;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border2);
+  white-space:nowrap;font-size:0.875rem;font-weight:600;
+  flex-shrink:0;
+}
+.provider-dot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+}
+
+/* ===== FEATURES GRID ===== */
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:1.5px;
+  background:var(--border);
+  border:1px solid var(--border);
+  border-radius:16px;overflow:hidden;
+}
+.feature-card{
+  background:var(--bg);padding:2.5rem 2rem;
+  transition:background .3s;
+}
+.feature-card:hover{background:var(--surface)}
+.feature-icon{
+  width:44px;height:44px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;margin-bottom:1.5rem;
+}
+.feature-card h3{
+  font-size:1.1rem;font-weight:700;margin-bottom:0.6rem;letter-spacing:-0.02em;
+}
+.feature-card p{color:var(--text2);font-size:0.9rem;line-height:1.6}
+
+/* ===== STATS ===== */
+.stats-row{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:1.5rem;
+}
+.stat-card{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:16px;padding:2rem;text-align:center;
+  position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';position:absolute;top:-40px;left:50%;transform:translateX(-50%);
+  width:100px;height:100px;border-radius:50%;
+  background:radial-gradient(circle,var(--glow),transparent 70%);
+}
+.stat-num{
+  font-size:clamp(2rem,5vw,3.5rem);font-weight:800;
+  letter-spacing:-0.04em;color:var(--accent2);
+  display:block;margin-bottom:0.5rem;
+}
+.stat-label{color:var(--text2);font-size:0.9rem}
+
+/* ===== PLATFORMS ===== */
+.platforms-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:1rem;
+}
+.platform-card{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:14px;padding:1.75rem 1.5rem;
+  transition:all .2s;
+}
+.platform-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 24px var(--glow)}
+.platform-icon{font-size:1.8rem;margin-bottom:1rem}
+.platform-card h4{font-size:0.95rem;font-weight:700;margin-bottom:0.4rem}
+.platform-card p{font-size:0.8rem;color:var(--text3)}
+.platform-formats{
+  display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.75rem;
+}
+.format-tag{
+  font-size:0.7rem;font-weight:600;
+  padding:0.2rem 0.5rem;border-radius:5px;
+  background:var(--glow2);color:var(--accent2);
+  border:1px solid rgba(124,106,240,0.2);
+}
+
+/* ===== WORKFLOW ===== */
+.workflow-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:1.5rem;
+}
+.workflow-item{
+  position:relative;padding:2rem;
+  background:var(--surface);border:1px solid var(--border2);border-radius:16px;
+}
+.workflow-num{
+  position:absolute;top:1.5rem;right:1.5rem;
+  font-size:3rem;font-weight:800;letter-spacing:-0.05em;
+  color:var(--border2);line-height:1;
+}
+.workflow-item h4{font-size:1rem;font-weight:700;margin-bottom:0.5rem}
+.workflow-item p{font-size:0.875rem;color:var(--text2);line-height:1.6}
+
+/* ===== PRICING ===== */
+.pricing-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:1.5rem;max-width:900px;margin:0 auto;
+}
+.pricing-card{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:20px;padding:2.5rem 2rem;
+  position:relative;overflow:hidden;
+}
+.pricing-card.featured{
+  border-color:var(--accent);
+  background:linear-gradient(135deg,var(--glow2),var(--surface));
+}
+.pricing-card.featured::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--accent),var(--pink));
+}
+.pricing-badge{
+  display:inline-block;font-size:0.7rem;font-weight:700;
+  padding:0.3rem 0.7rem;border-radius:99px;
+  background:var(--accent);color:#fff;margin-bottom:1.5rem;
+}
+.pricing-card h3{font-size:1.3rem;font-weight:700;margin-bottom:0.5rem}
+.pricing-price{
+  font-size:3rem;font-weight:800;letter-spacing:-0.04em;
+  color:var(--accent2);margin:1.5rem 0;
+}
+.pricing-price sup{font-size:1.2rem;vertical-align:super}
+.pricing-price span{font-size:1rem;color:var(--text2);font-weight:400}
+.pricing-features{list-style:none;margin:2rem 0;display:flex;flex-direction:column;gap:0.75rem}
+.pricing-features li{
+  display:flex;align-items:center;gap:0.75rem;
+  font-size:0.875rem;color:var(--text2);
+}
+.check{color:var(--green);font-size:0.9rem}
+
+/* ===== TESTIMONIALS ===== */
+.testimonials-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:1.5rem;
+}
+.testimonial{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:16px;padding:2rem;
+}
+.testimonial-text{
+  font-size:0.95rem;color:var(--text2);line-height:1.7;
+  margin-bottom:1.5rem;font-style:italic;
+}
+.testimonial-author{display:flex;align-items:center;gap:0.75rem}
+.author-avatar{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.75rem;font-weight:700;color:#fff;
+}
+.author-name{font-size:0.875rem;font-weight:700}
+.author-role{font-size:0.75rem;color:var(--text3)}
+.stars{color:var(--amber);font-size:0.75rem;margin-bottom:1rem}
+
+/* ===== CTA ===== */
+.cta-section{
+  padding:5rem clamp(1.5rem,5vw,4rem);
+  background:var(--surface);
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  text-align:center;position:relative;overflow:hidden;
+}
+.cta-bg{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:600px;height:300px;
+  background:radial-gradient(ellipse,var(--glow) 0%,transparent 70%);
+  pointer-events:none;
+}
+.cta-section h2{
+  font-size:clamp(2rem,4vw,3.5rem);font-weight:800;
+  letter-spacing:-0.03em;margin-bottom:1rem;
+  position:relative;
+}
+.cta-section p{color:var(--text2);font-size:1.05rem;margin-bottom:2.5rem;position:relative}
+.cta-actions{
+  display:flex;align-items:center;justify-content:center;
+  gap:1rem;flex-wrap:wrap;position:relative;
+}
+
+/* ===== FOOTER ===== */
+footer{
+  padding:4rem clamp(1.5rem,5vw,4rem) 2rem;
+  border-top:1px solid var(--border);
+}
+.footer-grid{
+  display:grid;
+  grid-template-columns:2fr repeat(3,1fr);
+  gap:3rem;margin-bottom:3rem;
+}
+.footer-brand p{color:var(--text2);font-size:0.875rem;margin-top:1rem;max-width:280px;line-height:1.6}
+.footer-links h5{font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:1rem}
+.footer-links ul{list-style:none;display:flex;flex-direction:column;gap:0.6rem}
+.footer-links a{color:var(--text2);font-size:0.875rem;transition:color .2s}
+.footer-links a:hover{color:var(--text)}
+.footer-bottom{
+  padding-top:2rem;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:1rem;
+}
+.footer-bottom p{font-size:0.8rem;color:var(--text3)}
+.footer-socials{display:flex;gap:0.75rem}
+.social-btn{
+  width:32px;height:32px;border-radius:8px;
+  border:1px solid var(--border2);background:transparent;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text3);font-size:0.85rem;transition:all .2s;
+}
+.social-btn:hover{background:var(--surface);color:var(--text);border-color:var(--border2)}
+
+/* ===== INNER PAGES ===== */
+.inner-page{padding-top:calc(var(--nav-h) + 4rem);padding-bottom:5rem}
+.inner-container{max-width:800px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+.inner-header{margin-bottom:3rem;padding-bottom:2rem;border-bottom:1px solid var(--border)}
+.inner-header h1{font-size:clamp(1.8rem,4vw,3rem);font-weight:800;letter-spacing:-0.03em;margin-bottom:0.75rem}
+.inner-header p{color:var(--text2);font-size:0.9rem}
+.prose h2{font-size:1.4rem;font-weight:700;margin:2.5rem 0 1rem;letter-spacing:-0.02em}
+.prose h3{font-size:1.1rem;font-weight:700;margin:2rem 0 0.75rem}
+.prose p{color:var(--text2);margin-bottom:1rem;line-height:1.75;font-size:0.95rem}
+.prose ul,.prose ol{padding-left:1.5rem;margin-bottom:1rem;color:var(--text2);font-size:0.95rem}
+.prose li{margin-bottom:0.5rem;line-height:1.7}
+.prose strong{color:var(--text);font-weight:600}
+.prose a{color:var(--accent2);text-decoration:underline;text-decoration-color:rgba(160,144,248,0.4)}
+.prose a:hover{text-decoration-color:var(--accent2)}
+.prose .callout{
+  background:var(--glow2);border:1px solid rgba(124,106,240,0.25);
+  border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;
+}
+.prose .callout p{margin:0;color:var(--text)}
+
+/* ===== DOWNLOAD PAGE ===== */
+.download-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:1.5rem;margin-bottom:3rem;
+}
+.download-card{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:16px;padding:2rem;
+}
+.download-card h3{font-size:1.1rem;font-weight:700;margin-bottom:0.5rem}
+.download-card p{color:var(--text2);font-size:0.875rem;margin-bottom:1.5rem}
+.download-formats{display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.5rem}
+.format-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0.6rem 0.75rem;border-radius:8px;
+  background:var(--bg2);border:1px solid var(--border);font-size:0.8rem;
+}
+.format-name{font-weight:600}
+.format-size{color:var(--text3)}
+.cli-block{
+  background:var(--bg);border:1px solid var(--border2);
+  border-radius:14px;padding:1.5rem;margin-bottom:2rem;
+}
+.cli-label{font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem}
+.cli-code{
+  font-family:monospace;font-size:0.875rem;color:var(--accent2);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;
+}
+.copy-btn{
+  font-size:0.75rem;color:var(--text3);border:1px solid var(--border2);
+  padding:0.25rem 0.6rem;border-radius:5px;background:transparent;
+  font-family:'Syne',sans-serif;transition:all .2s;
+}
+.copy-btn:hover{background:var(--surface2);color:var(--text)}
+
+/* ===== CHANGELOG ===== */
+.changelog-list{display:flex;flex-direction:column;gap:2.5rem}
+.changelog-item{
+  display:grid;grid-template-columns:120px 1fr;gap:2rem;
+  border-top:1px solid var(--border);padding-top:2rem;
+}
+.changelog-version{
+  font-size:1rem;font-weight:700;color:var(--accent2);
+}
+.changelog-date{font-size:0.8rem;color:var(--text3);margin-top:0.25rem}
+.changelog-content h4{font-size:1rem;font-weight:700;margin-bottom:0.5rem}
+.changelog-content p,.changelog-content li{font-size:0.875rem;color:var(--text2);line-height:1.7}
+.changelog-content ul{padding-left:1.25rem;margin-bottom:0.5rem}
+.change-tag{
+  display:inline-block;font-size:0.65rem;font-weight:700;
+  padding:0.15rem 0.5rem;border-radius:4px;margin-right:0.4rem;
+  text-transform:uppercase;letter-spacing:0.05em;
+}
+.tag-new{background:rgba(62,207,142,0.15);color:var(--green);border:1px solid rgba(62,207,142,0.3)}
+.tag-fix{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+.tag-improve{background:rgba(124,106,240,0.15);color:var(--accent2);border:1px solid rgba(124,106,240,0.3)}
+
+/* ===== TOOLTIP ===== */
+.tooltip{position:relative}
+.tooltip-tip{
+  display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  white-space:nowrap;background:var(--surface2);border:1px solid var(--border2);
+  font-size:0.75rem;color:var(--text2);padding:0.35rem 0.7rem;border-radius:6px;z-index:200;
+}
+.tooltip:hover .tooltip-tip{display:block}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:1024px){
+  .footer-grid{grid-template-columns:1fr 1fr}
+  .preview-body{grid-template-columns:180px 1fr}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .mobile-menu-btn{display:flex}
+  .footer-grid{grid-template-columns:1fr}
+  .preview-body{grid-template-columns:1fr}
+  .preview-sidebar{display:none}
+  .changelog-item{grid-template-columns:1fr;gap:0.75rem}
+}
+@media(max-width:480px){
+  .hero-actions .btn-xl{width:100%}
+  .hero-meta{flex-direction:column;gap:0.75rem}
+}
+
+/* ===== ANIM ===== */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(24px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.fade-up{animation:fadeUp .6s ease both}
+.fade-up-1{animation-delay:.1s}
+.fade-up-2{animation-delay:.2s}
+.fade-up-3{animation-delay:.3s}
+.fade-up-4{animation-delay:.4s}
+
+/* ===== MISC ===== */
+.divider{height:1px;background:var(--border);margin:0}
+.tag{
+  display:inline-block;font-size:0.7rem;font-weight:700;
+  padding:0.25rem 0.6rem;border-radius:6px;
+  background:var(--surface2);color:var(--text3);
+}
+.gradient-text{
+  background:linear-gradient(135deg,var(--accent2),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav id="nav">
+  <a class="nav-logo" href="#" onclick="showPage('home')">
+    <div class="logo-mark">E</div>
+    <span>Elara</span>
+  </a>
+  <ul class="nav-links" id="nav-links">
+    <li><a href="#" onclick="showPage('home')" class="active-link" id="nl-home">Home</a></li>
+    <li><a href="#features" onclick="showPage('home')">Features</a></li>
+    <li><a href="#" onclick="showPage('download')">Download</a></li>
+    <li><a href="#" onclick="showPage('changelog')">Changelog</a></li>
+    <li><a href="https://github.com/KhanhRomVN" target="_blank">GitHub</a></li>
+  </ul>
+  <div class="nav-actions">
+    <button class="theme-toggle tooltip" onclick="toggleTheme()" aria-label="Toggle theme">
+      <span id="theme-icon">☀️</span>
+      <span class="tooltip-tip">Toggle theme</span>
+    </button>
+    <a href="#" onclick="showPage('download')" class="btn btn-primary">Download</a>
+    <button class="mobile-menu-btn" onclick="toggleMobile()" aria-label="Menu">☰</button>
+  </div>
+</nav>
+
+<!-- Mobile menu -->
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#" onclick="showPage('home');toggleMobile()">Home</a>
+  <a href="#" onclick="showPage('home');toggleMobile()">Features</a>
+  <a href="#" onclick="showPage('download');toggleMobile()">Download</a>
+  <a href="#" onclick="showPage('changelog');toggleMobile()">Changelog</a>
+  <a href="#" onclick="showPage('privacy');toggleMobile()">Privacy Policy</a>
+  <a href="#" onclick="showPage('terms');toggleMobile()">Terms of Service</a>
+  <a href="https://github.com/KhanhRomVN" target="_blank" onclick="toggleMobile()">GitHub ↗</a>
+</div>
+
+<!-- ============================= HOME PAGE ============================= -->
+<div class="page active" id="page-home">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-badge fade-up">
+      <span class="badge-dot"></span>
+      v2.1.0 — Now with Claude Sonnet 4 support
+    </div>
+    <h1 class="fade-up fade-up-1">
+      One interface.<br/>
+      <span>All your AI models.</span>
+    </h1>
+    <p class="fade-up fade-up-2">
+      Elara is the desktop AI assistant that unifies DeepSeek, Claude, Groq, Mistral and more into a single, blazing-fast workspace built for developers.
+    </p>
+    <div class="hero-actions fade-up fade-up-3">
+      <a href="#" onclick="showPage('download')" class="btn btn-primary btn-xl">
+        ⬇ Download Free
+      </a>
+      <a href="https://github.com/KhanhRomVN" target="_blank" class="btn btn-ghost btn-xl">
+        ★ Star on GitHub
+      </a>
+    </div>
+    <div class="hero-meta fade-up fade-up-4">
+      <span>⬡ Cross-platform</span>
+      <span>🔑 Use your own API keys</span>
+      <span>🔒 Local-first, private</span>
+      <span>⚡ CLI + GUI</span>
+    </div>
+
+    <!-- App Preview -->
+    <div class="app-preview" style="margin-top:4rem">
+      <div class="preview-frame">
+        <div class="preview-titlebar">
+          <div class="traffic-light tl-red"></div>
+          <div class="traffic-light tl-yellow"></div>
+          <div class="traffic-light tl-green"></div>
+          <span>Elara — Playground</span>
+        </div>
+        <div class="preview-body">
+          <div class="preview-sidebar">
+            <div style="font-size:0.65rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Navigation</div>
+            <div class="preview-nav-item">
+              <div class="preview-nav-icon">📊</div> Dashboard
+            </div>
+            <div class="preview-nav-item active">
+              <div class="preview-nav-icon">💬</div> Playground
+            </div>
+            <div class="preview-nav-item">
+              <div class="preview-nav-icon">👤</div> Accounts
+            </div>
+            <div class="preview-nav-item">
+              <div class="preview-nav-icon">🧠</div> Models
+            </div>
+            <div class="preview-nav-item">
+              <div class="preview-nav-icon">⚙️</div> Settings
+            </div>
+            <div style="height:1px;background:var(--border);margin:1rem 0"></div>
+            <div style="font-size:0.65rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Model</div>
+            <div style="display:flex;align-items:center;gap:6px;padding:0.5rem 0.75rem;border-radius:8px;background:var(--glow2);border:1px solid rgba(124,106,240,0.2)">
+              <span style="font-size:0.75rem;color:var(--accent2);font-weight:600">Claude Sonnet 4</span>
+            </div>
+          </div>
+          <div class="preview-main">
+            <div class="chat-msg">
+              <div class="chat-avatar avatar-user">U</div>
+              <div class="chat-bubble user">Review this TypeScript function and suggest improvements</div>
+            </div>
+            <div class="chat-msg">
+              <div class="chat-avatar avatar-ai">AI</div>
+              <div class="chat-bubble">
+                I can see a few opportunities to improve this function. First, consider using <code>const</code> assertions for better type inference. Also, the error handling could be more explicit...
+              </div>
+            </div>
+            <div class="chat-msg">
+              <div class="chat-avatar avatar-user">U</div>
+              <div class="chat-bubble user">Can you generate a git commit message for these changes?</div>
+            </div>
+            <div class="chat-msg">
+              <div class="chat-avatar avatar-ai">AI</div>
+              <div class="chat-bubble">
+                <code>refactor(auth): improve type safety and error handling in validateToken</code><br/>
+                <span style="font-size:0.72rem;color:var(--text3);display:block;margin-top:0.5rem">✓ Conventional commits format · 72 chars</span>
+              </div>
+            </div>
+            <div class="preview-input">
+              <span>Ask anything or attach a file...</span>
+              <div class="preview-send">↑</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROVIDERS -->
+  <section style="padding:2rem clamp(1.5rem,5vw,4rem) 4rem">
+    <p style="font-size:0.8rem;font-weight:600;color:var(--text3);text-align:center;margin-bottom:1.5rem;text-transform:uppercase;letter-spacing:0.1em">Supports all major AI providers</p>
+    <div class="providers-scroll">
+      <div class="provider-chip"><div class="provider-dot" style="background:#2196f3"></div>DeepSeek</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#d97706"></div>Claude (Anthropic)</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#8b5cf6"></div>Groq</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#06b6d4"></div>Mistral</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#10b981"></div>Gemini</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#f59e0b"></div>Qwen</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#ec4899"></div>HuggingChat</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#64748b"></div>Kiro</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#6366f1"></div>Z.ai</div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" style="padding:4rem clamp(1.5rem,5vw,4rem)">
+    <div class="text-center" style="margin-bottom:3rem">
+      <span class="section-label">Features</span>
+      <h2 class="section-title">Everything developers need</h2>
+      <p class="section-sub">Elara packs powerful features into a clean interface, letting you focus on what matters: building.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(124,106,240,0.15)">💬</div>
+        <h3>Smart Chat Interface</h3>
+        <p>Full-featured chat with streaming, file uploads, web search, reasoning mode, and conversation history per tab.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(6,182,212,0.15)">⚡</div>
+        <h3>Multi-Provider Support</h3>
+        <p>Access 9+ AI providers through one interface. Switch between Claude, DeepSeek, Groq, and others instantly.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(62,207,142,0.15)">👥</div>
+        <h3>Multi-Account Management</h3>
+        <p>Manage multiple accounts per provider. Perfect for separating personal and work usage or team collaboration.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(245,158,11,0.15)">📊</div>
+        <h3>Usage Analytics</h3>
+        <p>Track token consumption, request counts, favorite models, peak usage times, and costs across all accounts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(236,72,153,0.15)">✍️</div>
+        <h3>Git Commit Generator</h3>
+        <p>Connect to Git, stage your changes, and let Elara write conventional commit messages in one click.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(239,68,68,0.15)">🖥️</div>
+        <h3>CLI + GUI Combined</h3>
+        <p>Use Elara from the desktop or your terminal. The app runs a local API server at localhost:8888 for CLI tools.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(124,106,240,0.15)">📑</div>
+        <h3>Tabbed Conversations</h3>
+        <p>Work on multiple topics simultaneously. Each tab has its own model, provider, settings, and full chat history.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(6,182,212,0.15)">⌨️</div>
+        <h3>Global Hotkeys & Tray</h3>
+        <p>Access Elara instantly from anywhere with configurable keyboard shortcuts. Runs silently in the system tray.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(62,207,142,0.15)">🔒</div>
+        <h3>Local-First Privacy</h3>
+        <p>API keys and data stay on your machine. Elara connects directly to AI providers — no middleman servers.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section style="padding:3rem clamp(1.5rem,5vw,4rem)">
+    <div class="stats-row">
+      <div class="stat-card">
+        <span class="stat-num">9+</span>
+        <span class="stat-label">AI Providers Supported</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">6</span>
+        <span class="stat-label">Platforms & Formats</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">∞</span>
+        <span class="stat-label">Accounts per Provider</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">0</span>
+        <span class="stat-label">Data Sent to Elara Servers</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- WORKFLOW -->
+  <section style="padding:4rem clamp(1.5rem,5vw,4rem)">
+    <div style="margin-bottom:3rem">
+      <span class="section-label">Workflows</span>
+      <h2 class="section-title">Built for real developer workflows</h2>
+    </div>
+    <div class="workflow-grid">
+      <div class="workflow-item">
+        <div class="workflow-num">01</div>
+        <div class="feature-icon" style="background:rgba(124,106,240,0.15);width:36px;height:36px;font-size:1rem;border-radius:8px;margin-bottom:1rem">🔍</div>
+        <h4>Code Review</h4>
+        <p>Paste code → Ask AI to review → Get detailed suggestions and refactoring ideas in seconds.</p>
+      </div>
+      <div class="workflow-item">
+        <div class="workflow-num">02</div>
+        <div class="feature-icon" style="background:rgba(6,182,212,0.15);width:36px;height:36px;font-size:1rem;border-radius:8px;margin-bottom:1rem">📄</div>
+        <h4>Documentation</h4>
+        <p>Upload any file → Ask AI to explain, summarize, or generate docs → Copy and ship.</p>
+      </div>
+      <div class="workflow-item">
+        <div class="workflow-num">03</div>
+        <div class="feature-icon" style="background:rgba(62,207,142,0.15);width:36px;height:36px;font-size:1rem;border-radius:8px;margin-bottom:1rem">🔖</div>
+        <h4>Commit Messages</h4>
+        <p>Stage Git changes → One click → Elara writes a perfect conventional commit message for you.</p>
+      </div>
+      <div class="workflow-item">
+        <div class="workflow-num">04</div>
+        <div class="feature-icon" style="background:rgba(245,158,11,0.15);width:36px;height:36px;font-size:1rem;border-radius:8px;margin-bottom:1rem">🔬</div>
+        <h4>Model Comparison</h4>
+        <p>Ask the same question to Claude and DeepSeek simultaneously → Compare answers side by side.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLATFORMS -->
+  <section style="padding:4rem clamp(1.5rem,5vw,4rem)">
+    <div class="text-center" style="margin-bottom:3rem">
+      <span class="section-label">Availability</span>
+      <h2 class="section-title">Works everywhere you work</h2>
+    </div>
+    <div class="platforms-grid">
+      <div class="platform-card">
+        <div class="platform-icon">🪟</div>
+        <h4>Windows</h4>
+        <p>Full native experience</p>
+        <div class="platform-formats">
+          <span class="format-tag">.exe</span>
+          <span class="format-tag">.msi</span>
+        </div>
+      </div>
+      <div class="platform-card">
+        <div class="platform-icon">🍎</div>
+        <h4>macOS</h4>
+        <p>Apple Silicon & Intel</p>
+        <div class="platform-formats">
+          <span class="format-tag">.dmg</span>
+        </div>
+      </div>
+      <div class="platform-card">
+        <div class="platform-icon">🐧</div>
+        <h4>Linux</h4>
+        <p>All major distros</p>
+        <div class="platform-formats">
+          <span class="format-tag">.AppImage</span>
+          <span class="format-tag">.deb</span>
+          <span class="format-tag">.rpm</span>
+          <span class="format-tag">.snap</span>
+        </div>
+      </div>
+      <div class="platform-card">
+        <div class="platform-icon">📦</div>
+        <h4>npm Package</h4>
+        <p>Global CLI install</p>
+        <div class="platform-formats">
+          <span class="format-tag">npm</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section style="padding:4rem clamp(1.5rem,5vw,4rem)">
+    <div class="text-center" style="margin-bottom:3rem">
+      <span class="section-label">Community</span>
+      <h2 class="section-title">What developers say</h2>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="testimonial-text">"Finally, a single interface that handles all my AI providers. The commit message generator alone saves me 20 minutes a day. Elara is now a permanent part of my dev setup."</p>
+        <div class="testimonial-author">
+          <div class="author-avatar" style="background:linear-gradient(135deg,#7c6af0,#ec4899)">AR</div>
+          <div>
+            <p class="author-name">Alex R.</p>
+            <p class="author-role">Senior Backend Engineer</p>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="testimonial-text">"I use 4 different AI services daily. Elara replaced all the browser tabs. The analytics dashboard is incredibly useful — I finally know where my API budget goes."</p>
+        <div class="testimonial-author">
+          <div class="author-avatar" style="background:linear-gradient(135deg,#06b6d4,#3ecf8e)">SK</div>
+          <div>
+            <p class="author-name">Sara K.</p>
+            <p class="author-role">Full-stack Developer</p>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <p class="testimonial-text">"The CLI integration is killer. I trigger Elara straight from my terminal scripts. Open-source, local-first, and incredibly fast. Exactly what I was looking for."</p>
+        <div class="testimonial-author">
+          <div class="author-avatar" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">JT</div>
+          <div>
+            <p class="author-name">James T.</p>
+            <p class="author-role">DevOps Engineer</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <div class="cta-bg"></div>
+    <h2>Start building faster today</h2>
+    <p>Free forever. Bring your own API keys. No tracking, no telemetry.</p>
+    <div class="cta-actions">
+      <a href="#" onclick="showPage('download')" class="btn btn-primary btn-xl">Download for free</a>
+      <a href="https://github.com/KhanhRomVN" target="_blank" class="btn btn-ghost btn-xl">View on GitHub →</a>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="nav-logo">
+          <div class="logo-mark">E</div>
+          <span>Elara</span>
+        </div>
+        <p>One interface for all your AI models. Built for developers who want speed, privacy, and control.</p>
+        <div class="footer-socials" style="margin-top:1.25rem">
+          <a class="social-btn" href="https://github.com/KhanhRomVN" target="_blank" title="GitHub">⬡</a>
+          <a class="social-btn" href="mailto:khanhromvn@gmail.com" title="Email">✉</a>
+        </div>
+      </div>
+      <div class="footer-links">
+        <h5>Product</h5>
+        <ul>
+          <li><a href="#features" onclick="showPage('home')">Features</a></li>
+          <li><a href="#" onclick="showPage('download')">Download</a></li>
+          <li><a href="#" onclick="showPage('changelog')">Changelog</a></li>
+          <li><a href="https://github.com/KhanhRomVN" target="_blank">GitHub</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h5>Legal</h5>
+        <ul>
+          <li><a href="#" onclick="showPage('privacy')">Privacy Policy</a></li>
+          <li><a href="#" onclick="showPage('terms')">Terms of Service</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h5>Connect</h5>
+        <ul>
+          <li><a href="mailto:khanhromvn@gmail.com">khanhromvn@gmail.com</a></li>
+          <li><a href="https://github.com/KhanhRomVN" target="_blank">@KhanhRomVN</a></li>
+          <li><a href="https://github.com/KhanhRomVN/issues" target="_blank">Report a Bug</a></li>
+          <li><a href="https://github.com/KhanhRomVN/issues" target="_blank">Request Feature</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 Elara by <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">KhanhRomVN</a>. Open-source software.</p>
+      <p style="color:var(--text3)">Made with ♥ for the developer community</p>
+    </div>
+  </footer>
+</div>
+
+<!-- ============================= DOWNLOAD PAGE ============================= -->
+<div class="page" id="page-download">
+  <div class="inner-page">
+    <div class="inner-container" style="max-width:900px">
+      <div class="inner-header">
+        <h1>Download Elara</h1>
+        <p>Free forever. Works on Windows, macOS, and Linux. Bring your own API keys.</p>
+      </div>
+
+      <div class="cli-block">
+        <div class="cli-label">Install via npm (all platforms)</div>
+        <div class="cli-code">
+          <code>npm install -g elara</code>
+          <button class="copy-btn" onclick="copyText('npm install -g elara', this)">Copy</button>
+        </div>
+      </div>
+
+      <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1.5rem;letter-spacing:-0.02em">Desktop installers</h2>
+      <div class="download-grid">
+        <div class="download-card">
+          <div style="font-size:2rem;margin-bottom:0.75rem">🪟</div>
+          <h3>Windows</h3>
+          <p>Windows 10 and later, 64-bit</p>
+          <div class="download-formats">
+            <div class="format-item">
+              <span class="format-name">elara-setup.exe</span>
+              <span class="format-size">~85 MB</span>
+            </div>
+            <div class="format-item">
+              <span class="format-name">elara-setup.msi</span>
+              <span class="format-size">~82 MB</span>
+            </div>
+          </div>
+          <a href="https://github.com/KhanhRomVN" target="_blank" class="btn btn-primary" style="width:100%;justify-content:center">Download for Windows</a>
+        </div>
+        <div class="download-card">
+          <div style="font-size:2rem;margin-bottom:0.75rem">🍎</div>
+          <h3>macOS</h3>
+          <p>macOS 11+ · Apple Silicon & Intel</p>
+          <div class="download-formats">
+            <div class="format-item">
+              <span class="format-name">elara.dmg (Universal)</span>
+              <span class="format-size">~90 MB</span>
+            </div>
+          </div>
+          <a href="https://github.com/KhanhRomVN" target="_blank" class="btn btn-primary" style="width:100%;justify-content:center">Download for macOS</a>
+        </div>
+        <div class="download-card">
+          <div style="font-size:2rem;margin-bottom:0.75rem">🐧</div>
+          <h3>Linux</h3>
+          <p>Ubuntu, Fedora, Arch, and more</p>
+          <div class="download-formats">
+            <div class="format-item">
+              <span class="format-name">elara.AppImage</span>
+              <span class="format-size">~95 MB</span>
+            </div>
+            <div class="format-item">
+              <span class="format-name">elara_amd64.deb</span>
+              <span class="format-size">~80 MB</span>
+            </div>
+            <div class="format-item">
+              <span class="format-name">elara.x86_64.rpm</span>
+              <span class="format-size">~81 MB</span>
+            </div>
+            <div class="format-item">
+              <span class="format-name">elara.snap</span>
+              <span class="format-size">~92 MB</span>
+            </div>
+          </div>
+          <a href="https://github.com/KhanhRomVN" target="_blank" class="btn btn-primary" style="width:100%;justify-content:center">Download for Linux</a>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:2rem;margin-top:2rem">
+        <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:0.75rem">⚡ Quick Start</h3>
+        <ol style="color:var(--text2);font-size:0.9rem;line-height:1.8;padding-left:1.25rem">
+          <li>Download and install Elara for your platform</li>
+          <li>Open Elara and go to <strong style="color:var(--text)">Accounts → Add Account</strong></li>
+          <li>Enter your API key or login credentials for any AI provider</li>
+          <li>Open <strong style="color:var(--text)">Playground</strong>, select your provider and model, and start chatting</li>
+          <li>Optional: Enable Git integration in Settings for commit message generation</li>
+        </ol>
+      </div>
+
+      <div style="text-align:center;margin-top:3rem;color:var(--text3);font-size:0.875rem">
+        All releases are available on <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">GitHub Releases</a>. Found a bug? <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">Open an issue</a>.
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer same -->
+  <footer style="border-top:1px solid var(--border)">
+    <div class="footer-bottom" style="max-width:900px;margin:0 auto;padding:2rem clamp(1.5rem,5vw,4rem)">
+      <p>© 2025 Elara by <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">KhanhRomVN</a></p>
+      <div style="display:flex;gap:1.5rem;font-size:0.8rem">
+        <a href="#" onclick="showPage('privacy')" style="color:var(--text3)">Privacy</a>
+        <a href="#" onclick="showPage('terms')" style="color:var(--text3)">Terms</a>
+        <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--text3)">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ============================= CHANGELOG PAGE ============================= -->
+<div class="page" id="page-changelog">
+  <div class="inner-page">
+    <div class="inner-container">
+      <div class="inner-header">
+        <h1>Changelog</h1>
+        <p>All notable changes to Elara. Follows <a href="https://keepachangelog.com" target="_blank" style="color:var(--accent2)">Keep a Changelog</a> format.</p>
+      </div>
+      <div class="changelog-list">
+        <div class="changelog-item">
+          <div>
+            <div class="changelog-version">v2.1.0</div>
+            <div class="changelog-date">May 2025</div>
+          </div>
+          <div class="changelog-content">
+            <ul>
+              <li><span class="change-tag tag-new">New</span> Claude Sonnet 4 and Opus 4 support via Anthropic API</li>
+              <li><span class="change-tag tag-new">New</span> Kiro and Z.ai provider integrations</li>
+              <li><span class="change-tag tag-improve">Improve</span> Usage analytics now shows cost estimates per session</li>
+              <li><span class="change-tag tag-improve">Improve</span> CLI API server performance improved by 40%</li>
+              <li><span class="change-tag tag-fix">Fix</span> Fixed multi-account token refresh issue on macOS Sequoia</li>
+              <li><span class="change-tag tag-fix">Fix</span> Fixed file upload size limit not being enforced correctly</li>
+            </ul>
+          </div>
+        </div>
+        <div class="changelog-item">
+          <div>
+            <div class="changelog-version">v2.0.0</div>
+            <div class="changelog-date">March 2025</div>
+          </div>
+          <div class="changelog-content">
+            <ul>
+              <li><span class="change-tag tag-new">New</span> Complete UI redesign — tabbed conversations, new sidebar</li>
+              <li><span class="change-tag tag-new">New</span> Git Commit Message Generator with conventional commits support</li>
+              <li><span class="change-tag tag-new">New</span> Reasoning mode toggle for supported models (o1, Sonnet 3.7)</li>
+              <li><span class="change-tag tag-new">New</span> Global hotkeys and system tray integration</li>
+              <li><span class="change-tag tag-new">New</span> Local API server (localhost:8888) for CLI tool integration</li>
+              <li><span class="change-tag tag-improve">Improve</span> Multi-account management overhauled with import/export</li>
+              <li><span class="change-tag tag-improve">Improve</span> Streaming responses now render markdown in real time</li>
+            </ul>
+          </div>
+        </div>
+        <div class="changelog-item">
+          <div>
+            <div class="changelog-version">v1.5.2</div>
+            <div class="changelog-date">January 2025</div>
+          </div>
+          <div class="changelog-content">
+            <ul>
+              <li><span class="change-tag tag-new">New</span> HuggingChat provider support</li>
+              <li><span class="change-tag tag-new">New</span> Gemini Flash 2.0 model added</li>
+              <li><span class="change-tag tag-fix">Fix</span> Fixed memory leak in long-running chat sessions</li>
+              <li><span class="change-tag tag-fix">Fix</span> Fixed Windows auto-update failing behind corporate proxies</li>
+              <li><span class="change-tag tag-improve">Improve</span> Dark mode contrast improvements across all screens</li>
+            </ul>
+          </div>
+        </div>
+        <div class="changelog-item">
+          <div>
+            <div class="changelog-version">v1.5.0</div>
+            <div class="changelog-date">December 2024</div>
+          </div>
+          <div class="changelog-content">
+            <ul>
+              <li><span class="change-tag tag-new">New</span> Web search integration (provider-level toggle)</li>
+              <li><span class="change-tag tag-new">New</span> File upload support for PDFs, images, and code files</li>
+              <li><span class="change-tag tag-new">New</span> Usage analytics dashboard with charts</li>
+              <li><span class="change-tag tag-improve">Improve</span> Provider connection status indicators</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer style="border-top:1px solid var(--border)">
+    <div class="footer-bottom" style="max-width:800px;margin:0 auto;padding:2rem clamp(1.5rem,5vw,4rem)">
+      <p>© 2025 Elara by <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">KhanhRomVN</a></p>
+      <div style="display:flex;gap:1.5rem;font-size:0.8rem">
+        <a href="#" onclick="showPage('privacy')" style="color:var(--text3)">Privacy</a>
+        <a href="#" onclick="showPage('terms')" style="color:var(--text3)">Terms</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ============================= PRIVACY POLICY ============================= -->
+<div class="page" id="page-privacy">
+  <div class="inner-page">
+    <div class="inner-container">
+      <div class="inner-header">
+        <h1>Privacy Policy</h1>
+        <p>Last updated: May 1, 2025</p>
+      </div>
+      <div class="prose">
+        <div class="callout">
+          <p><strong>TL;DR:</strong> Elara is local-first software. Your API keys, credentials, and conversation data are stored on your device. Elara itself does not collect, transmit, or store any of your personal data on its servers.</p>
+        </div>
+
+        <h2>1. Who We Are</h2>
+        <p>Elara is developed and maintained by KhanhRomVN, an independent developer. You can contact us at <a href="mailto:khanhromvn@gmail.com">khanhromvn@gmail.com</a>.</p>
+
+        <h2>2. What Data We Collect</h2>
+        <p>Elara does <strong>not collect</strong> any personally identifiable information. Specifically:</p>
+        <ul>
+          <li>We do not collect your name, email address, or any account information.</li>
+          <li>We do not collect your API keys or AI provider credentials.</li>
+          <li>We do not collect your conversation history or prompts.</li>
+          <li>We do not use analytics SDKs, tracking pixels, or telemetry tools.</li>
+        </ul>
+
+        <h2>3. Data Stored Locally</h2>
+        <p>The following data is stored exclusively on your local device:</p>
+        <ul>
+          <li><strong>API keys and credentials</strong> — stored in your operating system's secure storage</li>
+          <li><strong>Conversation history</strong> — stored in a local database on your machine</li>
+          <li><strong>Application preferences and settings</strong> — stored in your user config directory</li>
+          <li><strong>Usage statistics</strong> — stored locally; never transmitted to Elara servers</li>
+        </ul>
+
+        <h2>4. Third-Party AI Providers</h2>
+        <p>When you interact with an AI model through Elara, your prompts and conversation data are sent directly to the AI provider you have configured (e.g., Anthropic, Groq, Mistral). Elara acts solely as a client application — it does not intercept, store, or log any of this communication.</p>
+        <p>Each AI provider has its own Privacy Policy and Terms of Service. You are responsible for reviewing and complying with those policies. Elara is not affiliated with any of these providers.</p>
+
+        <h2>5. Automatic Updates</h2>
+        <p>Elara may check for updates by making anonymous requests to our update server (GitHub Releases). These requests contain only the current version number and your operating system type. No personal data is included.</p>
+
+        <h2>6. Open Source</h2>
+        <p>Elara is open-source software. You can review the complete source code on <a href="https://github.com/KhanhRomVN" target="_blank">GitHub</a> to verify our privacy practices.</p>
+
+        <h2>7. Children's Privacy</h2>
+        <p>Elara is not directed at children under the age of 13. We do not knowingly collect information from children.</p>
+
+        <h2>8. Changes to This Policy</h2>
+        <p>We may update this Privacy Policy from time to time. Changes will be reflected by the "Last updated" date at the top of this page and noted in the Changelog.</p>
+
+        <h2>9. Contact</h2>
+        <p>Questions about this Privacy Policy? Contact us at <a href="mailto:khanhromvn@gmail.com">khanhromvn@gmail.com</a> or open an issue on <a href="https://github.com/KhanhRomVN" target="_blank">GitHub</a>.</p>
+      </div>
+    </div>
+  </div>
+  <footer style="border-top:1px solid var(--border)">
+    <div class="footer-bottom" style="max-width:800px;margin:0 auto;padding:2rem clamp(1.5rem,5vw,4rem)">
+      <p>© 2025 Elara by <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">KhanhRomVN</a></p>
+      <div style="display:flex;gap:1.5rem;font-size:0.8rem">
+        <a href="#" onclick="showPage('home')" style="color:var(--text3)">Home</a>
+        <a href="#" onclick="showPage('terms')" style="color:var(--text3)">Terms</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ============================= TERMS OF SERVICE ============================= -->
+<div class="page" id="page-terms">
+  <div class="inner-page">
+    <div class="inner-container">
+      <div class="inner-header">
+        <h1>Terms of Service</h1>
+        <p>Last updated: May 1, 2025</p>
+      </div>
+      <div class="prose">
+        <div class="callout">
+          <p><strong>Summary:</strong> Elara is free, open-source software. Use it responsibly, comply with AI provider terms, and don't hold us liable for AI-generated content.</p>
+        </div>
+
+        <h2>1. Acceptance</h2>
+        <p>By downloading, installing, or using Elara, you agree to these Terms of Service. If you do not agree, do not use Elara.</p>
+
+        <h2>2. License</h2>
+        <p>Elara is open-source software released under the MIT License. You may use, copy, modify, and distribute Elara subject to the terms of that license. The source code is available on <a href="https://github.com/KhanhRomVN" target="_blank">GitHub</a>.</p>
+
+        <h2>3. Your Responsibilities</h2>
+        <p>You are solely responsible for:</p>
+        <ul>
+          <li>Obtaining and maintaining valid API keys and credentials for the AI providers you use</li>
+          <li>Complying with the Terms of Service of each AI provider accessed through Elara</li>
+          <li>Any costs incurred from AI provider API usage</li>
+          <li>Ensuring your use of Elara and connected AI services complies with applicable laws</li>
+          <li>The content of your prompts and the use you make of AI-generated responses</li>
+        </ul>
+
+        <h2>4. AI-Generated Content</h2>
+        <p>Elara is a client application that facilitates communication with third-party AI services. We have no control over, and are not responsible for, the content generated by AI models. AI-generated content may be inaccurate, incomplete, or inappropriate — always exercise your own judgment.</p>
+
+        <h2>5. Third-Party Services</h2>
+        <p>Elara integrates with third-party AI providers (Anthropic, Groq, Mistral, DeepSeek, etc.). Your use of these services is governed by their respective Terms of Service and Privacy Policies. Elara is not affiliated with, endorsed by, or sponsored by any of these providers.</p>
+
+        <h2>6. Disclaimer of Warranties</h2>
+        <p>Elara is provided "as is" without warranty of any kind, express or implied. We do not warrant that Elara will be error-free, uninterrupted, or free of security vulnerabilities. Use at your own risk.</p>
+
+        <h2>7. Limitation of Liability</h2>
+        <p>To the maximum extent permitted by applicable law, KhanhRomVN shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of Elara, even if advised of the possibility of such damages.</p>
+
+        <h2>8. Prohibited Uses</h2>
+        <p>You may not use Elara to:</p>
+        <ul>
+          <li>Violate any applicable laws or regulations</li>
+          <li>Generate harmful, abusive, or illegal content</li>
+          <li>Attempt to circumvent the safety measures of AI providers</li>
+          <li>Engage in unauthorized access to systems or networks</li>
+        </ul>
+
+        <h2>9. Changes</h2>
+        <p>We reserve the right to modify these terms at any time. Continued use of Elara after changes constitutes acceptance. Significant changes will be noted in the Changelog.</p>
+
+        <h2>10. Governing Law</h2>
+        <p>These terms are governed by applicable law. Any disputes shall be resolved through good-faith negotiation before resorting to legal proceedings.</p>
+
+        <h2>11. Contact</h2>
+        <p>Questions? Contact <a href="mailto:khanhromvn@gmail.com">khanhromvn@gmail.com</a>.</p>
+      </div>
+    </div>
+  </div>
+  <footer style="border-top:1px solid var(--border)">
+    <div class="footer-bottom" style="max-width:800px;margin:0 auto;padding:2rem clamp(1.5rem,5vw,4rem)">
+      <p>© 2025 Elara by <a href="https://github.com/KhanhRomVN" target="_blank" style="color:var(--accent2)">KhanhRomVN</a></p>
+      <div style="display:flex;gap:1.5rem;font-size:0.8rem">
+        <a href="#" onclick="showPage('home')" style="color:var(--text3)">Home</a>
+        <a href="#" onclick="showPage('privacy')" style="color:var(--text3)">Privacy</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+// ===== PAGE ROUTING =====
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  window.scrollTo(0,0);
+  // update active nav
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active-link'));
+  if(name === 'home') document.getElementById('nl-home') && document.getElementById('nl-home').classList.add('active-link');
+}
+
+// ===== THEME =====
+let isDark = true;
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+}
+
+// ===== MOBILE MENU =====
+let mobileOpen = false;
+function toggleMobile() {
+  mobileOpen = !mobileOpen;
+  document.getElementById('mobile-menu').classList.toggle('open', mobileOpen);
+}
+
+// ===== COPY =====
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 2000);
+  });
+}
+
+// ===== NAV SCROLL EFFECT =====
+window.addEventListener('scroll', () => {
+  const nav = document.getElementById('nav');
+  if(window.scrollY > 20) {
+    nav.style.borderBottomColor = 'var(--border2)';
+  } else {
+    nav.style.borderBottomColor = 'var(--border)';
+  }
+});
+
+// Close mobile menu on resize
+window.addEventListener('resize', () => {
+  if(window.innerWidth > 768 && mobileOpen) {
+    mobileOpen = false;
+    document.getElementById('mobile-menu').classList.remove('open');
+  }
+});
+</script>
+</body>
+</html>

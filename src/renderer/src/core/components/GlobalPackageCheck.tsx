@@ -9,23 +9,8 @@ export const GlobalPackageCheck = () => {
   const [checking, setChecking] = useState(true);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
-  const checkInstall = async () => {
-    setChecking(true);
-    try {
-      const result = await invoke<boolean>('check_global_server_install');
-      setIsInstalled(result || false);
-    } catch (error) {
-      console.error('Failed to check global install:', error);
-      setIsInstalled(false);
-    } finally {
-      setTimeout(() => setChecking(false), 500);
-    }
-  };
-
-  useEffect(() => {
-    checkInstall();
-  }, []);
-
+// Version check removed: no longer required
+  return null;
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedCmd(id);

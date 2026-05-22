@@ -1,0 +1,13 @@
+POST https://chat.deepseek.com/api/v0/chat_session/create
+
+{
+  "request": "{}",
+  "response": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"b041b7b0-b891-46f7-a308-9884b971cb9b\",\"seq_id\":201577543,\"agent\":\"chat\",\"model_type\":\"default\",\"title\":null,\"title_type\":\"WIP\",\"version\":0,\"current_message_id\":null,\"pinned\":false,\"inserted_at\":1779414344.006,\"updated_at\":1779414344.006},\"ttl_seconds\":259200}}}"
+}
+
+POST https://chat.deepseek.com/api/v0/chat/completion
+
+{
+  "request": "{\"chat_session_id\":\"b041b7b0-b891-46f7-a308-9884b971cb9b\",\"parent_message_id\":null,\"model_type\":\"default\",\"prompt\":\"xin chào instant\",\"ref_file_ids\":[],\"thinking_enabled\":false,\"search_enabled\":false,\"action\":null,\"preempt\":false}",
+  "response": "event: ready\ndata: {\"request_message_id\":1,\"response_message_id\":2,\"model_type\":\"default\"}\n\nevent: update_session\ndata: {\"updated_at\":1779414437.9003808}\n\ndata: {\"v\":{\"response\":{\"message_id\":2,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":false,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"WIP\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"feedback\":null,\"inserted_at\":1779414437.892686,\"search_enabled\":false,\"fragments\":[{\"id\":2,\"type\":\"RESPONSE\",\"content\":\"X\",\"references\":[],\"stage_id\":1}],\"conversation_mode\":\"DEFAULT\",\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false}}}\n\ndata: {\"p\":\"response/fragments/-1/content\",\"o\":\"APPEND\",\"v\":\"in\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ào\"}\n\ndata: {\"v\":\"!\"}\n\ndata: {\"v\":\" R\"}\n\ndata: {\"v\":\"ất\"}\n\ndata: {\"v\":\" v\"}\n\ndata: {\"v\":\"ui\"}\n\ndata: {\"v\":\" được\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"ặ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" bạn\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ôi\"}\n\ndata: {\"v\":\" có\"}\n\ndata: {\"v\":\" thể\"}\n\ndata: {\"v\":\" gi\"}\n\ndata: {\"v\":\"ú\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"ì\"}\n\ndata: {\"v\":\" cho\"}\n\ndata: {\"v\":\" bạn\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ôm\"}\n\ndata: {\"v\":\" nay\"}\n\ndata: {\"v\":\"?\"}\n\ndata: {\"p\":\"response\",\"o\":\"BATCH\",\"v\":[{\"p\":\"accumulated_token_usage\",\"v\":66},{\"p\":\"quasi_status\",\"v\":\"FINISHED\"}]}\n\ndata: {\"p\":\"response/status\",\"o\":\"SET\",\"v\":\"FINISHED\"}\n\nevent: update_session\ndata: {\"updated_at\":1779414438.5387409}\n\nevent: title\ndata: {\"content\":\"Vietnamese greeting and assistance offer\"}\n\nevent: close\ndata: {\"click_behavior\":\"none\",\"auto_resume\":false}\n\n"
+}

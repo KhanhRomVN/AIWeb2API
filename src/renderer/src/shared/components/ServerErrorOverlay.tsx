@@ -28,12 +28,11 @@ export const ServerErrorOverlay = ({ onRetry }: ServerErrorOverlayProps) => {
             <span>How to fix:</span>
           </div>
           <p className="text-sm text-muted-foreground/90 leading-relaxed px-1">
-            Ensure you have installed the server package globally via npm and it's accessible in
-            your PATH:
+            Ensure the Elara server is running. Start it manually:
           </p>
           <div className="bg-black/60 p-4 rounded-xl border border-white/10 font-mono text-[13px] select-all text-primary shadow-inner">
             <span className="text-muted-foreground/50 mr-2">$</span>
-            npm install -g @khanhromvn/elara-server
+            elara-server
           </div>
         </div>
 
