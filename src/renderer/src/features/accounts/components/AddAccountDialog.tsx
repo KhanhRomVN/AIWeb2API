@@ -124,6 +124,12 @@ export function AddAccountDialog({
 
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    if (!provider || !selectedProviderData?.is_enabled) {
+      setError('Please select a valid provider first');
+      return;
+    }
+    
     console.log('[AddAccountDialog] handleLogin called for provider:', provider);
 
     const hasOAuth = selectedProviderData?.auth_methods?.includes('oauth');
@@ -451,7 +457,7 @@ export function AddAccountDialog({
                       <button
                         type="button"
                         onClick={(e) => handleLogin(e as any)}
-                        disabled={loading}
+                        disabled={loading || !provider || !selectedProviderData?.is_enabled}
                         className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-lg hover:scale-105 active:scale-100 h-11 px-8 w-full max-w-xs"
                       >
                         {loading ? (

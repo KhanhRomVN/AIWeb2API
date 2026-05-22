@@ -239,18 +239,26 @@ export const PlaygroundPage = ({
                 onRemoveAttachment={handleRemoveAttachment}
                 streamEnabled={streamEnabled}
                 setStreamEnabled={setStreamEnabled}
-                supportsSearch={
-                  providersList.find(
-                    (p) =>
-                      p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-                  )?.is_search
-                }
-                supportsUpload={
-                  providersList.find(
-                    (p) =>
-                      p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-                  )?.is_upload
-                }
+                supportsSearch={(() => {
+                  const providerKey = selectedProvider.toLowerCase();
+                  const models = providerModelsList[providerKey] || [];
+                  const selectedModelId = providerModels[providerKey];
+                  if (models && selectedModelId) {
+                    const model = models.find((m) => m.id === selectedModelId);
+                    return model?.is_search === true;
+                  }
+                  return false;
+                })()}
+                supportsUpload={(() => {
+                  const providerKey = selectedProvider.toLowerCase();
+                  const models = providerModelsList[providerKey] || [];
+                  const selectedModelId = providerModels[providerKey];
+                  if (models && selectedModelId) {
+                    const model = models.find((m) => m.id === selectedModelId);
+                    return model?.is_upload === true;
+                  }
+                  return false;
+                })()}
                 supportsThinking={(() => {
                   const providerKey = selectedProvider.toLowerCase();
                   const models = providerModelsList[providerKey] || [];
@@ -263,12 +271,7 @@ export const PlaygroundPage = ({
                 })()}
                 temperature={temperature}
                 setTemperature={setTemperature}
-                isTemperatureSupported={
-                  providersList.find(
-                    (p) =>
-                      p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-                  )?.is_temperature
-                }
+                isTemperatureSupported={true}
                 onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
                 onNavigateToSettings={() => navigate('/settings')}
               />
@@ -341,18 +344,26 @@ export const PlaygroundPage = ({
                   onRemoveAttachment={handleRemoveAttachment}
                   streamEnabled={streamEnabled}
                   setStreamEnabled={setStreamEnabled}
-                  supportsSearch={
-                    providersList.find(
-                      (p) =>
-                        p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-                    )?.is_search
-                  }
-                  supportsUpload={
-                    providersList.find(
-                      (p) =>
-                        p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-                    )?.is_upload
-                  }
+                  supportsSearch={(() => {
+                    const providerKey = selectedProvider.toLowerCase();
+                    const models = providerModelsList[providerKey] || [];
+                    const selectedModelId = providerModels[providerKey];
+                    if (models && selectedModelId) {
+                      const model = models.find((m) => m.id === selectedModelId);
+                      return model?.is_search === true;
+                    }
+                    return false;
+                  })()}
+                  supportsUpload={(() => {
+                    const providerKey = selectedProvider.toLowerCase();
+                    const models = providerModelsList[providerKey] || [];
+                    const selectedModelId = providerModels[providerKey];
+                    if (models && selectedModelId) {
+                      const model = models.find((m) => m.id === selectedModelId);
+                      return model?.is_upload === true;
+                    }
+                    return false;
+                  })()}
                   supportsThinking={(() => {
                     const providerKey = selectedProvider.toLowerCase();
                     const models = providerModelsList[providerKey] || [];
@@ -366,12 +377,7 @@ export const PlaygroundPage = ({
                   isConversationActive={messages.length > 0}
                   temperature={temperature}
                   setTemperature={setTemperature}
-                  isTemperatureSupported={
-                    providersList.find(
-                      (p) =>
-                        p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-                    )?.is_temperature
-                  }
+                  isTemperatureSupported={true}
                   onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
                   onGitCommit={handleGitCommit}
                   isGitRepo={gitStatus.isRepo}
@@ -390,11 +396,6 @@ export const PlaygroundPage = ({
         onClose={() => setIsSettingsOpen(false)}
         temperature={temperature ?? 0.7}
         setTemperature={setTemperature}
-        isTemperatureSupported={
-          providersList.find(
-            (p) => p.provider_id === selectedProvider || p.provider_name === selectedProvider,
-          )?.is_temperature
-        }
       />
     </div>
   );

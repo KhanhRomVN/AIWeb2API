@@ -150,9 +150,12 @@ export const usePlaygroundLogic = ({
   // Handle File Uploads (Smart Upload Management) - debounced
   useEffect(() => {
     const uploadPendingFiles = async () => {
-      // Check if provider supports upload from config
-      const config = providersList.find((p) => p.provider_id === selectedProvider);
-      if (!config?.is_upload) return;
+      // Check if model supports upload
+      const providerKey = selectedProvider.toLowerCase();
+      const models = providerModelsList[providerKey] || [];
+      const selectedModelId = providerModels[providerKey];
+      const model = models.find((m) => m.id === selectedModelId);
+      if (!model?.is_upload) return;
 
       // If no account selected, we wait (files remain in 'pending' state)
       if (!selectedAccount) return;

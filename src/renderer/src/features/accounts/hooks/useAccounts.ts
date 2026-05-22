@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Account, Pagination, FlatAccount } from '../types';
 import { StatsPeriod } from '../../models/types';
-import { callBackend } from '../../../shared/utils/backend';
+import { callBackend, getBackendPortNumber } from '../../../shared/utils/backend';
 import { toast } from 'sonner';
 
 const PROVIDER_CACHE_KEY = 'elara_provider_configs_cache';
@@ -109,6 +109,7 @@ export const useAccounts = () => {
               max_req_conversation: stats?.max_req_conversation || 0,
               max_token_conversation: stats?.max_token_conversation || 0,
               isActive: pConfig ? pConfig.is_enabled : true,
+              is_active_cli: (acc as any).is_active_cli,
             };
           });
 
@@ -212,12 +213,28 @@ export const useAccounts = () => {
     }
   };
 
+  const switchKiroAccount = async (id: string) => {
+    try {
+      const result = await callBackend(`/v1/accounts/${id}/switch`, 'POST');
+      if (result.success) {
+        toast.success(result.message || 'Successfully switched Kiro CLI account');
+        fetchAccounts(pagination.page, pagination.limit, true);
+      } else {
+        toast.error(result.message || 'Failed to switch account');
+      }
+    } catch (error) {
+      console.error('Failed to switch Kiro CLI account:', error);
+      toast.error('An error occurred while switching account');
+    }
+  };
+
   return {
     accounts: filteredAccounts, // Return filtered view
     rawAccounts: accounts, // Expose raw page
     allStats, // Expose all stats for global range calculation
     allAccounts, // Expose all accounts for email options
     loading,
+    serverPort: getBackendPortNumber(),
     providerConfigs,
     searchQuery,
     setSearchQuery,
@@ -254,5 +271,6 @@ export const useAccounts = () => {
     setMaxReqRange,
     maxTokenRange,
     setMaxTokenRange,
+    switchKiroAccount,
   };
 };

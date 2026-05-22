@@ -63,6 +63,7 @@ export const Accounts = () => {
     setPeriod,
     offset,
     setOffset,
+    switchKiroAccount,
   } = useAccounts();
 
   useEffect(() => {
@@ -346,6 +347,7 @@ export const Accounts = () => {
             providerConfigs={providerConfigs}
             period={period}
             onDelete={handleDelete}
+            onSwitchAccount={switchKiroAccount}
           />
         </div>
 

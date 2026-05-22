@@ -6,7 +6,6 @@ interface SettingsSidebarProps {
   onClose: () => void;
   temperature: number;
   setTemperature: (val: number) => void;
-  isTemperatureSupported: boolean;
 }
 
 export const SettingsSidebar = ({
@@ -14,7 +13,6 @@ export const SettingsSidebar = ({
   onClose,
   temperature,
   setTemperature,
-  isTemperatureSupported,
 }: SettingsSidebarProps) => {
   if (!isOpen) return null;
 
@@ -56,27 +54,15 @@ export const SettingsSidebar = ({
                     min={0}
                     max={2}
                     step={0.1}
-                    disabled={!isTemperatureSupported}
                     value={temperature}
                     onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    className={cn(
-                      'w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary',
-                      !isTemperatureSupported && 'opacity-50 cursor-not-allowed',
-                    )}
+                    className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
                   />
                   <div className="flex justify-between text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
                     <span>Precise</span>
                     <span>Creative</span>
                   </div>
                 </div>
-
-                {!isTemperatureSupported && (
-                  <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                    <p className="text-[10px] text-amber-500 font-medium leading-relaxed">
-                      This provider does not support temperature control.
-                    </p>
-                  </div>
-                )}
 
                 <p className="text-[11px] text-muted-foreground leading-relaxed italic">
                   Higher values make output more random, lower values more deterministic.

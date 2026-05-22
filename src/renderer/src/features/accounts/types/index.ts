@@ -31,4 +31,5 @@ export interface FlatAccount extends Account {
   last_refreshed_at?: number;
   usage?: string;
   reset_period?: string;
+  is_active_cli?: boolean;
 }

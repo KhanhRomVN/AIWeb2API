@@ -13,5 +13,8 @@ commands.allow = [
     "server_get_status",
     "watch_dir",
     "unwatch_dir",
-    "shell_execute"
+    "shell_execute",
+    "get_system_stats",
+    "get_process_list",
+    "check_global_server_install"
 ]

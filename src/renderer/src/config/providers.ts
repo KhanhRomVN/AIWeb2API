@@ -28,7 +28,6 @@ export interface ProviderConfig {
   detail_fetch_required?: boolean;
   color?: string;
   conflict_search_with_upload?: boolean;
-  is_temperature?: boolean;
   models?: any[];
   connection_mode?: 'https_spoofing' | 'headless_browser';
   concurrency_mode?: 'concurrent' | 'sequential';
@@ -96,7 +95,6 @@ async function fetchProvidersFromApi(port: number): Promise<ProviderConfig[]> {
         detail_fetch_required: p.detail_fetch_required ?? false,
         color: p.color,
         conflict_search_with_upload: p.conflict_search_with_upload,
-        is_temperature: p.is_temperature ?? false,
         models: p.models,
         connection_mode: p.connection_mode,
         concurrency_mode: p.concurrency_mode,

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   RefreshCcw,
   Zap,
+  Terminal,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -29,6 +30,7 @@ interface AccountsTableProps {
   providerConfigs: any[];
   period: string;
   onDelete: (id: string, email?: string) => void;
+  onSwitchAccount?: (id: string) => void;
 }
 
 const formatNumber = (num: number) => {
@@ -59,6 +61,7 @@ export const AccountsTable = ({
   providerConfigs,
   period,
   onDelete,
+  onSwitchAccount,
 }: AccountsTableProps) => {
   const navigate = useNavigate();
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -306,6 +309,12 @@ export const AccountsTable = ({
                     </div>
                     <span className="text-zinc-700 font-light shrink-0">|</span>
                     <span className="text-sm truncate">{account.email}</span>
+                    {account.is_active_cli && (
+                      <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-500 font-bold ml-1 shrink-0 animate-pulse">
+                        <Terminal className="w-2.5 h-2.5" />
+                        ACTIVE CLI
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-2.5 align-middle text-center">
@@ -377,6 +386,21 @@ export const AccountsTable = ({
             left: Math.min(menuPosition.x, window.innerWidth - 230),
           }}
         >
+          {menuAccount.provider_id === 'kiro-cli' && !menuAccount.is_active_cli && (
+            <>
+              <button
+                onClick={() => {
+                  onSwitchAccount?.(menuAccount.id);
+                  setMenuPosition(null);
+                }}
+                className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-emerald-500/10 text-emerald-500 font-medium"
+              >
+                <Terminal className="mr-2 h-4 w-4" />
+                Sử dụng cho CLI
+              </button>
+              <div className="my-1 h-px bg-dropdown-border" />
+            </>
+          )}
           <button
             onClick={() => {
               copyAccountJson(menuAccount);
