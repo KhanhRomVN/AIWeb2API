@@ -42,11 +42,9 @@ export class CertificateManager {
 
   async ensureCertificates(): Promise<CertificatePair> {
     if (await this.certificatesExist()) {
-      console.log('[CertManager] Loading existing certificates');
       return this.loadCertificates();
     }
 
-    console.log('[CertManager] Generating new self-signed certificates');
     return this.generateCertificates();
   }
 
@@ -84,10 +82,6 @@ export class CertificateManager {
       // Clean up CSR
       fs.unlinkSync(csrPath);
 
-      console.log('[CertManager] Certificates generated successfully');
-      console.log(`[CertManager] Certificate: ${this.certPath}`);
-      console.log(`[CertManager] Key: ${this.keyPath}`);
-
       return {
         cert: this.certPath,
         key: this.keyPath,
@@ -103,8 +97,6 @@ export class CertificateManager {
   private async generateCertificatesWithNodeForge(): Promise<CertificatePair> {
     try {
       const forge = require('node-forge');
-
-      console.log('[CertManager] Generating certificates with node-forge');
 
       // Generate key pair
       const keys = forge.pki.rsa.generateKeyPair(2048);
@@ -170,10 +162,6 @@ export class CertificateManager {
       fs.writeFileSync(this.certPath, certPem);
       fs.writeFileSync(this.keyPath, keyPem);
 
-      console.log('[CertManager] Certificates generated with node-forge');
-      console.log(`[CertManager] Certificate: ${this.certPath}`);
-      console.log(`[CertManager] Key: ${this.keyPath}`);
-
       return {
         cert: this.certPath,
         key: this.keyPath,
@@ -210,7 +198,6 @@ export class CertificateManager {
     try {
       if (fs.existsSync(this.certPath)) fs.unlinkSync(this.certPath);
       if (fs.existsSync(this.keyPath)) fs.unlinkSync(this.keyPath);
-      console.log('[CertManager] Certificates deleted');
     } catch (error) {
       console.error('[CertManager] Failed to delete certificates:', error);
     }

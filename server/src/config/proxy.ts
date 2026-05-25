@@ -71,7 +71,6 @@ export class ConfigManager {
     try {
       this.config = { ...this.config, ...config };
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(this.config, null, 2));
-      console.log('[Config] Configuration saved');
     } catch (error) {
       console.error('[Config] Failed to save config:', error);
       throw error;

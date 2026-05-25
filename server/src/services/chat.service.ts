@@ -90,20 +90,13 @@ export const sendMessage = async (
       );
 
       // Update timestamp
-      db.prepare(
-        'UPDATE local_conversations SET updated_at = ? WHERE id = ?',
-      ).run(timestamp, activeConversationId);
-      logger.info(
-        `[ChatService] Saved ${role} message to DB. Session: ${activeConversationId}`,
-      );
+      db.prepare('UPDATE local_conversations SET updated_at = ? WHERE id = ?').run(timestamp, activeConversationId);
     } catch (e) {
-      logger.error('[ChatService] Failed to save message:', e);
+      logger.error(`Failed to save ${role} message`, e);
     }
   };
 
-  logger.info(
-    `[ChatService] Starting sendMessage for provider ${provider_id}. Initial session: ${activeConversationId}`,
-  );
+  logger.info(`sendMessage — provider: ${provider_id}, session: ${activeConversationId}`);
 
   // 1. Save User Message immediately
   if (activeConversationId) {
@@ -127,9 +120,6 @@ export const sendMessage = async (
       activeConversationId = sessionId;
 
       if (oldId && oldId !== sessionId) {
-        logger.debug(
-          `[ChatService] Migrating session ID: ${oldId} -> ${sessionId}`,
-        );
         const db = getDb();
         try {
           db.transaction(() => {
@@ -161,9 +151,8 @@ export const sendMessage = async (
               oldId,
             );
           })();
-          logger.debug(`[ChatService] Session migration successful.`);
         } catch (e) {
-          logger.warn('[ChatService] Failed to migrate local session:', e);
+          logger.warn('Failed to migrate session', e);
         }
       }
 
@@ -193,10 +182,7 @@ export const sendMessage = async (
       if (accountId) {
         const { accountRefreshService } = require('./account-refresh.service');
         accountRefreshService.refreshUsage(accountId).catch((err: any) => {
-          logger.warn(
-            `[ChatService] Failed to auto-refresh usage for account ${accountId}:`,
-            err.message,
-          );
+          logger.warn(`Failed to refresh usage for account ${accountId}: ${err.message}`);
         });
       }
 

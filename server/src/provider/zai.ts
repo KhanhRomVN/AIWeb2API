@@ -11,7 +11,7 @@ import * as crypto from 'crypto';
 const logger = createLogger('ZAIProvider');
 
 const BASE_URL = 'https://chat.z.ai';
-const SALT = "key-@@@@)))()((9))-xxxx&&&%%%%%";
+const SALT = 'key-@@@@)))()((9))-xxxx&&&%%%%%';
 
 // =============================================================================
 // TYPES
@@ -38,7 +38,7 @@ interface SignatureResult {
 
 function getAuthDataFromCredential(credential: string): ZAIAuthData | null {
   if (!credential) return null;
-  
+
   try {
     const credParts = credential.split('|||');
     const jwtToken = credParts[0];
@@ -49,10 +49,18 @@ function getAuthDataFromCredential(credential: string): ZAIAuthData | null {
     if (parts.length >= 2) {
       const payloadB64 = parts[1];
       const padding = '='.repeat((4 - (payloadB64.length % 4)) % 4);
-      const payloadJson = Buffer.from(payloadB64 + padding, 'base64').toString('utf-8');
+      const payloadJson = Buffer.from(payloadB64 + padding, 'base64').toString(
+        'utf-8',
+      );
       const payload = JSON.parse(payloadJson);
       const userId = payload.id;
-      return { token: jwtToken, userId: userId || '', email: payload.email, cookies, userAgent };
+      return {
+        token: jwtToken,
+        userId: userId || '',
+        email: payload.email,
+        cookies,
+        userAgent,
+      };
     }
     return { token: jwtToken, userId: '', cookies, userAgent };
   } catch (e) {
@@ -64,7 +72,7 @@ function getAuthDataFromCredential(credential: string): ZAIAuthData | null {
 function parseUserAgentDetails(userAgent: string) {
   let osName = 'Windows';
   let secChUaPlatform = '"Windows"';
-  
+
   if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
     osName = 'Mac';
     secChUaPlatform = '"macOS"';
@@ -96,10 +104,13 @@ function generateSignatureAndParams(
   const timestamp = timestampMs || String(Date.now());
   const requestId = crypto.randomUUID();
 
-  const currentUrl = chatId ? `https://chat.z.ai/c/${chatId}` : 'https://chat.z.ai/';
+  const currentUrl = chatId
+    ? `https://chat.z.ai/c/${chatId}`
+    : 'https://chat.z.ai/';
   const pathname = chatId ? `/c/${chatId}` : '/';
 
-  const defaultUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  const defaultUa =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   const activeUa = userAgent || defaultUa;
   const uaDetails = parseUserAgentDetails(activeUa);
 
@@ -161,7 +172,10 @@ function generateSignatureAndParams(
 
   const timeChunk = String(Math.floor(Number(timestamp) / 300000));
   const k1 = crypto.createHmac('sha256', SALT).update(timeChunk).digest('hex');
-  const signature = crypto.createHmac('sha256', k1).update(dataString).digest('hex');
+  const signature = crypto
+    .createHmac('sha256', k1)
+    .update(dataString)
+    .digest('hex');
 
   const queryParams = new URLSearchParams(metadata).toString();
 
@@ -179,26 +193,35 @@ function sanitizeCookies(cookieString: string, token: string): string {
   if (regex.test(cookieString)) {
     return cookieString.replace(regex, `token=${token}`);
   } else {
-    return cookieString.trim().endsWith(';') 
-      ? `${cookieString} token=${token};` 
+    return cookieString.trim().endsWith(';')
+      ? `${cookieString} token=${token};`
       : `${cookieString}; token=${token};`;
   }
 }
 
-function getHeaders(token: string, signature: string, chatId?: string, cookies?: string, userAgent?: string): Record<string, string> {
-  const defaultUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+function getHeaders(
+  token: string,
+  signature: string,
+  chatId?: string,
+  cookies?: string,
+  userAgent?: string,
+): Record<string, string> {
+  const defaultUa =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   const activeUa = userAgent || defaultUa;
   const uaDetails = parseUserAgentDetails(activeUa);
-  const referer = chatId ? `https://chat.z.ai/c/${chatId}` : 'https://chat.z.ai/';
+  const referer = chatId
+    ? `https://chat.z.ai/c/${chatId}`
+    : 'https://chat.z.ai/';
   const headers: Record<string, string> = {
-    'Accept': 'text/event-stream',
-    'Authorization': `Bearer ${token}`,
+    Accept: 'text/event-stream',
+    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     'X-Signature': signature,
     'X-Fe-Version': 'prod-fe-1.1.35',
     'User-Agent': activeUa,
-    'Origin': 'https://chat.z.ai',
-    'Referer': referer,
+    Origin: 'https://chat.z.ai',
+    Referer: referer,
     'sec-ch-ua': uaDetails.secChUa,
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': uaDetails.secChUaPlatform,
@@ -240,7 +263,9 @@ export const proxyHandler: ProxyHandler = {
             cookiesVal += `|||${userAgentHeader}`;
           }
         }
-        logger.info('[Proxy] Captured Z.AI token, cookies and user-agent from request headers');
+        logger.info(
+          '[Proxy] Captured Z.AI token, cookies and user-agent from request headers',
+        );
         proxyEvents.emit('zai-token', { cookies: cookiesVal });
       }
     }
@@ -256,7 +281,9 @@ export const proxyHandler: ProxyHandler = {
         try {
           const json = JSON.parse(body);
           if (json.token) {
-            logger.info('[Proxy] Captured Z.AI Login Token, cookies and user-agent from auths API response');
+            logger.info(
+              '[Proxy] Captured Z.AI Login Token, cookies and user-agent from auths API response',
+            );
             let cookiesVal = json.token;
             if (ctx.capturedZaiCookie) {
               cookiesVal += `|||${ctx.capturedZaiCookie}`;
@@ -264,7 +291,10 @@ export const proxyHandler: ProxyHandler = {
                 cookiesVal += `|||${ctx.capturedZaiUserAgent}`;
               }
             }
-            proxyEvents.emit('zai-token', { cookies: cookiesVal, email: json.email });
+            proxyEvents.emit('zai-token', {
+              cookies: cookiesVal,
+              email: json.email,
+            });
           }
         } catch (e) {
           logger.error('[Proxy] Failed to parse Z.AI auths response:', e);
@@ -300,14 +330,19 @@ export class ZAIProvider implements Provider {
     ];
   }
 
-  async getProfile(credential: string): Promise<{ email: string | null; name?: string; id?: string }> {
+  async getProfile(
+    credential: string,
+  ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
       const jwtToken = credential.split('|||')[0];
       const parts = jwtToken.split('.');
       if (parts.length >= 2) {
         const payloadB64 = parts[1];
         const padding = '='.repeat((4 - (payloadB64.length % 4)) % 4);
-        const payloadJson = Buffer.from(payloadB64 + padding, 'base64').toString('utf-8');
+        const payloadJson = Buffer.from(
+          payloadB64 + padding,
+          'base64',
+        ).toString('utf-8');
         const payload = JSON.parse(payloadJson);
         return {
           email: payload.email || null,
@@ -331,11 +366,17 @@ export class ZAIProvider implements Provider {
       partition: `z-${Date.now()}`,
       cookieEvent: 'zai-token',
       infoEvent: 'zai-login-email',
-      validate: async (data: { cookies: string; headers?: any; email?: string }) => {
+      validate: async (data: {
+        cookies: string;
+        headers?: any;
+        email?: string;
+      }) => {
         if (data.cookies) {
           const profile = await this.getProfile(data.cookies);
           const emailOrId = profile.email || profile.id;
-          const isGuest = emailOrId ? emailOrId.toLowerCase().includes('guest') : true;
+          const isGuest = emailOrId
+            ? emailOrId.toLowerCase().includes('guest')
+            : true;
           if (emailOrId && !isGuest) {
             logger.info(`[Z.AI] Validation success for email: ${emailOrId}`);
             return {
@@ -366,32 +407,32 @@ export class ZAIProvider implements Provider {
 
   private async enforceRateLimit(): Promise<void> {
     const now = Date.now();
-    
+
     // Reset window every 60 seconds
     if (now - this.requestWindowStart > 60000) {
       this.requestCount = 0;
       this.requestWindowStart = now;
     }
-    
+
     // Max 8 requests per minute (保守)
     if (this.requestCount >= 8) {
       const waitTime = 60000 - (now - this.requestWindowStart);
       if (waitTime > 0) {
         logger.warn(`[Z.AI] Rate limit reached, waiting ${waitTime}ms`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
         this.requestCount = 0;
         this.requestWindowStart = Date.now();
       }
     }
-    
+
     // Random delay between 0.5-2.5 seconds between requests
     const timeSinceLastRequest = now - this.lastRequestTime;
     if (this.lastRequestTime > 0 && timeSinceLastRequest < 500) {
       const delay = Math.random() * 2000 + 500; // 500-2500ms
       logger.debug(`[Z.AI] Adding random delay ${Math.round(delay)}ms`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
-    
+
     this.lastRequestTime = Date.now();
     this.requestCount++;
   }
@@ -419,7 +460,9 @@ export class ZAIProvider implements Provider {
 
     const authData = getAuthDataFromCredential(credential);
     if (!authData) {
-      onError(new Error('Z.AI authentication data not found. Please login first.'));
+      onError(
+        new Error('Z.AI authentication data not found. Please login first.'),
+      );
       return;
     }
 
@@ -438,8 +481,8 @@ export class ZAIProvider implements Provider {
         const createChatUrl = `${BASE_URL}/api/v1/chats/new`;
         const createChatPayload = {
           chat: {
-            id: "",
-            title: prompt.substring(0, 50) || "New Chat",
+            id: '',
+            title: prompt.substring(0, 50) || 'New Chat',
             models: [modelName],
             params: {},
             history: {
@@ -448,22 +491,22 @@ export class ZAIProvider implements Provider {
                   id: userMessageId,
                   parentId: null,
                   childrenIds: [],
-                  role: "user",
+                  role: 'user',
                   content: prompt,
                   timestamp: Math.floor(Date.now() / 1000),
-                  models: [modelName]
-                }
+                  models: [modelName],
+                },
               },
-              currentId: userMessageId
+              currentId: userMessageId,
             },
             tags: [],
             flags: [],
             features: [
               {
-                server: "tool_selector_h",
-                status: "hidden",
-                type: "tool_selector"
-              }
+                server: 'tool_selector_h',
+                status: 'hidden',
+                type: 'tool_selector',
+              },
             ],
             mcp_servers: [],
             enable_thinking: !!options.thinking,
@@ -471,19 +514,19 @@ export class ZAIProvider implements Provider {
             message_version: 1,
             extra: {},
             timestamp: Date.now(),
-            type: "default"
-          }
+            type: 'default',
+          },
         };
 
         const userAgent = authData.userAgent || this.getRandomUserAgent();
         const uaDetails = parseUserAgentDetails(userAgent);
         const createHeaders: Record<string, string> = {
-          'Authorization': `Bearer ${authData.token}`,
+          Authorization: `Bearer ${authData.token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'User-Agent': userAgent,
-          'Origin': 'https://chat.z.ai',
-          'Referer': 'https://chat.z.ai/',
+          Origin: 'https://chat.z.ai',
+          Referer: 'https://chat.z.ai/',
           'sec-ch-ua': uaDetails.secChUa,
           'sec-ch-ua-mobile': '?0',
           'sec-ch-ua-platform': uaDetails.secChUaPlatform,
@@ -493,7 +536,10 @@ export class ZAIProvider implements Provider {
           'accept-language': 'vi,en-US,en',
         };
         if (authData.cookies) {
-          createHeaders['Cookie'] = sanitizeCookies(authData.cookies, authData.token);
+          createHeaders['Cookie'] = sanitizeCookies(
+            authData.cookies,
+            authData.token,
+          );
         }
 
         const createResponse = await fetch(createChatUrl, {
@@ -504,13 +550,17 @@ export class ZAIProvider implements Provider {
 
         if (!createResponse.ok) {
           const errText = await createResponse.text();
-          throw new Error(`Failed to create chat session: ${createResponse.status} - ${errText}`);
+          throw new Error(
+            `Failed to create chat session: ${createResponse.status} - ${errText}`,
+          );
         }
 
         const createJson = await createResponse.json();
         chatId = createJson.id;
         if (!chatId) {
-          throw new Error('Response from chats/new did not return a valid chat ID');
+          throw new Error(
+            'Response from chats/new did not return a valid chat ID',
+          );
         }
 
         logger.info(`[Z.AI] Created new chat session: ${chatId}`);
@@ -520,7 +570,7 @@ export class ZAIProvider implements Provider {
         if (onMetadata) {
           onMetadata({
             conversation_id: chatId,
-            conversation_title: prompt.substring(0, 50) || "New Chat",
+            conversation_title: prompt.substring(0, 50) || 'New Chat',
           });
         }
       }
@@ -528,17 +578,38 @@ export class ZAIProvider implements Provider {
       const completionId = crypto.randomUUID();
       const userAgent = authData.userAgent || this.getRandomUserAgent();
 
-      const sigRes = generateSignatureAndParams(prompt, authData.token, authData.userId, chatId, undefined, userAgent);
+      const sigRes = generateSignatureAndParams(
+        prompt,
+        authData.token,
+        authData.userId,
+        chatId,
+        undefined,
+        userAgent,
+      );
       const url = `${BASE_URL}/api/v2/chat/completions?${sigRes.queryParams}`;
-      const headers = getHeaders(authData.token, sigRes.signature, chatId, authData.cookies, userAgent);
-      
+      const headers = getHeaders(
+        authData.token,
+        sigRes.signature,
+        chatId,
+        authData.cookies,
+        userAgent,
+      );
+
       headers['User-Agent'] = userAgent;
 
       const vnTime = new Date(Date.now() + 7 * 3600000);
       const vnTimeStr = vnTime.toISOString().slice(0, 19).replace('T', ' ');
       const localDateStr = vnTimeStr.substring(0, 10);
       const localTimeOnlyStr = vnTimeStr.substring(11);
-      const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const weekdays = [
+        'Sunday',
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+      ];
       const weekdayStr = weekdays[vnTime.getUTCDay()];
 
       const payload = {
@@ -628,7 +699,9 @@ export class ZAIProvider implements Provider {
             if (inner && typeof inner === 'object') {
               const phase = inner.phase;
               const content = inner.delta_content || '';
-              logger.info(`[Z.AI] Stream phase: ${phase}, Content length: ${content.length}`);
+              logger.info(
+                `[Z.AI] Stream phase: ${phase}, Content length: ${content.length}`,
+              );
 
               if (phase === 'thinking') {
                 currentPhase = 'thinking';
@@ -665,7 +738,9 @@ export class ZAIProvider implements Provider {
     router.get('/auth/status', (req, res) => {
       const db = getDB();
       const accounts = db.getAll();
-      const zaiAccount = accounts.find(a => a.provider_id === 'z' || a.provider_id === 'zai');
+      const zaiAccount = accounts.find(
+        (a) => a.provider_id === 'z' || a.provider_id === 'zai',
+      );
       res.json({ authenticated: !!zaiAccount });
     });
   }

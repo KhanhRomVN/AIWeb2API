@@ -2,8 +2,11 @@ import { Request, Response } from 'express';
 import { providerRegistry } from '../provider/registry';
 import { SendMessageOptions } from '../provider/types';
 import { countTokens, countMessagesTokens } from '../utils/tokenizer';
+import { createLogger } from '../utils/logger';
 
 import * as crypto from 'crypto';
+
+const logger = createLogger('messages');
 
 function generateId(prefix: string = 'msg_'): string {
   return `${prefix}${crypto.randomUUID()}`;
@@ -109,7 +112,6 @@ function generateSessionFingerprint(
     .substring(0, 8);
 
   if (cliSessionId) {
-    console.log(`[Messages] Detected CLI Session ID: ${cliSessionId}`);
     return `sess_${keyHash}_cli_${cliSessionId}`;
   }
 
@@ -295,9 +297,7 @@ export const messagesController = async (
 
   // 0.5 Handle Probe Request (Claude Code) BEFORE Session Logic
   if (isProbeRequest(messages)) {
-    console.log(
-      `[Messages] 🔍 Intercepted Probe request ('warmup'/'count') from key: ${apiKey.substring(0, 10)}...`,
-    );
+    logger.debug(`Intercepted Probe request from key: ${apiKey.substring(0, 10)}...`);
     createWarmupResponse(res, stream, model);
     return;
   }
@@ -314,15 +314,13 @@ export const messagesController = async (
       const { model, messages, system, stream, max_tokens } = req.body;
       let currentSessionId = sessionStore.get(sessionKey) || null;
 
-      console.log(
-        `[Messages] Request from key: ${sessionKey.substring(0, 10)}... | Current Session: ${currentSessionId}`,
-      );
+      logger.debug(`Request | session: ${sessionKey.substring(0, 10)}... | stored: ${currentSessionId}`);
 
       // 0. Handle Reset Command
       if (isResetCommand(messages)) {
         sessionStore.delete(sessionKey);
         currentSessionId = null;
-        console.log(`[Messages] Session reset for key: ${sessionKey}`);
+        logger.debug(`Session reset for key: ${sessionKey}`);
         if (stream) {
           res.setHeader('Content-Type', 'text/event-stream');
           res.write(
@@ -352,9 +350,7 @@ export const messagesController = async (
 
       // 0.5 Handle Probe Request (Claude Code)
       if (isProbeRequest(messages)) {
-        console.log(
-          `[Messages] 🔍 Intercepted Probe request from key: ${sessionKey.substring(0, 10)}...`,
-        );
+        logger.debug(`Intercepted Probe request from key: ${sessionKey.substring(0, 10)}...`);
         createWarmupResponse(res, stream, model);
         return;
       }
@@ -372,9 +368,7 @@ export const messagesController = async (
       if (mapped) {
         if (mapped.providerId) targetProviderId = mapped.providerId;
         if (mapped.modelId) targetModelId = mapped.modelId;
-        console.log(
-          `[Messages] Model Mapping: ${model} -> ${targetProviderId ? targetProviderId + '/' : ''}${targetModelId}`,
-        );
+        logger.debug(`Model mapping: ${model} -> ${targetProviderId ? targetProviderId + '/' : ''}${targetModelId}`);
       }
 
       // Handle "auto" or "provider/model" format (Skip if already mapped)
@@ -389,17 +383,12 @@ export const messagesController = async (
         if (bestSequence) {
           targetProviderId = bestSequence.provider_id;
           targetModelId = bestSequence.model_id;
-          console.log(
-            `[Messages] Auto-selected: ${targetProviderId}/${targetModelId}`,
-          );
+          logger.debug(`Auto-selected: ${targetProviderId}/${targetModelId}`);
         }
       } else if (!targetProviderId && model && model.includes('/')) {
         const parts = model.split('/');
         targetProviderId = parts[0];
-        targetModelId = parts.slice(1).join('/'); // In case model name has slashes
-        console.log(
-          `[Messages] Parsed Provider: ${targetProviderId}, Model: ${targetModelId}`,
-        );
+        targetModelId = parts.slice(1).join('/');
       } else if (!targetProviderId && model) {
         // Legacy behavior: lookup provider by model id
         const inferredProvider = providerRegistry.getProviderForModel(model);
@@ -410,10 +399,6 @@ export const messagesController = async (
 
       if (targetProviderId) {
         const tid = targetProviderId.trim().toLowerCase();
-        console.log(
-          `[Messages] Looking for account with provider_id: "${tid}"`,
-        );
-        console.log(`[Messages] Total accounts in DB: ${accounts.length}`);
 
         account = accounts.find(
           (a) => (a.provider_id || '').trim().toLowerCase() === tid,
@@ -423,11 +408,7 @@ export const messagesController = async (
           const availableProviders = [
             ...new Set(accounts.map((a) => a.provider_id)),
           ];
-          console.log(
-            `[Messages] Account not found. Available providers: ${availableProviders.join(', ')}`,
-          );
-        } else {
-          console.log(`[Messages] Found account for ${tid}: ${account.email}`);
+          logger.debug(`Account not found for "${tid}". Available: ${availableProviders.join(', ')}`);
         }
       }
 
@@ -477,15 +458,11 @@ export const messagesController = async (
           if (formattedMessages.length > 0) {
             const lastMsg = formattedMessages[formattedMessages.length - 1];
             providerMessages.push(lastMsg);
-            console.log(
-              `[Messages] Reusing session ${currentSessionId}. Sending only last message.`,
-            );
+            logger.debug(`Reusing session ${currentSessionId}. Sending only last message.`);
           }
         } else {
           providerMessages.push(...formattedMessages);
-          console.log(
-            `[Messages] New session. Sending full history (${formattedMessages.length} msgs).`,
-          );
+          logger.debug(`New session. Sending full history (${formattedMessages.length} msgs).`);
         }
       }
 
@@ -555,9 +532,7 @@ export const messagesController = async (
         onSessionCreated: (sessionId: string) => {
           if (!currentSessionId) {
             sessionStore.set(sessionKey, sessionId);
-            console.log(
-              `[Messages] Captured new Provider Session ID: ${sessionId} for key: ${sessionKey}`,
-            );
+            logger.debug(`Captured new session ID: ${sessionId} for key: ${sessionKey}`);
           }
         },
         onDone: () => {
@@ -590,14 +565,12 @@ export const messagesController = async (
           }
         },
         onError: (err: Error) => {
-          console.error('[Messages] Provider Error:', err);
+          logger.error('Provider Error:', err);
           if (
             err.message &&
             (err.message.includes('404') || err.message.includes('session'))
           ) {
-            console.warn(
-              `[Messages] Session error detected for key ${sessionKey}, clearing stored session ID.`,
-            );
+            logger.warn(`Session error for key ${sessionKey}, clearing session ID.`);
             sessionStore.delete(sessionKey);
           }
 

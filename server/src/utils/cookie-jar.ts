@@ -17,7 +17,7 @@ export class CookieJar {
     try {
       this.jar.setCookieSync(cookieStr, url);
     } catch (error) {
-      console.error('[CookieJar] Failed to set cookie:', error);
+
     }
   }
 
@@ -28,7 +28,7 @@ export class CookieJar {
     try {
       return this.jar.getCookieStringSync(url);
     } catch (error) {
-      console.error('[CookieJar] Failed to get cookies:', error);
+
       return '';
     }
   }
@@ -40,7 +40,7 @@ export class CookieJar {
     try {
       return this.jar.getCookiesSync(url);
     } catch (error) {
-      console.error('[CookieJar] Failed to get cookies:', error);
+
       return [];
     }
   }

@@ -112,7 +112,9 @@ export const sendMessageController = async (
     }
 
     if (!account) {
-      logger.warn(`[Chat] Unauthorized: No active account found. Params - accountId: ${accountId}, providerId: ${providerId}, modelId: ${modelId}`);
+      logger.warn(
+        `[Chat] Unauthorized: No active account found. Params - accountId: ${accountId}, providerId: ${providerId}, modelId: ${modelId}`,
+      );
       res.status(401).json({
         success: false,
         message:
@@ -133,9 +135,6 @@ export const sendMessageController = async (
 
       if (bestModel) {
         finalModel = bestModel.model_id;
-        console.log(
-          `[Chat] Auto-selected model for ${account.provider_id}: ${finalModel}`,
-        );
       } else {
         console.warn(
           `[Chat] "auto" model requested but no sequence found for ${account.provider_id}`,
@@ -184,10 +183,6 @@ export const sendMessageController = async (
         Connection: 'keep-alive',
       });
       const responseData = { meta: initialMeta };
-      console.log(
-        '[Debug] SendMessage Initial Meta:',
-        JSON.stringify(responseData),
-      );
       res.write(`data: ${JSON.stringify(responseData)}\n\n`);
     }
 
@@ -198,7 +193,7 @@ export const sendMessageController = async (
     try {
       // captureFirstResponse check removed
 
-      recordRequest(account.id, account.provider_id, model, conversationId);
+      recordRequest(account.provider_id, model);
 
       await sendMessage({
         credential: account.credential,
@@ -214,10 +209,6 @@ export const sendMessageController = async (
         onContent: (content) => {
           if (stream !== false) {
             const responseData = { content: unescapeHtml(content) };
-            console.log(
-              '[Debug] SendMessage Content:',
-              JSON.stringify(responseData),
-            );
             res.write(`data: ${JSON.stringify(responseData)}\n\n`);
           } else {
             accumulatedContent += content;
@@ -226,10 +217,6 @@ export const sendMessageController = async (
         onMetadata: (meta) => {
           if (stream !== false) {
             const responseData = { meta };
-            console.log(
-              '[Debug] SendMessage Metadata:',
-              JSON.stringify(responseData),
-            );
             res.write(`data: ${JSON.stringify(responseData)}\n\n`);
           } else {
             accumulatedMetadata = { ...accumulatedMetadata, ...meta };
@@ -258,10 +245,6 @@ export const sendMessageController = async (
                 },
                 metadata: accumulatedMetadata,
               };
-              console.log(
-                '[Debug] SendMessage Final Response:',
-                JSON.stringify(responseData),
-              );
               res.status(200).json(responseData);
             }
           }
@@ -340,7 +323,9 @@ export const claudeMessagesController = async (
     }
 
     if (!account) {
-      logger.warn(`[Claude] Unauthorized: No active account found for model ${model}`);
+      logger.warn(
+        `[Claude] Unauthorized: No active account found for model ${model}`,
+      );
       res.status(401).json({
         error: {
           type: 'not_found_error',
@@ -389,13 +374,9 @@ export const claudeMessagesController = async (
           usage: { input_tokens: inputTokens, output_tokens: 0 },
         },
       };
-      console.log(
-        '[Debug] Claude Message Start:',
-        JSON.stringify(messageStartData),
-      );
       res.write(`data: ${JSON.stringify(messageStartData)}\n\n`);
 
-      recordRequest(account.id, account.provider_id, finalModel, undefined);
+      recordRequest(account.provider_id, finalModel);
       await sendMessage({
         credential: account.credential,
         provider_id: account.provider_id,
@@ -412,10 +393,6 @@ export const claudeMessagesController = async (
             index: 0,
             delta: { type: 'text_delta', text: unescapeHtml(content) },
           };
-          console.log(
-            '[Debug] Claude Content Block:',
-            JSON.stringify(responseData),
-          );
           res.write(`data: ${JSON.stringify(responseData)}\n\n`);
         },
         onDone: () => {
@@ -440,7 +417,7 @@ export const claudeMessagesController = async (
         },
       });
     } else {
-      recordRequest(account.id, account.provider_id, finalModel, undefined);
+      recordRequest(account.provider_id, finalModel);
       await sendMessage({
         credential: account.credential,
         provider_id: account.provider_id,
@@ -556,7 +533,9 @@ export const completionController = async (
     }
 
     if (!account) {
-      logger.warn(`[Completion] Unauthorized: No active account found. model: ${model}, provider: ${providerQuery}`);
+      logger.warn(
+        `[Completion] Unauthorized: No active account found. model: ${model}, provider: ${providerQuery}`,
+      );
       res
         .status(401)
         .json({ error: 'No valid account found for this request' });
@@ -564,12 +543,7 @@ export const completionController = async (
     }
 
     // Record request start
-    recordRequest(
-      account.id,
-      account.provider_id,
-      model || 'unknown',
-      conversation_id,
-    );
+    recordRequest(account.provider_id, model || 'unknown');
 
     let activeConversationId = conversation_id;
 
@@ -600,10 +574,6 @@ export const completionController = async (
       onMetadata: (metadata) => {
         accumulatedMetadata = { ...accumulatedMetadata, ...metadata };
         const responseData = { choices: [{ delta: metadata }] };
-        console.log(
-          '[Debug] Completion Metadata:',
-          JSON.stringify(responseData),
-        );
         res.write(`data: ${JSON.stringify(responseData)}\n\n`);
       },
       onThinking: (content) => {
@@ -614,9 +584,6 @@ export const completionController = async (
         res.write(`event: session_created\ndata: ${sessionId}\n\n`);
       },
       onDone: () => {
-        // Updated: Logic tính toán token và ghi metrics đã được chuyển về Client
-        // Backend chỉ đóng vai trò forward stream và lưu session
-
         res.write('data: [DONE]\n\n');
         res.end();
       },

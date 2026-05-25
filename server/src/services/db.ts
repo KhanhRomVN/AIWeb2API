@@ -21,9 +21,6 @@ export const initDatabase = (customPath?: string): void => {
 
   try {
     if (isCjsBundle) {
-      logger.info(
-        `Detected CJS Bundle environment. BaseDir: ${envInfo.baseDir}`,
-      );
 
       // 1. Try local build path (e.g. for pkg binary where we bundle it)
       const distBindingPath = path.join(
@@ -56,19 +53,10 @@ export const initDatabase = (customPath?: string): void => {
 
       if (fs.existsSync(distBindingPath)) {
         nativeBinding = distBindingPath;
-        logger.info(
-          `Loading SQLite native binding from dist path: ${distBindingPath}`,
-        );
       } else if (fs.existsSync(npmBindingPath)) {
         nativeBinding = npmBindingPath;
-        logger.info(
-          `Loading SQLite native binding from npm path: ${npmBindingPath}`,
-        );
       } else if (fs.existsSync(globalBindingPath)) {
         nativeBinding = globalBindingPath;
-        logger.info(
-          `Loading SQLite native binding from global path: ${globalBindingPath}`,
-        );
       } else {
         logger.warn(
           'Could not find better-sqlite3 native binding in known locations. Falling back to default search.',
@@ -166,7 +154,6 @@ const createTables = (): void => {
     if (!finalAccountColumns.includes('last_refreshed_at')) {
       try {
         db.exec('ALTER TABLE accounts ADD COLUMN last_refreshed_at INTEGER');
-        logger.info('Migrated accounts table: added last_refreshed_at column');
       } catch (e) {
         logger.warn('Failed to add last_refreshed_at to accounts', e);
       }
@@ -175,7 +162,6 @@ const createTables = (): void => {
     if (!finalAccountColumns.includes('usage')) {
       try {
         db.exec('ALTER TABLE accounts ADD COLUMN usage TEXT');
-        logger.info('Migrated accounts table: added usage column');
       } catch (e) {
         logger.warn('Failed to add usage to accounts', e);
       }
@@ -184,7 +170,6 @@ const createTables = (): void => {
     if (!finalAccountColumns.includes('reset_period')) {
       try {
         db.exec('ALTER TABLE accounts ADD COLUMN reset_period TEXT');
-        logger.info('Migrated accounts table: added reset_period column');
       } catch (e) {
         logger.warn('Failed to add reset_period to accounts', e);
       }

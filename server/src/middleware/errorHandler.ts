@@ -29,22 +29,37 @@ export const errorHandler = (
       message: err.message,
       error: {
         code: err.code || 'APP_ERROR',
+        type: err.constructor.name,
+        details: err.message,
+        stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
       },
       meta: {
         timestamp: new Date().toISOString(),
+        path: req.path,
+        method: req.method,
       },
     });
   }
 
-  // Default error
-  return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR || 500).json({
+  const errorCode = (err as any).code || 'INTERNAL_ERROR';
+  const statusCode =
+    errorCode === 'ETIMEDOUT' || errorCode === 'ECONNRESET' || errorCode === 'ECONNREFUSED'
+      ? 503
+      : HTTP_STATUS.INTERNAL_SERVER_ERROR;
+
+  return res.status(statusCode).json({
     success: false,
-    message: 'Internal server error',
+    message: err.message || 'Internal server error',
     error: {
-      code: 'INTERNAL_ERROR',
+      code: errorCode,
+      type: err.constructor.name,
+      details: err.message,
+      stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
     },
     meta: {
       timestamp: new Date().toISOString(),
+      path: req.path,
+      method: req.method,
     },
   });
 };

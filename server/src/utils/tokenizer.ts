@@ -9,12 +9,8 @@ let encoding: any = null;
 
 try {
   encoding = getEncoding(ENCODING_NAME);
-  logger.info(`Initialized js-tiktoken with ${ENCODING_NAME} encoding`);
 } catch (error) {
-  logger.error(
-    `Failed to initialize js-tiktoken with ${ENCODING_NAME}:`,
-    error,
-  );
+  logger.error(`Failed to initialize tiktoken (${ENCODING_NAME})`, error);
 }
 
 /**
@@ -31,7 +27,6 @@ export function countTokens(text: string): number {
     const tokens = encoding.encode(text);
     return tokens.length;
   } catch (error) {
-    logger.error('Error counting tokens with tiktoken:', error);
     return Math.ceil(text.length / 4);
   }
 }

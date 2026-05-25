@@ -23,49 +23,36 @@ export const startServer = async (): Promise<{
 
   try {
     const config = getServerConfig();
-
     const app = await createApp();
 
     return new Promise((resolve) => {
       try {
         if (config.tls.enable && config.tls.certPath && config.tls.keyPath) {
-          // HTTPS mode
           const httpsOptions = {
             cert: fs.readFileSync(config.tls.certPath),
             key: fs.readFileSync(config.tls.keyPath),
           };
           server = https.createServer(httpsOptions, app);
-          logger.info('Starting HTTPS server...');
         } else {
-          // HTTP mode
           server = http.createServer(app);
-          logger.info('Starting HTTP server...');
         }
 
         server.listen(config.port, config.host, () => {
-          logger.info(`Server running on ${config.host}:${config.port}`);
-          resolve({
-            success: true,
-            port: config.port,
-            https: config.tls.enable,
-          });
+          logger.info(`Listening on ${config.host}:${config.port}`);
+          resolve({ success: true, port: config.port, https: config.tls.enable });
         });
 
         server.on('error', (e: any) => {
           if (e.code === 'EADDRINUSE') {
-            logger.error(`Port ${config.port} is already in use`);
-            resolve({
-              success: false,
-              error: `Port ${config.port} is already in use`,
-              code: 'EADDRINUSE',
-            });
+            logger.error(`Port ${config.port} already in use`);
+            resolve({ success: false, error: `Port ${config.port} is already in use`, code: 'EADDRINUSE' });
           } else {
             logger.error('Server error', e);
             resolve({ success: false, error: e.message });
           }
         });
       } catch (error: any) {
-        logger.error('Failed to start server', error);
+        logger.error('Failed to create server', error);
         resolve({ success: false, error: error.message });
       }
     });
@@ -75,10 +62,7 @@ export const startServer = async (): Promise<{
   }
 };
 
-export const stopServer = (): Promise<{
-  success: boolean;
-  message?: string;
-}> => {
+export const stopServer = (): Promise<{ success: boolean; message?: string }> => {
   if (!server) {
     return Promise.resolve({ success: false, message: 'Server not running' });
   }

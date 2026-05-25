@@ -1,7 +1,6 @@
 import { createLogger } from '../utils/logger';
 import { configService } from './config.service';
 import { getCertificateManager } from '../utils/cert-manager';
-import { proxyEvents } from './proxy-events';
 import * as zlib from 'zlib';
 
 const logger = createLogger('ProxyService');
@@ -166,7 +165,6 @@ export class ProxyService {
           if (err) {
             logger.error('Failed to start proxy:', err);
           } else {
-            logger.info(`Proxy listening on port ${config.port}`);
             this.isRunning = true;
           }
         },
@@ -180,7 +178,6 @@ export class ProxyService {
     if (this.isRunning && this.proxy) {
       this.proxy.close();
       this.isRunning = false;
-      logger.info('Proxy stopped');
     }
   }
 

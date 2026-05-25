@@ -478,41 +478,19 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const { provider: providerId } = req.params;
     const { method } = req.body;
 
-    logger.info(
-      `[DEBUG] /login/:provider endpoint hit with provider: ${providerId}, method: ${method}`,
-    );
-
-    const allRegisteredProviders = providerRegistry
-      .getAllProviders()
-      .map((p) => p.name);
-    logger.info(
-      `[DEBUG] Available providers in registry: ${allRegisteredProviders.join(', ')}`,
-    );
-
     const provider = providerRegistry.getProvider(providerId);
     if (!provider) {
-      res.status(404).json({
-        success: false,
-        message: 'Provider not found',
-      });
+      res.status(404).json({ success: false, message: 'Provider not found' });
       return;
     }
 
-    logger.info(
-      `Starting browser login for ${providerId} (method: ${method})...`,
-    );
+    logger.info(`Browser login started — provider: ${providerId}, method: ${method || 'basic'}`);
 
-    // Use provider-specific login function
     let result;
     if (provider.login) {
-      result = await provider.login({
-        method: method === 'google' ? 'google' : 'basic',
-      });
+      result = await provider.login({ method: method === 'google' ? 'google' : 'basic' });
     } else {
-      res.status(400).json({
-        success: false,
-        message: `Browser login not yet implemented for ${providerId}`,
-      });
+      res.status(400).json({ success: false, message: `Browser login not supported for ${providerId}` });
       return;
     }
 
@@ -526,7 +504,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error: any) {
-    logger.error('Login failed:', error);
+    logger.error('Login failed', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Login failed',
@@ -570,9 +548,7 @@ export const switchAccount = async (
       return;
     }
 
-    logger.info(
-      `Switching to account ${account.email} (provider: ${account.provider_id})...`,
-    );
+    logger.info(`Switching to account ${account.email} (${account.provider_id})`);
     await provider.switchAccount(id);
 
     res.status(200).json({

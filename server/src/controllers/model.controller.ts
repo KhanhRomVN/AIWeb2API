@@ -33,8 +33,6 @@ export const getModelSequences = async (req: Request, res: Response) => {
 export const upsertModelSequence = async (req: Request, res: Response) => {
   try {
     const { provider_id, model_id, sequence } = req.body;
-    console.log('[Model Sequences] Setting sequence:', req.body);
-
     if (!provider_id || !model_id || sequence === undefined) {
       res
         .status(400)

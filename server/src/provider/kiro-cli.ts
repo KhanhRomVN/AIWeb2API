@@ -2,14 +2,12 @@ import { Provider, SendMessageOptions } from './types';
 import { Router } from 'express';
 import fetch from 'node-fetch';
 import { createLogger } from '../utils/logger';
-import { loginService } from '../services/login.service';
 import { proxyService } from '../services/proxy.service';
 import { ProxyHandler } from '../services/proxy.service';
 import { proxyEvents } from '../services/proxy-events';
 import { getDb } from '../services/db';
 import * as path from 'path';
 import * as os from 'os';
-import * as fs from 'fs';
 import { spawn, execSync } from 'child_process';
 import { kiroAccountService } from '../services/kiro-account.service';
 
@@ -19,8 +17,6 @@ export const KIRO_CONFIG = {
   tokenUrl: 'https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken',
   qUrl: 'https://q.us-east-1.amazonaws.com/',
 };
-
-// ... (other code remains the same)
 
 // =============================================================================
 // PROXY HANDLER
@@ -49,7 +45,9 @@ export const proxyHandler: ProxyHandler = {
           const sessionData = {
             access_token: json.accessToken,
             refresh_token: json.refreshToken || '',
-            expires_at: new Date(Date.now() + (json.expiresIn || 3600) * 1000).toISOString(),
+            expires_at: new Date(
+              Date.now() + (json.expiresIn || 3600) * 1000,
+            ).toISOString(),
             provider: json.provider || 'google', // Default to google as seen in analysis
             profile_arn: json.profileArn || '',
             email: json.email || '', // Store email for stable identification
@@ -489,14 +487,16 @@ export class KiroCLIProvider implements Provider {
 
   async switchAccount(accountId: string): Promise<void> {
     const db = getDb();
-    const account = db.prepare('SELECT email, credential FROM accounts WHERE id = ?').get(accountId) as { email: string; credential: string } | undefined;
-    
+    const account = db
+      .prepare('SELECT email, credential FROM accounts WHERE id = ?')
+      .get(accountId) as { email: string; credential: string } | undefined;
+
     if (!account) {
       throw new Error('Account not found');
     }
 
     logger.info(`Switching Kiro CLI to account ${accountId}...`);
-    
+
     try {
       // credential field in DB now stores the full JSON required by Kiro's auth_kv
       // We also ensure email is present in the JSON for identification
@@ -506,7 +506,7 @@ export class KiroCLIProvider implements Provider {
       } catch (e) {
         sessionData = { access_token: account.credential };
       }
-      
+
       const accountEmail = (account as any).email;
       if (accountEmail && !sessionData.email) {
         sessionData.email = accountEmail;

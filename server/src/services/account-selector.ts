@@ -45,72 +45,42 @@ export class AccountSelector {
     }
   }
 
-  /**
-   * Get all active accounts, optionally filtered by provider
-   */
   getActiveAccounts(provider_id?: string): Account[] {
     try {
       const accounts = this.db.getAll();
       let filtered = accounts;
-
       if (provider_id) {
         const pid = provider_id.toLowerCase();
         filtered = filtered.filter((a) => a.provider_id.toLowerCase() === pid);
       }
-
       return filtered;
     } catch (error) {
-      console.error('[AccountSelector] Failed to get accounts:', error);
       return [];
     }
   }
 
-  /**
-   * Get all accounts from a specific account ID
-   */
   getAccountById(id: string): Account | null {
     try {
       return this.db.getById(id);
     } catch (error) {
-      console.error('[AccountSelector] Failed to get account by ID:', error);
       return null;
     }
   }
 
-  /**
-   * Round-robin selection
-   */
   private roundRobin(key: string, accounts: Account[]): Account {
     const index = this.roundRobinIndex.get(key) || 0;
     const account = accounts[index % accounts.length];
     this.roundRobinIndex.set(key, index + 1);
-
-    console.log(
-      `[AccountSelector] Round-robin selected: ${account.email} (${account.provider_id})`,
-    );
     return account;
   }
 
-  /**
-   * Priority-based selection (first account has highest priority)
-   */
   private priority(accounts: Account[]): Account {
-    // You could extend Account interface to include priority field
-    // For now, just return first account
-    const account = accounts[0];
-    console.log(
-      `[AccountSelector] Priority selected: ${account.email} (${account.provider_id})`,
-    );
-    return account;
+    return accounts[0];
   }
 
-  /**
-   * Least-used selection (based on request count tracking)
-   */
   private leastUsed(accounts: Account[]): Account {
     let minCount = Infinity;
     let selectedAccount = accounts[0];
-
     for (const account of accounts) {
       const count = this.requestCounts.get(account.id) || 0;
       if (count < minCount) {
@@ -118,10 +88,6 @@ export class AccountSelector {
         selectedAccount = account;
       }
     }
-
-    console.log(
-      `[AccountSelector] Least-used selected: ${selectedAccount.email} (${selectedAccount.provider_id})`,
-    );
     return selectedAccount;
   }
 

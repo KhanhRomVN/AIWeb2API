@@ -3,27 +3,6 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('StatsService');
 
-interface DateComponents {
-  year: number;
-  month: number;
-  week: number;
-  day: number;
-}
-
-function getCurrentGMTComponents(): DateComponents {
-  const now = new Date();
-  // Get time in GMT
-  const gmtNow = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
-
-  return {
-    year: gmtNow.getUTCFullYear(),
-    month: gmtNow.getUTCMonth() + 1, // 1-12
-    // Simple week calculation: days since epoch / 7
-    week: Math.floor(gmtNow.getTime() / (1000 * 60 * 60 * 24 * 7)),
-    day: Math.floor(gmtNow.getTime() / (1000 * 60 * 60 * 24)),
-  };
-}
-
 function isStatsEnabled(): boolean {
   const db = getDb();
   try {
@@ -36,25 +15,13 @@ function isStatsEnabled(): boolean {
   }
 }
 
-export async function recordRequest(
-  accountId: string,
-  providerId: string,
-  modelId: string,
-  conversationId?: string,
-) {
-  if (!isStatsEnabled()) {
-    console.log('[Stats] Stats collection disabled');
-    return;
-  }
-  console.log('[Stats] Recording request for', accountId, providerId, modelId);
+export async function recordRequest(providerId: string, modelId: string) {
+  if (!isStatsEnabled()) return;
   const db = getDb();
   const now = Date.now();
 
   try {
-    // 1. Update Account Stats
-    // Removed total_requests update
-
-    // 2. Upsert Provider Model Stats (Dọn dẹp các trường max_...)
+    // Upsert Provider Model Stats (Dọn dẹp các trường max_...)
     db.prepare(
       `
       INSERT INTO provider_models (
@@ -81,7 +48,6 @@ export async function recordSuccess(
   conversationId?: string,
 ) {
   if (!isStatsEnabled()) return;
-  console.log('[Stats] Recording success for', accountId, tokens);
   const db = getDb();
   const now = Date.now();
 

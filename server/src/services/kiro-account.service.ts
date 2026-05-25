@@ -8,7 +8,13 @@ const logger = createLogger('KiroAccountService');
 
 export class KiroAccountService {
   private getKiroDbPath(): string {
-    return path.join(os.homedir(), '.local', 'share', 'kiro-cli', 'data.sqlite3');
+    return path.join(
+      os.homedir(),
+      '.local',
+      'share',
+      'kiro-cli',
+      'data.sqlite3',
+    );
   }
 
   /**
@@ -24,13 +30,15 @@ export class KiroAccountService {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      logger.warn(`Kiro CLI database not found at ${dbPath}. Creating a new one.`);
+      logger.warn(
+        `Kiro CLI database not found at ${dbPath}. Creating a new one.`,
+      );
     }
 
     let db: Database.Database | null = null;
     try {
       db = new Database(dbPath, { timeout: 5000 });
-      
+
       // Ensure the table exists (it should, but safety first)
       db.exec(`
         CREATE TABLE IF NOT EXISTS auth_kv (
@@ -40,12 +48,17 @@ export class KiroAccountService {
       `);
 
       // Update or Insert the token
-      const stmt = db.prepare('INSERT OR REPLACE INTO auth_kv (key, value) VALUES (?, ?)');
+      const stmt = db.prepare(
+        'INSERT OR REPLACE INTO auth_kv (key, value) VALUES (?, ?)',
+      );
       stmt.run('kirocli:social:token', sessionJson);
-      
+
       logger.info('Successfully synced Kiro session to local SQLite.');
     } catch (error: any) {
-      logger.error('Failed to sync Kiro session to local SQLite:', error.message);
+      logger.error(
+        'Failed to sync Kiro session to local SQLite:',
+        error.message,
+      );
       throw new Error(`Kiro Sync Error: ${error.message}`);
     } finally {
       if (db) db.close();
@@ -62,10 +75,15 @@ export class KiroAccountService {
     let db: Database.Database | null = null;
     try {
       db = new Database(dbPath, { readonly: true, timeout: 5000 });
-      const row = db.prepare('SELECT value FROM auth_kv WHERE key = ?').get('kirocli:social:token') as { value: string } | undefined;
+      const row = db
+        .prepare('SELECT value FROM auth_kv WHERE key = ?')
+        .get('kirocli:social:token') as { value: string } | undefined;
       return row ? row.value : null;
     } catch (error: any) {
-      logger.error('Failed to read Kiro session from local SQLite:', error.message);
+      logger.error(
+        'Failed to read Kiro session from local SQLite:',
+        error.message,
+      );
       return null;
     } finally {
       if (db) db.close();

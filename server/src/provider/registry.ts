@@ -4,7 +4,6 @@ import { Router } from 'express';
 import { Provider } from './types';
 import { createLogger } from '../utils/logger';
 import { proxyService } from '../services/proxy.service';
-// Proxy handlers are now loaded dynamically
 
 const logger = createLogger('ProviderRegistry');
 
@@ -13,26 +12,17 @@ class ProviderRegistry {
 
   register(provider: Provider) {
     const key = provider.name.toLowerCase();
-    if (this.providers.has(key)) {
-      logger.warn(
-        `Provider ${provider.name} is already registered. Overwriting.`,
-      );
-    }
     this.providers.set(key, provider);
-    logger.info(`Registered provider: ${provider.name}`);
 
-    // Register aliases for provider names with dots (e.g., "Z.AI" should also be accessible as "z")
     if (key.includes('.')) {
       const alias = key.split('.')[0];
       if (!this.providers.has(alias)) {
         this.providers.set(alias, provider);
-        logger.info(`Registered alias "${alias}" for provider: ${provider.name}`);
       }
     }
 
     if (provider.proxyHandler) {
       proxyService.registerHandler(provider.proxyHandler);
-      logger.info(`Registered proxy handler for ${provider.name}`);
     }
   }
 
@@ -53,10 +43,9 @@ class ProviderRegistry {
     return undefined;
   }
 
-  // Static loading of providers for bundler compatibility
   async loadProviders() {
     try {
-const { default: ClaudeProvider } = require('./claude');
+      const { default: ClaudeProvider } = require('./claude');
       const { default: HuggingChatProvider } = require('./huggingchat');
       const { default: MistralProvider } = require('./mistral');
       const { default: DeepSeekProvider } = require('./deepseek');
@@ -69,25 +58,16 @@ const { default: ClaudeProvider } = require('./claude');
       const { default: ZAIProvider } = require('./zai');
 
       const providers = [
-        ClaudeProvider,
-        HuggingChatProvider,
-        MistralProvider,
-        DeepSeekProvider,
-        GroqProvider,
-        QwenProvider,
-        QwenCliProvider,
-        GeminiCliProvider,
-        KiroCliProvider,
-        CodexCliProvider,
-        ZAIProvider,
+        ClaudeProvider, HuggingChatProvider, MistralProvider, DeepSeekProvider,
+        GroqProvider, QwenProvider, QwenCliProvider, GeminiCliProvider,
+        KiroCliProvider, CodexCliProvider, ZAIProvider,
       ];
-      for (const ProviderClass of providers) {
-        if (ProviderClass && ProviderClass.name) {
-          this.register(ProviderClass);
-        }
+      for (const p of providers) {
+        if (p && p.name) this.register(p);
       }
+      logger.info(`Registered ${this.providers.size} providers`);
     } catch (error) {
-      logger.error('Failed to load static providers:', error);
+      logger.error('Failed to load providers', error);
     }
   }
 
@@ -97,7 +77,6 @@ const { default: ClaudeProvider } = require('./claude');
         const providerRouter = Router();
         provider.registerRoutes(providerRouter);
         router.use(`/${provider.name.toLowerCase()}`, providerRouter);
-        logger.info(`Mounted routes for ${provider.name}`);
       }
     });
   }

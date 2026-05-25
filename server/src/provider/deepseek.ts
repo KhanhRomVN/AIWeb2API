@@ -438,7 +438,6 @@ export class DeepSeekProvider implements Provider {
     for (const p of possiblePaths) {
       if (fs.existsSync(p)) {
         this.wasmPath = p;
-        logger.info(`DeepSeek WASM found at: ${p}`);
         break;
       }
     }
@@ -498,9 +497,13 @@ export class DeepSeekProvider implements Provider {
       Authorization: credential,
       'Content-Type': 'application/json',
       'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
       Origin: 'https://chat.deepseek.com',
       Referer: 'https://chat.deepseek.com/',
+      'X-App-Version': '2.0.0',
+      'X-Client-Version': '2.0.0',
+      'X-Client-Platform': 'web',
+      'X-Client-Locale': 'en_US',
     };
 
     const client = new HttpClient({
@@ -514,12 +517,21 @@ export class DeepSeekProvider implements Provider {
         const sessionRes = await client.post('/api/v0/chat_session/create', {
           character_id: null,
         });
-        if (!sessionRes.ok)
+        if (!sessionRes.ok) {
+          const errText = await sessionRes.text();
           throw new Error(
-            `Failed to create chat session: ${sessionRes.status}`,
+            `Failed to create chat session: ${sessionRes.status} - ${errText}`,
           );
+        }
         const sessionData = await sessionRes.json();
-        sessionId = sessionData?.data?.biz_data?.id;
+        sessionId =
+          sessionData?.data?.biz_data?.chat_session?.id ||
+          sessionData?.data?.biz_data?.id;
+        if (!sessionId) {
+          throw new Error(
+            `Session ID missing from response: ${JSON.stringify(sessionData)}`,
+          );
+        }
       }
 
       if (!sessionId) throw new Error('Failed to obtain session ID');
@@ -572,7 +584,7 @@ export class DeepSeekProvider implements Provider {
         prompt: messages[messages.length - 1].content,
         messages: [],
         ref_file_ids: options.ref_file_ids || [],
-        thinking_enabled: options.thinking ?? (model === 'deepseek-expert' || model === 'deepseek-reasoner'),
+        thinking_enabled: options.thinking ?? model === 'deepseek-reasoner',
         search_enabled: options.search || false,
         client_stream_id: clientStreamId,
         model_type: model === 'deepseek-expert' ? 'expert' : 'default',
@@ -584,10 +596,6 @@ export class DeepSeekProvider implements Provider {
           ...baseHeaders,
           Referer: `https://chat.deepseek.com/a/chat/s/${sessionId}`,
           'X-Ds-Pow-Response': powResponseBase64,
-          'X-App-Version': '20241129.1',
-          'X-Client-Locale': 'en_US',
-          'X-Client-Platform': 'web',
-          'X-Client-Version': '1.0.0-always',
         },
       });
 
@@ -610,6 +618,7 @@ export class DeepSeekProvider implements Provider {
       let currentMode: 'THINK' | 'RESPONSE' = 'RESPONSE';
       const promptTokens = countMessagesTokens(messages);
       let completionTokens = 0;
+      let currentEventType = '';
 
       for await (const chunk of response.body) {
         const chunkStr = chunk.toString();
@@ -619,6 +628,10 @@ export class DeepSeekProvider implements Provider {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEventType = line.substring(7).trim();
+            continue;
+          }
           if (line.startsWith('data: ')) {
             const jsonStr = line.substring(6).trim();
             if (jsonStr === '[DONE]') {
@@ -629,12 +642,28 @@ export class DeepSeekProvider implements Provider {
             try {
               const json = JSON.parse(jsonStr);
 
-              if (
-                json.request_message_id !== undefined &&
-                json.response_message_id !== undefined
-              ) {
+              if (currentEventType === 'ready') {
+                if (json.response_message_id !== undefined && onMetadata) {
+                  onMetadata({
+                    response_message_id: json.response_message_id,
+                    chat_session_id: sessionId,
+                  });
+                }
+                currentEventType = '';
                 continue;
               }
+
+              if (currentEventType === 'title') {
+                if (json.content && onMetadata) {
+                  onMetadata({
+                    conversation_title: json.content,
+                  });
+                }
+                currentEventType = '';
+                continue;
+              }
+
+              currentEventType = '';
 
               if (json.choices?.[0]?.delta?.content) {
                 const deltaText = json.choices[0].delta.content;
@@ -649,6 +678,35 @@ export class DeepSeekProvider implements Provider {
               const path = json.p;
               const value = json.v;
 
+              // Handle initial full object: {"v":{"response":{"fragments":[...]}}}
+              if (
+                value &&
+                typeof value === 'object' &&
+                !Array.isArray(value) &&
+                value.response?.fragments
+              ) {
+                for (const fragment of value.response.fragments) {
+                  if (fragment.type === 'THINK') {
+                    currentMode = 'THINK';
+                    if (fragment.content) {
+                      if (onThinking) onThinking(fragment.content);
+                      else onContent(`[Thinking] ${fragment.content}\n`);
+                    }
+                  } else if (fragment.type === 'RESPONSE') {
+                    currentMode = 'RESPONSE';
+                    if (fragment.content) {
+                      completionTokens += countTokens(fragment.content);
+                      onContent(fragment.content);
+                      if (onMetadata)
+                        onMetadata({
+                          total_token: promptTokens + completionTokens,
+                        });
+                    }
+                  }
+                }
+                continue;
+              }
+
               if (Array.isArray(value)) {
                 const fragment = value[0];
                 if (fragment) {
@@ -660,6 +718,9 @@ export class DeepSeekProvider implements Provider {
                     }
                   } else if (fragment.type === 'RESPONSE') {
                     currentMode = 'RESPONSE';
+                    logger.debug(
+                      `[DeepSeek] Switching to RESPONSE mode via array fragment. path=${path}`,
+                    );
                     if (fragment.content) {
                       completionTokens += countTokens(fragment.content);
                       onContent(fragment.content);
@@ -728,27 +789,6 @@ export class DeepSeekProvider implements Provider {
               }
             } catch (e) {}
           }
-        }
-      }
-
-      if (!options.conversationId && sessionId) {
-        try {
-          const renameRes = await client.post(
-            '/api/v0/chat_session/auto_rename',
-            {
-              chat_session_id: sessionId,
-            },
-          );
-
-          if (renameRes.ok) {
-            const renameData = await renameRes.json();
-            const title = renameData?.data?.biz_data?.title;
-            if (title && onMetadata) {
-              onMetadata({ conversation_title: title });
-            }
-          }
-        } catch (e) {
-          logger.warn('Failed to auto-rename session:', e);
         }
       }
 

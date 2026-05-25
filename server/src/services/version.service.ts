@@ -10,7 +10,6 @@ class VersionService {
   }
 
   public async startChecking() {
-    logger.info('Version checking disabled');
   }
 
   public stopChecking() {
