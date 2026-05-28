@@ -34,6 +34,7 @@ export const sendMessageController = async (
       modelId,
       messages,
       conversationId,
+      parent_message_id,
       stream,
       is_search,
       search,
@@ -44,6 +45,7 @@ export const sendMessageController = async (
 
     if (messages && messages.length > 1 && providerId !== 'kiro-cli') {
       if (!conversationId || conversationId.trim() === '') {
+        if (!parent_message_id) {
         const msg =
           'Missing Conversation ID: For multi-turn conversations, a valid conversationId must be provided.';
         logger.error(`[Chat] Validation Error: ${msg}`);
@@ -56,11 +58,14 @@ export const sendMessageController = async (
           },
         });
         return;
+        }
       }
     }
 
     let accountId = accountIdFromParams || accountIdFromBody;
     const useSearch = is_search === true || search === true;
+
+    logger.info(`[Chat] incoming: msgs=${messages?.length} convId="${conversationId}" parent_msg_id="${parent_message_id}" providerId="${providerId}"`);
 
     const db = getDb();
     let account: any | undefined;
@@ -136,9 +141,7 @@ export const sendMessageController = async (
       if (bestModel) {
         finalModel = bestModel.model_id;
       } else {
-        console.warn(
-          `[Chat] "auto" model requested but no sequence found for ${account.provider_id}`,
-        );
+        logger.warn(`"auto" model requested but no sequence found for ${account.provider_id}`);
         // Fallback: try to get default model from provider registry or let it fail
         const provider = providerRegistry.getProvider(account.provider_id);
         if (provider?.defaultModel) {
@@ -202,6 +205,7 @@ export const sendMessageController = async (
         model,
         messages,
         conversationId,
+        parent_message_id,
         search: useSearch,
         temperature,
         thinking,

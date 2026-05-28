@@ -2,6 +2,9 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('workspace');
 
 export interface WorkspaceInfo {
   id: string;
@@ -33,10 +36,7 @@ export class WorkspaceService {
       }
       return config;
     } catch (err) {
-      console.error(
-        '[WorkspaceService] Error reading root.json, resetting:',
-        err,
-      );
+      logger.error('Error reading root.json, resetting:', err);
       const defaultConfig: RootConfig = { workspaces: [] };
       await fs.writeJson(this.rootJson, defaultConfig, { spaces: 2 });
       return defaultConfig;
@@ -216,7 +216,7 @@ export class WorkspaceService {
               totalTokens,
             };
           } catch (e) {
-            console.error(`Error parsing session file ${file}:`, e);
+            logger.error(`Error parsing session file ${file}:`, e);
             return null;
           }
         }),

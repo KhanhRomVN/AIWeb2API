@@ -1,6 +1,9 @@
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('proxy-config');
 
 export interface ProxyConfig {
   host: string; // Default: '127.0.0.1' or '0.0.0.0'
@@ -62,7 +65,7 @@ export class ConfigManager {
         return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
       }
     } catch (error) {
-      console.error('[Config] Failed to load config:', error);
+      logger.error('Failed to load config:', error);
     }
     return { ...DEFAULT_CONFIG };
   }
@@ -72,7 +75,7 @@ export class ConfigManager {
       this.config = { ...this.config, ...config };
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(this.config, null, 2));
     } catch (error) {
-      console.error('[Config] Failed to save config:', error);
+      logger.error('Failed to save config:', error);
       throw error;
     }
   }

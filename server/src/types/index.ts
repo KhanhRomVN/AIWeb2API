@@ -27,6 +27,7 @@ export const ChatRequestSchema = z.object({
   stream: z.boolean().optional(),
   conversation_id: z.string().optional(),
   conversationId: z.string().optional(),
+  parent_message_id: z.string().optional(),
   search: z.boolean().optional(),
   ref_file_ids: z.array(z.string()).optional(),
   thinking: z.boolean().optional(),
@@ -99,6 +100,7 @@ export interface SendMessageOptions {
   model: string;
   messages: Message[];
   conversationId?: string;
+  parent_message_id?: string;
   search?: boolean;
   ref_file_ids?: string[];
   thinking?: boolean;

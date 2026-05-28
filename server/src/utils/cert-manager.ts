@@ -3,7 +3,9 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
+import { createLogger } from './logger';
 
+const logger = createLogger('cert-manager');
 const execAsync = promisify(exec);
 
 export interface CertificatePair {
@@ -87,7 +89,7 @@ export class CertificateManager {
         key: this.keyPath,
       };
     } catch (error) {
-      console.error('[CertManager] Failed to generate certificates:', error);
+      logger.error('Failed to generate certificates:', error);
 
       // Fallback: Create simple self-signed cert using Node.js if OpenSSL fails
       return this.generateCertificatesWithNodeForge();
@@ -167,10 +169,7 @@ export class CertificateManager {
         key: this.keyPath,
       };
     } catch (error) {
-      console.error(
-        '[CertManager] Failed to generate certificates with node-forge:',
-        error,
-      );
+      logger.error('Failed to generate certificates with node-forge:', error);
       throw new Error('Certificate generation failed');
     }
   }
@@ -199,7 +198,7 @@ export class CertificateManager {
       if (fs.existsSync(this.certPath)) fs.unlinkSync(this.certPath);
       if (fs.existsSync(this.keyPath)) fs.unlinkSync(this.keyPath);
     } catch (error) {
-      console.error('[CertManager] Failed to delete certificates:', error);
+      logger.error('Failed to delete certificates:', error);
     }
   }
 }

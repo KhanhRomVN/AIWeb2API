@@ -1,4 +1,7 @@
 import simpleGit, { SimpleGit, StatusResult } from 'simple-git';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('git-service');
 
 export interface GitStatusSummary {
   modified: string[];
@@ -60,7 +63,7 @@ export class GitService {
         isRepo: true,
       };
     } catch (error) {
-      console.warn(`Failed to get git status for ${repoPath}:`, error);
+      logger.warn(`Failed to get git status for ${repoPath}:`, error);
       return {
         modified: [],
         staged: [],
@@ -119,7 +122,7 @@ export class GitService {
         },
       };
     } catch (error) {
-      console.warn(`Failed to get git diff stats for ${repoPath}:`, error);
+      logger.warn(`Failed to get git diff stats for ${repoPath}:`, error);
       return { files: {}, total: { insertions: 0, deletions: 0 } };
     }
   }
@@ -131,7 +134,7 @@ export class GitService {
       const options = staged ? ['--cached'] : [];
       return await git.diff(options);
     } catch (error) {
-      console.warn(`Failed to get git diff for ${repoPath}:`, error);
+      logger.warn(`Failed to get git diff for ${repoPath}:`, error);
       return '';
     }
   }

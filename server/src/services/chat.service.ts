@@ -36,6 +36,7 @@ export const sendMessage = async (
     provider_id,
     messages,
     conversationId,
+    parent_message_id,
     onContent,
     onDone,
     onSessionCreated,
