@@ -65,7 +65,6 @@ export const sendMessageController = async (
     let accountId = accountIdFromParams || accountIdFromBody;
     const useSearch = is_search === true || search === true;
 
-    logger.info(`[Chat] incoming: msgs=${messages?.length} convId="${conversationId}" parent_msg_id="${parent_message_id}" providerId="${providerId}"`);
 
     const db = getDb();
     let account: any | undefined;
@@ -241,6 +240,14 @@ export const sendMessageController = async (
             res.end();
           } else {
             if (!res.headersSent) {
+              if (!accumulatedContent || accumulatedContent.trim() === '') {
+                res.status(502).json({
+                  success: false,
+                  message: 'Provider returned empty response',
+                  error: { code: 'EMPTY_RESPONSE' },
+                });
+                return;
+              }
               const responseData = {
                 success: true,
                 message: {

@@ -394,7 +394,6 @@ export class DeepSeekProvider implements Provider {
           }
 
           if (email) {
-            logger.info(`[DeepSeek] Validation success for email: ${email}`);
             return { isValid: true, cookies: token, email };
           }
         }
@@ -547,12 +546,9 @@ export class DeepSeekProvider implements Provider {
       let parentMessageId: string | null | undefined = undefined;
       if (options.parent_message_id) {
         parentMessageId = options.parent_message_id;
-        logger.info(`[DeepSeek] revert mode: using provided parent_message_id="${parentMessageId}" sessionId="${sessionId}"`);
       } else if (options.conversationId) {
         parentMessageId = await this.getLastMessageId(client, sessionId);
-        logger.info(`[DeepSeek] continue mode: fetched parentMessageId="${parentMessageId}" sessionId="${sessionId}"`);
       } else {
-        logger.info(`[DeepSeek] new session: sessionId="${sessionId}" no parentMessageId`);
       }
 
       const challengeClient = new HttpClient({
@@ -605,7 +601,6 @@ export class DeepSeekProvider implements Provider {
         },
       });
 
-      logger.info(`[DeepSeek] sending completion: sessionId="${sessionId}" parent_message_id="${requestPayload.parent_message_id}" prompt_len=${requestPayload.prompt?.length}`);
 
       const response = await completionClient.post(
         '/api/v0/chat/completion',
@@ -613,13 +608,11 @@ export class DeepSeekProvider implements Provider {
       );
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(`[DeepSeek] completion failed: status=${response.status} body=${errorText}`);
         throw new Error(
           `DeepSeek API returned ${response.status}: ${errorText}`,
         );
       }
 
-      logger.info(`[DeepSeek] completion response ok, streaming...`);
 
       if (!response.body) {
         throw new Error('No response body');
