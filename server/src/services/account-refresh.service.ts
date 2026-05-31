@@ -11,7 +11,6 @@ export class AccountRefreshService {
 
   start() {
     if (this.interval) return;
-    logger.info('Account refresh service started');
     setTimeout(() => this.checkAndRefresh(), 30000);
     this.interval = setInterval(() => this.checkAndRefresh(), this.REFRESH_INTERVAL);
   }
@@ -55,7 +54,7 @@ export class AccountRefreshService {
               };
               db.prepare('UPDATE accounts SET credential = ?, last_refreshed_at = ? WHERE id = ?')
                 .run(JSON.stringify(updatedCredential), now, account.id);
-              logger.info(`Token refreshed — ${account.email} (${account.provider_id})`);
+
               credential = updatedCredential;
             } catch (err: any) {
               logger.error(`Token refresh failed — ${account.email}: ${err.message}`);

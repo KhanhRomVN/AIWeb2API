@@ -165,6 +165,10 @@ export const sendMessage = async (
         saveMessage('assistant', accumulatedAssistantContent);
       }
 
+      if (!accumulatedAssistantContent) {
+        logger.warn(`[sendMessage] Provider ${provider_id} completed with empty content (session: ${activeConversationId})`);
+      }
+
       // Calculate tokens for request and response
       const requestTokens = countMessagesTokens(messages);
       const responseTokens = countTokens(accumulatedAssistantContent);

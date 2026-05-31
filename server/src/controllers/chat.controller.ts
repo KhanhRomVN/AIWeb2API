@@ -197,6 +197,27 @@ export const sendMessageController = async (
 
       recordRequest(account.provider_id, model);
 
+      // Log request snippet
+      const lastMsg = messages?.[messages.length - 1];
+      const lastMsgSnippet = typeof lastMsg?.content === 'string'
+        ? lastMsg.content.slice(0, 120).replace(/\n/g, ' ')
+        : '';
+      logger.info(`[Request] provider=${account.provider_id} model=${model} msgs=${messages?.length} convId=${conversationId || 'none'} | "${lastMsgSnippet}"`);
+
+      let accumulatedResponse = '';
+
+      // SSE first-chunk timeout: if no content received within 30s, abort
+      let firstChunkReceived = false;
+      let streamTimeoutId: ReturnType<typeof setTimeout> | null = null;
+      if (stream !== false) {
+        streamTimeoutId = setTimeout(() => {
+          if (!firstChunkReceived && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ error: 'Stream timeout: no response received within 30 seconds' })}\n\n`);
+            res.end();
+          }
+        }, 30000);
+      }
+
       await sendMessage({
         credential: account.credential,
         provider_id: account.provider_id,
@@ -210,7 +231,13 @@ export const sendMessageController = async (
         thinking,
         ref_file_ids,
         onContent: (content) => {
+          accumulatedResponse += content;
           if (stream !== false) {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              if (streamTimeoutId) clearTimeout(streamTimeoutId);
+            }
+            if (res.writableEnded) return;
             const responseData = { content: unescapeHtml(content) };
             res.write(`data: ${JSON.stringify(responseData)}\n\n`);
           } else {
@@ -232,10 +259,19 @@ export const sendMessageController = async (
           // Note: added thinking handling for consistency if needed
         },
         onDone: () => {
+          if (streamTimeoutId) clearTimeout(streamTimeoutId);
+          if (stream !== false && res.writableEnded) return;
           // Updated: Logic tính toán token và ghi metrics đã được chuyển về Client
           // Backend chỉ đóng vai trò forward stream và lưu session
 
+          const responseSnippet = accumulatedResponse.slice(0, 120).replace(/\n/g, ' ');
+          logger.info(`[Response] len=${accumulatedResponse.length} | "${responseSnippet}"`);
+
           if (stream !== false) {
+            if (!accumulatedResponse || accumulatedResponse.trim() === '') {
+              logger.warn(`[Response] Provider ${account.provider_id} returned empty content for model=${model}`);
+              res.write(`data: ${JSON.stringify({ error: 'Provider returned empty response', code: 'EMPTY_RESPONSE' })}\n\n`);
+            }
             res.write('data: [DONE]\n\n');
             res.end();
           } else {
@@ -270,10 +306,13 @@ export const sendMessageController = async (
           }
         },
         onError: (error) => {
+          if (streamTimeoutId) clearTimeout(streamTimeoutId);
           logger.error('Stream error', error);
           if (stream !== false) {
-            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-            res.end();
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+              res.end();
+            }
           } else {
             if (!res.headersSent) {
               res.status(500).json({ error: error.message });

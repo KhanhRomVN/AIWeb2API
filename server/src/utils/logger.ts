@@ -41,12 +41,11 @@ export class Logger {
   constructor(private context: string) {}
 
   private log(level: string, message: string, ...args: any[]) {
-    const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
     const color = LEVEL_COLOR[level] || '';
     const caller = getCallerFile();
     const meta = formatMeta(args);
     process.stdout.write(
-      `${COLORS.gray}[${ts}]${COLORS.reset} ${color}${COLORS.bold}[${level}]${COLORS.reset} ${COLORS.gray}[${caller}]${COLORS.reset} ${message}${meta}\n`
+      `${color}${COLORS.bold}[${level}]${COLORS.reset} ${COLORS.gray}[${caller}]${COLORS.reset} ${message}${meta}\n`
     );
   }
 

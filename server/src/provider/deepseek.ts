@@ -4,7 +4,7 @@ import { HttpClient } from '../utils/http-client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import fetch from 'node-fetch';
+import fetch, { Response as NodeFetchResponse } from 'node-fetch';
 import { findAccount } from '../services/account-selector';
 import { createLogger } from '../utils/logger';
 import { loginService } from '../services/login.service';
@@ -52,6 +52,11 @@ export interface ChatPayload {
   thinking_enabled?: boolean;
   search_enabled?: boolean;
   model_type?: string;
+}
+
+export interface ContinuePayload {
+  request: string; // JSON-stringified { chat_session_id, message_id, fallback_to_resume }
+  response: string; // The prior SSE stream text (can be empty string for auto-resume)
 }
 
 // =============================================================================
@@ -478,6 +483,293 @@ export class DeepSeekProvider implements Provider {
     };
   }
 
+  // =============================================================================
+  // SSE STREAM PARSER
+  // Parses a DeepSeek SSE response body and emits content/thinking/metadata.
+  // Returns an object indicating whether the response was INCOMPLETE and the
+  // response_message_id needed to call /chat/continue.
+  // =============================================================================
+  private async parseSSEStream(
+    responseBody: NodeJS.ReadableStream,
+    opts: {
+      onContent: (chunk: string) => void;
+      onThinking?: (chunk: string) => void;
+      onMetadata?: (meta: any) => void;
+      onRaw?: (data: string) => void;
+      sessionId: string;
+      promptTokens: number;
+      completionTokensRef: { value: number };
+      currentModeRef: { value: 'THINK' | 'RESPONSE' };
+    },
+  ): Promise<{ incomplete: boolean; responseMessageId: number | null }> {
+    const {
+      onContent,
+      onThinking,
+      onMetadata,
+      onRaw,
+      sessionId,
+      promptTokens,
+      completionTokensRef,
+      currentModeRef,
+    } = opts;
+
+    let buffer = '';
+    let currentEventType = '';
+    let isIncomplete = false;
+    let responseMessageId: number | null = null;
+
+    for await (const chunk of responseBody) {
+      const chunkStr = chunk.toString();
+      if (onRaw) onRaw(chunkStr);
+      buffer += chunkStr;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEventType = line.substring(7).trim();
+          continue;
+        }
+
+        if (!line.startsWith('data: ')) continue;
+
+        const jsonStr = line.substring(6).trim();
+        if (jsonStr === '[DONE]') {
+          // Explicit [DONE] means complete — not INCOMPLETE
+          return { incomplete: false, responseMessageId };
+        }
+
+        try {
+          const json = JSON.parse(jsonStr);
+
+          // ── event: ready ──────────────────────────────────────────────────
+          if (currentEventType === 'ready') {
+            if (json.response_message_id !== undefined) {
+              responseMessageId = json.response_message_id;
+              if (onMetadata) {
+                onMetadata({
+                  response_message_id: json.response_message_id,
+                  chat_session_id: sessionId,
+                });
+              }
+            }
+            currentEventType = '';
+            continue;
+          }
+
+          // ── event: title ──────────────────────────────────────────────────
+          if (currentEventType === 'title') {
+            if (json.content && onMetadata) {
+              onMetadata({ conversation_title: json.content });
+            }
+            currentEventType = '';
+            continue;
+          }
+
+          // ── event: close ─────────────────────────────────────────────────
+          // DeepSeek sends `event: close` with auto_resume info when INCOMPLETE
+          if (currentEventType === 'close') {
+            currentEventType = '';
+            continue;
+          }
+
+          currentEventType = '';
+
+          // ── Detect INCOMPLETE status ──────────────────────────────────────
+          // Pattern 1: {"p":"response/status","o":"SET","v":"INCOMPLETE"}
+          if (json.p === 'response/status' && json.v === 'INCOMPLETE') {
+            isIncomplete = true;
+            logger.info(
+              `[DeepSeek] Response INCOMPLETE detected (session=${sessionId}, msgId=${responseMessageId})`,
+            );
+            continue;
+          }
+
+          // Pattern 2: batch update containing quasi_status=INCOMPLETE
+          // {"p":"response","o":"BATCH","v":[...,{"p":"quasi_status","v":"INCOMPLETE"}]}
+          if (json.p === 'response' && json.o === 'BATCH' && Array.isArray(json.v)) {
+            for (const item of json.v) {
+              if (item.p === 'quasi_status' && item.v === 'INCOMPLETE') {
+                isIncomplete = true;
+                logger.info(
+                  `[DeepSeek] Response INCOMPLETE detected via BATCH (session=${sessionId}, msgId=${responseMessageId})`,
+                );
+              }
+              if (item.p === 'accumulated_token_usage' && onMetadata) {
+                onMetadata({ total_token: item.v });
+              }
+            }
+            continue;
+          }
+
+          // ── OpenAI-compat delta ───────────────────────────────────────────
+          if (json.choices?.[0]?.delta?.content) {
+            const deltaText = json.choices[0].delta.content;
+            completionTokensRef.value += countTokens(deltaText);
+            onContent(deltaText);
+            if (onMetadata) {
+              onMetadata({ total_token: promptTokens + completionTokensRef.value });
+            }
+            continue;
+          }
+
+          const path = json.p;
+          const value = json.v;
+
+          // ── Initial full object: {"v":{"response":{"fragments":[...]}}} ───
+          if (
+            value &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            value.response?.fragments
+          ) {
+            // Also capture response_message_id from initial snapshot
+            if (value.response?.message_id != null) {
+              responseMessageId = value.response.message_id;
+            }
+            for (const fragment of value.response.fragments) {
+              if (fragment.type === 'THINK') {
+                currentModeRef.value = 'THINK';
+                if (fragment.content) {
+                  if (onThinking) onThinking(fragment.content);
+                  else onContent(`[Thinking] ${fragment.content}\n`);
+                }
+              } else if (fragment.type === 'RESPONSE') {
+                currentModeRef.value = 'RESPONSE';
+                if (fragment.content) {
+                  completionTokensRef.value += countTokens(fragment.content);
+                  onContent(fragment.content);
+                  if (onMetadata)
+                    onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                }
+              }
+            }
+            // Check if initial snapshot already shows INCOMPLETE
+            if (value.response?.status === 'INCOMPLETE') {
+              isIncomplete = true;
+            }
+            continue;
+          }
+
+          // ── Array fragment ────────────────────────────────────────────────
+          if (Array.isArray(value)) {
+            const fragment = value[0];
+            if (fragment) {
+              if (fragment.type === 'THINK') {
+                currentModeRef.value = 'THINK';
+                if (fragment.content) {
+                  if (onThinking) onThinking(fragment.content);
+                  else onContent(`[Thinking] ${fragment.content}\n`);
+                }
+              } else if (fragment.type === 'RESPONSE') {
+                currentModeRef.value = 'RESPONSE';
+                if (fragment.content) {
+                  completionTokensRef.value += countTokens(fragment.content);
+                  onContent(fragment.content);
+                  if (onMetadata) {
+                    onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                  }
+                }
+              }
+            }
+            continue;
+          }
+
+          // ── String value (incremental delta) ─────────────────────────────
+          if (typeof value === 'string') {
+            if (path?.includes('thinking_content')) {
+              currentModeRef.value = 'THINK';
+              completionTokensRef.value += countTokens(value);
+              if (onThinking) onThinking(value);
+              else onContent(`[Thinking] ${value}\n`);
+              if (onMetadata) {
+                onMetadata({ total_token: promptTokens + completionTokensRef.value });
+              }
+            } else if (
+              path === 'response/content' ||
+              path?.endsWith('/content')
+            ) {
+              if (path === 'response/content') {
+                currentModeRef.value = 'RESPONSE';
+              }
+              completionTokensRef.value += countTokens(value);
+              if (currentModeRef.value === 'THINK') {
+                if (onThinking) onThinking(value);
+                else onContent(`[Thinking] ${value}\n`);
+              } else {
+                onContent(value);
+              }
+              if (onMetadata) {
+                onMetadata({ total_token: promptTokens + completionTokensRef.value });
+              }
+            } else if (!path) {
+              completionTokensRef.value += countTokens(value);
+              if (currentModeRef.value === 'THINK') {
+                if (onThinking) onThinking(value);
+                else onContent(`[Thinking] ${value}\n`);
+              } else {
+                onContent(value);
+              }
+              if (onMetadata) {
+                onMetadata({ total_token: promptTokens + completionTokensRef.value });
+              }
+            }
+          } else if (
+            path?.endsWith('/elapsed_secs') ||
+            path?.endsWith('thinking_elapsed_secs')
+          ) {
+            if (onMetadata) {
+              onMetadata({ thinking_elapsed: value });
+            }
+          }
+        } catch (_e) {
+          // Ignore malformed JSON lines
+        }
+      }
+    }
+
+    return { incomplete: isIncomplete, responseMessageId };
+  }
+
+  // =============================================================================
+  // CONTINUE INCOMPLETE RESPONSE
+  // Calls POST /api/v0/chat/continue to resume a truncated DeepSeek response.
+  // =============================================================================
+  private async continueIncompleteResponse(
+    client: HttpClient,
+    sessionId: string,
+    responseMessageId: number,
+  ): Promise<NodeFetchResponse> {
+    const requestBody = JSON.stringify({
+      chat_session_id: sessionId,
+      message_id: responseMessageId,
+      fallback_to_resume: true,
+    });
+
+    // The /chat/continue endpoint wraps the prior SSE stream in a "response" field.
+    // We pass an empty string since we don't need to replay it — DeepSeek uses
+    // the server-side state to resume from where it left off.
+    const continuePayload = {
+      request: requestBody,
+      response: '',
+    };
+
+    logger.info(
+      `[DeepSeek] Calling /chat/continue for session=${sessionId} msgId=${responseMessageId}`,
+    );
+
+    const response = await client.post('/api/v0/chat/continue', continuePayload);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(
+        `DeepSeek /chat/continue returned ${response.status}: ${errText}`,
+      );
+    }
+
+    return response;
+  }
+
   async handleMessage(options: SendMessageOptions): Promise<void> {
     const {
       credential,
@@ -548,7 +840,6 @@ export class DeepSeekProvider implements Provider {
         parentMessageId = options.parent_message_id;
       } else if (options.conversationId) {
         parentMessageId = await this.getLastMessageId(client, sessionId);
-      } else {
       }
 
       const challengeClient = new HttpClient({
@@ -601,7 +892,6 @@ export class DeepSeekProvider implements Provider {
         },
       });
 
-
       const response = await completionClient.post(
         '/api/v0/chat/completion',
         requestPayload,
@@ -613,187 +903,98 @@ export class DeepSeekProvider implements Provider {
         );
       }
 
-
       if (!response.body) {
         throw new Error('No response body');
       }
 
-      let buffer = '';
-      let currentMode: 'THINK' | 'RESPONSE' = 'RESPONSE';
+      // Shared mutable state across initial + continuation streams
       const promptTokens = countMessagesTokens(messages);
-      let completionTokens = 0;
-      let currentEventType = '';
+      const completionTokensRef = { value: 0 };
+      const currentModeRef: { value: 'THINK' | 'RESPONSE' } = { value: 'RESPONSE' };
 
-      for await (const chunk of response.body) {
-        const chunkStr = chunk.toString();
-        if (onRaw) onRaw(chunkStr);
-        buffer += chunkStr;
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      // Client for continue calls (uses session-scoped Referer)
+      const continueClient = new HttpClient({
+        baseURL: 'https://chat.deepseek.com',
+        headers: {
+          ...baseHeaders,
+          Referer: `https://chat.deepseek.com/a/chat/s/${sessionId}`,
+        },
+      });
 
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEventType = line.substring(7).trim();
-            continue;
-          }
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.substring(6).trim();
-            if (jsonStr === '[DONE]') {
-              onDone();
-              return;
-            }
+      // ── Parse initial stream ──────────────────────────────────────────────
+      let { incomplete, responseMessageId } = await this.parseSSEStream(
+        response.body as NodeJS.ReadableStream,
+        {
+          onContent,
+          onThinking,
+          onMetadata,
+          onRaw,
+          sessionId,
+          promptTokens,
+          completionTokensRef,
+          currentModeRef,
+        },
+      );
 
-            try {
-              const json = JSON.parse(jsonStr);
+      // ── Auto-continue loop ────────────────────────────────────────────────
+      // DeepSeek may truncate long responses. We keep calling /chat/continue
+      // until the response is complete (quasi_status !== INCOMPLETE).
+      const MAX_CONTINUATIONS = 10; // safety cap to prevent infinite loops
+      let continuationCount = 0;
 
-              if (currentEventType === 'ready') {
-                if (json.response_message_id !== undefined && onMetadata) {
-                  onMetadata({
-                    response_message_id: json.response_message_id,
-                    chat_session_id: sessionId,
-                  });
-                }
-                currentEventType = '';
-                continue;
-              }
+      while (incomplete && responseMessageId !== null && continuationCount < MAX_CONTINUATIONS) {
+        continuationCount++;
+        logger.info(
+          `[DeepSeek] Auto-continuing response (attempt ${continuationCount}/${MAX_CONTINUATIONS}, session=${sessionId})`,
+        );
 
-              if (currentEventType === 'title') {
-                if (json.content && onMetadata) {
-                  onMetadata({
-                    conversation_title: json.content,
-                  });
-                }
-                currentEventType = '';
-                continue;
-              }
-
-              currentEventType = '';
-
-              if (json.choices?.[0]?.delta?.content) {
-                const deltaText = json.choices[0].delta.content;
-                completionTokens += countTokens(deltaText);
-                onContent(deltaText);
-                if (onMetadata) {
-                  onMetadata({ total_token: promptTokens + completionTokens });
-                }
-                continue;
-              }
-
-              const path = json.p;
-              const value = json.v;
-
-              // Handle initial full object: {"v":{"response":{"fragments":[...]}}}
-              if (
-                value &&
-                typeof value === 'object' &&
-                !Array.isArray(value) &&
-                value.response?.fragments
-              ) {
-                for (const fragment of value.response.fragments) {
-                  if (fragment.type === 'THINK') {
-                    currentMode = 'THINK';
-                    if (fragment.content) {
-                      if (onThinking) onThinking(fragment.content);
-                      else onContent(`[Thinking] ${fragment.content}\n`);
-                    }
-                  } else if (fragment.type === 'RESPONSE') {
-                    currentMode = 'RESPONSE';
-                    if (fragment.content) {
-                      completionTokens += countTokens(fragment.content);
-                      onContent(fragment.content);
-                      if (onMetadata)
-                        onMetadata({
-                          total_token: promptTokens + completionTokens,
-                        });
-                    }
-                  }
-                }
-                continue;
-              }
-
-              if (Array.isArray(value)) {
-                const fragment = value[0];
-                if (fragment) {
-                  if (fragment.type === 'THINK') {
-                    currentMode = 'THINK';
-                    if (fragment.content) {
-                      if (onThinking) onThinking(fragment.content);
-                      else onContent(`[Thinking] ${fragment.content}\n`);
-                    }
-                  } else if (fragment.type === 'RESPONSE') {
-                    currentMode = 'RESPONSE';
-                    logger.debug(
-                      `[DeepSeek] Switching to RESPONSE mode via array fragment. path=${path}`,
-                    );
-                    if (fragment.content) {
-                      completionTokens += countTokens(fragment.content);
-                      onContent(fragment.content);
-                      if (onMetadata) {
-                        onMetadata({
-                          total_token: promptTokens + completionTokens,
-                        });
-                      }
-                    }
-                  }
-                }
-              } else if (typeof value === 'string') {
-                if (path?.includes('thinking_content')) {
-                  currentMode = 'THINK';
-                  completionTokens += countTokens(value);
-                  if (onThinking) onThinking(value);
-                  else onContent(`[Thinking] ${value}\n`);
-                  if (onMetadata) {
-                    onMetadata({
-                      total_token: promptTokens + completionTokens,
-                    });
-                  }
-                } else if (
-                  path === 'response/content' ||
-                  path?.endsWith('/content')
-                ) {
-                  if (path === 'response/content') {
-                    currentMode = 'RESPONSE';
-                  }
-
-                  if (currentMode === 'THINK') {
-                    completionTokens += countTokens(value);
-                    if (onThinking) onThinking(value);
-                    else onContent(`[Thinking] ${value}\n`);
-                  } else {
-                    completionTokens += countTokens(value);
-                    onContent(value);
-                  }
-
-                  if (onMetadata) {
-                    onMetadata({
-                      total_token: promptTokens + completionTokens,
-                    });
-                  }
-                } else if (!path) {
-                  completionTokens += countTokens(value);
-                  if (currentMode === 'THINK') {
-                    if (onThinking) onThinking(value);
-                    else onContent(`[Thinking] ${value}\n`);
-                  } else {
-                    onContent(value);
-                  }
-                  if (onMetadata) {
-                    onMetadata({
-                      total_token: promptTokens + completionTokens,
-                    });
-                  }
-                }
-              } else if (
-                path?.endsWith('/elapsed_secs') ||
-                path?.endsWith('thinking_elapsed_secs')
-              ) {
-                if (onMetadata) {
-                  onMetadata({ thinking_elapsed: value });
-                }
-              }
-            } catch (e) {}
-          }
+        if (onMetadata) {
+          onMetadata({ continuing: true, continuation_count: continuationCount });
         }
+
+        let continueResponse: NodeFetchResponse;
+        try {
+          continueResponse = await this.continueIncompleteResponse(
+            continueClient,
+            sessionId,
+            responseMessageId,
+          );
+        } catch (continueErr: any) {
+          logger.error(`[DeepSeek] /chat/continue failed: ${continueErr.message}`);
+          // Don't propagate — treat as end of stream with what we have
+          break;
+        }
+
+        if (!continueResponse.body) {
+          logger.warn('[DeepSeek] /chat/continue returned no body, stopping continuation');
+          break;
+        }
+
+        const continueResult = await this.parseSSEStream(
+          continueResponse.body as unknown as NodeJS.ReadableStream,
+          {
+            onContent,
+            onThinking,
+            onMetadata,
+            onRaw,
+            sessionId,
+            promptTokens,
+            completionTokensRef,
+            currentModeRef,
+          },
+        );
+
+        incomplete = continueResult.incomplete;
+        // Update responseMessageId if the continuation stream provides a new one
+        if (continueResult.responseMessageId !== null) {
+          responseMessageId = continueResult.responseMessageId;
+        }
+      }
+
+      if (continuationCount >= MAX_CONTINUATIONS && incomplete) {
+        logger.warn(
+          `[DeepSeek] Reached max continuations (${MAX_CONTINUATIONS}) for session=${sessionId}. Response may be truncated.`,
+        );
       }
 
       onDone();
