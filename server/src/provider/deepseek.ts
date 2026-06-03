@@ -484,6 +484,28 @@ export class DeepSeekProvider implements Provider {
   }
 
   // =============================================================================
+  // TOOL CALL DETECTION
+  // Checks if accumulated content ends with a partial (unclosed) tool tag.
+  // Used to detect when INCOMPLETE cuts off mid-toolcall.
+  // =============================================================================
+  private detectPartialToolcall(content: string): { hasPartial: boolean; toolType: string | null } {
+    const TOOL_NAMES = [
+      'write_to_file', 'replace_in_file', 'read_file', 'run_command',
+      'list_files', 'search_files', 'delete_file', 'delete_folder', 'execute_agent_action',
+    ];
+
+    for (const tool of TOOL_NAMES) {
+      // Check for unclosed opening tag: <tool_name> exists but </tool_name> does not
+      const openTagRegex = new RegExp(`<${tool}(?:\\s[^>]*)?>`, 'i');
+      const closeTagRegex = new RegExp(`</${tool}>`, 'i');
+      if (openTagRegex.test(content) && !closeTagRegex.test(content)) {
+        return { hasPartial: true, toolType: tool };
+      }
+    }
+    return { hasPartial: false, toolType: null };
+  }
+
+  // =============================================================================
   // SSE STREAM PARSER
   // Parses a DeepSeek SSE response body and emits content/thinking/metadata.
   // Returns an object indicating whether the response was INCOMPLETE and the
@@ -501,7 +523,7 @@ export class DeepSeekProvider implements Provider {
       completionTokensRef: { value: number };
       currentModeRef: { value: 'THINK' | 'RESPONSE' };
     },
-  ): Promise<{ incomplete: boolean; responseMessageId: number | null }> {
+  ): Promise<{ incomplete: boolean; responseMessageId: number | null; accumulatedContent: string }> {
     const {
       onContent,
       onThinking,
@@ -517,9 +539,13 @@ export class DeepSeekProvider implements Provider {
     let currentEventType = '';
     let isIncomplete = false;
     let responseMessageId: number | null = null;
+    let contentChunkCount = 0;
+    let totalBytesProcessed = 0;
+    let accumulatedContent = '';
 
     for await (const chunk of responseBody) {
       const chunkStr = chunk.toString();
+      totalBytesProcessed += chunkStr.length;
       if (onRaw) onRaw(chunkStr);
       buffer += chunkStr;
       const lines = buffer.split('\n');
@@ -536,7 +562,8 @@ export class DeepSeekProvider implements Provider {
         const jsonStr = line.substring(6).trim();
         if (jsonStr === '[DONE]') {
           // Explicit [DONE] means complete — not INCOMPLETE
-          return { incomplete: false, responseMessageId };
+          logger.debug(`[DeepSeek] parseSSEStream complete | session=${sessionId} | status=COMPLETE | msgId=${responseMessageId} | totalBytes=${totalBytesProcessed} | contentChunks=${contentChunkCount}`);
+          return { incomplete: false, responseMessageId, accumulatedContent };
         }
 
         try {
@@ -579,9 +606,16 @@ export class DeepSeekProvider implements Provider {
           // Pattern 1: {"p":"response/status","o":"SET","v":"INCOMPLETE"}
           if (json.p === 'response/status' && json.v === 'INCOMPLETE') {
             isIncomplete = true;
+            const { hasPartial, toolType } = this.detectPartialToolcall(accumulatedContent);
             logger.info(
-              `[DeepSeek] Response INCOMPLETE detected (session=${sessionId}, msgId=${responseMessageId})`,
+              `[DeepSeek] INCOMPLETE detected (Pattern 1) | session=${sessionId} | msgId=${responseMessageId} | contentChunks=${contentChunkCount} | bytesProcessed=${totalBytesProcessed} | hasPartialTool=${hasPartial} | toolType=${toolType ?? 'none'}`,
             );
+            if (onMetadata) {
+              onMetadata({
+                incomplete_has_partial_tool: hasPartial,
+                incomplete_partial_tool_type: toolType,
+              });
+            }
             continue;
           }
 
@@ -591,9 +625,16 @@ export class DeepSeekProvider implements Provider {
             for (const item of json.v) {
               if (item.p === 'quasi_status' && item.v === 'INCOMPLETE') {
                 isIncomplete = true;
+                const { hasPartial, toolType } = this.detectPartialToolcall(accumulatedContent);
                 logger.info(
-                  `[DeepSeek] Response INCOMPLETE detected via BATCH (session=${sessionId}, msgId=${responseMessageId})`,
+                  `[DeepSeek] INCOMPLETE detected (Pattern 2/BATCH) | session=${sessionId} | msgId=${responseMessageId} | contentChunks=${contentChunkCount} | bytesProcessed=${totalBytesProcessed} | hasPartialTool=${hasPartial} | toolType=${toolType ?? 'none'}`,
                 );
+                if (onMetadata) {
+                  onMetadata({
+                    incomplete_has_partial_tool: hasPartial,
+                    incomplete_partial_tool_type: toolType,
+                  });
+                }
               }
               if (item.p === 'accumulated_token_usage' && onMetadata) {
                 onMetadata({ total_token: item.v });
@@ -606,7 +647,9 @@ export class DeepSeekProvider implements Provider {
           if (json.choices?.[0]?.delta?.content) {
             const deltaText = json.choices[0].delta.content;
             completionTokensRef.value += countTokens(deltaText);
+            accumulatedContent += deltaText;
             onContent(deltaText);
+            contentChunkCount++;
             if (onMetadata) {
               onMetadata({ total_token: promptTokens + completionTokensRef.value });
             }
@@ -632,13 +675,15 @@ export class DeepSeekProvider implements Provider {
                 currentModeRef.value = 'THINK';
                 if (fragment.content) {
                   if (onThinking) onThinking(fragment.content);
-                  else onContent(`[Thinking] ${fragment.content}\n`);
+                  else { onContent(`[Thinking] ${fragment.content}\n`); contentChunkCount++; }
                 }
               } else if (fragment.type === 'RESPONSE') {
                 currentModeRef.value = 'RESPONSE';
                 if (fragment.content) {
                   completionTokensRef.value += countTokens(fragment.content);
+                  accumulatedContent += fragment.content;
                   onContent(fragment.content);
+                  contentChunkCount++;
                   if (onMetadata)
                     onMetadata({ total_token: promptTokens + completionTokensRef.value });
                 }
@@ -659,13 +704,15 @@ export class DeepSeekProvider implements Provider {
                 currentModeRef.value = 'THINK';
                 if (fragment.content) {
                   if (onThinking) onThinking(fragment.content);
-                  else onContent(`[Thinking] ${fragment.content}\n`);
+                  else { onContent(`[Thinking] ${fragment.content}\n`); contentChunkCount++; }
                 }
               } else if (fragment.type === 'RESPONSE') {
                 currentModeRef.value = 'RESPONSE';
                 if (fragment.content) {
                   completionTokensRef.value += countTokens(fragment.content);
+                  accumulatedContent += fragment.content;
                   onContent(fragment.content);
+                  contentChunkCount++;
                   if (onMetadata) {
                     onMetadata({ total_token: promptTokens + completionTokensRef.value });
                   }
@@ -681,7 +728,7 @@ export class DeepSeekProvider implements Provider {
               currentModeRef.value = 'THINK';
               completionTokensRef.value += countTokens(value);
               if (onThinking) onThinking(value);
-              else onContent(`[Thinking] ${value}\n`);
+              else { onContent(`[Thinking] ${value}\n`); contentChunkCount++; }
               if (onMetadata) {
                 onMetadata({ total_token: promptTokens + completionTokensRef.value });
               }
@@ -695,9 +742,11 @@ export class DeepSeekProvider implements Provider {
               completionTokensRef.value += countTokens(value);
               if (currentModeRef.value === 'THINK') {
                 if (onThinking) onThinking(value);
-                else onContent(`[Thinking] ${value}\n`);
+                else { onContent(`[Thinking] ${value}\n`); contentChunkCount++; }
               } else {
+                accumulatedContent += value;
                 onContent(value);
+                contentChunkCount++;
               }
               if (onMetadata) {
                 onMetadata({ total_token: promptTokens + completionTokensRef.value });
@@ -706,9 +755,11 @@ export class DeepSeekProvider implements Provider {
               completionTokensRef.value += countTokens(value);
               if (currentModeRef.value === 'THINK') {
                 if (onThinking) onThinking(value);
-                else onContent(`[Thinking] ${value}\n`);
+                else { onContent(`[Thinking] ${value}\n`); contentChunkCount++; }
               } else {
+                accumulatedContent += value;
                 onContent(value);
+                contentChunkCount++;
               }
               if (onMetadata) {
                 onMetadata({ total_token: promptTokens + completionTokensRef.value });
@@ -728,7 +779,9 @@ export class DeepSeekProvider implements Provider {
       }
     }
 
-    return { incomplete: isIncomplete, responseMessageId };
+    logger.debug(`[DeepSeek] Stream ended naturally (no [DONE] token) | session=${sessionId} | msgId=${responseMessageId} | bytesProcessed=${totalBytesProcessed} | contentChunks=${contentChunkCount} | incomplete=${isIncomplete}`);
+    logger.debug(`[DeepSeek] parseSSEStream complete | session=${sessionId} | status=${isIncomplete ? 'INCOMPLETE' : 'COMPLETE'} | msgId=${responseMessageId} | totalBytes=${totalBytesProcessed} | contentChunks=${contentChunkCount}`);
+    return { incomplete: isIncomplete, responseMessageId, accumulatedContent };
   }
 
   // =============================================================================
@@ -740,22 +793,15 @@ export class DeepSeekProvider implements Provider {
     sessionId: string,
     responseMessageId: number,
   ): Promise<NodeFetchResponse> {
-    const requestBody = JSON.stringify({
+    // DeepSeek /chat/continue expects a flat JSON body — NOT wrapped in a "request" field.
+    const continuePayload = {
       chat_session_id: sessionId,
       message_id: responseMessageId,
       fallback_to_resume: true,
-    });
-
-    // The /chat/continue endpoint wraps the prior SSE stream in a "response" field.
-    // We pass an empty string since we don't need to replay it — DeepSeek uses
-    // the server-side state to resume from where it left off.
-    const continuePayload = {
-      request: requestBody,
-      response: '',
     };
 
     logger.info(
-      `[DeepSeek] Calling /chat/continue for session=${sessionId} msgId=${responseMessageId}`,
+      `[DeepSeek] Calling /chat/continue for session=${sessionId} msgId=${responseMessageId} | payload=${JSON.stringify(continuePayload)}`,
     );
 
     const response = await client.post('/api/v0/chat/continue', continuePayload);
@@ -922,7 +968,7 @@ export class DeepSeekProvider implements Provider {
       });
 
       // ── Parse initial stream ──────────────────────────────────────────────
-      let { incomplete, responseMessageId } = await this.parseSSEStream(
+      let { incomplete, responseMessageId, accumulatedContent } = await this.parseSSEStream(
         response.body as NodeJS.ReadableStream,
         {
           onContent,
@@ -945,7 +991,7 @@ export class DeepSeekProvider implements Provider {
       while (incomplete && responseMessageId !== null && continuationCount < MAX_CONTINUATIONS) {
         continuationCount++;
         logger.info(
-          `[DeepSeek] Auto-continuing response (attempt ${continuationCount}/${MAX_CONTINUATIONS}, session=${sessionId})`,
+          `[DeepSeek] Auto-continue attempt ${continuationCount}/${MAX_CONTINUATIONS} | session=${sessionId} | msgId=${responseMessageId}`,
         );
 
         if (onMetadata) {
@@ -984,17 +1030,26 @@ export class DeepSeekProvider implements Provider {
           },
         );
 
+        // Merge accumulated content across continuations
+        accumulatedContent += continueResult.accumulatedContent;
+
         incomplete = continueResult.incomplete;
         // Update responseMessageId if the continuation stream provides a new one
         if (continueResult.responseMessageId !== null) {
           responseMessageId = continueResult.responseMessageId;
         }
+        logger.info(`[DeepSeek] Auto-continue attempt ${continuationCount} result | incomplete=${continueResult.incomplete} | newMsgId=${continueResult.responseMessageId ?? 'unchanged'} | session=${sessionId}`);
       }
 
       if (continuationCount >= MAX_CONTINUATIONS && incomplete) {
         logger.warn(
-          `[DeepSeek] Reached max continuations (${MAX_CONTINUATIONS}) for session=${sessionId}. Response may be truncated.`,
+          `[DeepSeek] Max continuations reached | session=${sessionId} | totalAttempts=${continuationCount}`,
         );
+      }
+
+      // Signal that all continuations are done — Zen uses this to know the merged response is complete
+      if (continuationCount > 0 && onMetadata) {
+        onMetadata({ continuing: false, continuation_complete: true, total_continuations: continuationCount });
       }
 
       onDone();

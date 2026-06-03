@@ -214,6 +214,18 @@ export const providers = [
     concurrency_mode: 'sequential',
   },
   {
+    provider_id: 'cerebras-cloud',
+    provider_name: 'Cerebras Cloud',
+    is_enabled: true,
+    website: 'https://cloud.cerebras.ai/',
+    is_search: false,
+    is_upload: false,
+    auth_method: ['basic', 'google'],
+    is_pausable: false,
+    connection_mode: 'https_spoofing',
+    concurrency_mode: 'sequential',
+  },
+  {
     provider_id: 'googlestudio',
     provider_name: 'Google Studio',
     is_enabled: false,

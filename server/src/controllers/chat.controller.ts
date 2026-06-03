@@ -301,6 +301,8 @@ export const sendMessageController = async (
 
           if (stream !== false) {
             res.write(`event: session_created\ndata: ${sessionId}\n\n`);
+            // Also emit conversation_id via meta so the client SSE parser can capture it
+            res.write(`data: ${JSON.stringify({ meta: { conversation_id: sessionId } })}\n\n`);
           } else {
             accumulatedMetadata.conversation_id = sessionId;
           }
