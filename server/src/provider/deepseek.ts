@@ -562,7 +562,6 @@ export class DeepSeekProvider implements Provider {
         const jsonStr = line.substring(6).trim();
         if (jsonStr === '[DONE]') {
           // Explicit [DONE] means complete — not INCOMPLETE
-          logger.debug(`[DeepSeek] parseSSEStream complete | session=${sessionId} | status=COMPLETE | msgId=${responseMessageId} | totalBytes=${totalBytesProcessed} | contentChunks=${contentChunkCount}`);
           return { incomplete: false, responseMessageId, accumulatedContent };
         }
 
@@ -596,6 +595,23 @@ export class DeepSeekProvider implements Provider {
           // ── event: close ─────────────────────────────────────────────────
           // DeepSeek sends `event: close` with auto_resume info when INCOMPLETE
           if (currentEventType === 'close') {
+            currentEventType = '';
+            continue;
+          }
+
+          // ── event: hint ───────────────────────────────────────────────────
+          // DeepSeek sends `event: hint` for server-side errors, e.g. expert model busy
+          if (currentEventType === 'hint') {
+            if (json.type === 'error') {
+              const hintMsg = json.content || 'Unknown DeepSeek server hint error';
+              const finishReason = json.finish_reason || '';
+              logger.warn(
+                `[DeepSeek] Server hint error | session=${sessionId} | finish_reason=${finishReason} | message=${hintMsg}`,
+              );
+              const err: any = new Error(hintMsg);
+              if (finishReason) err.code = finishReason;
+              throw err;
+            }
             currentEventType = '';
             continue;
           }
@@ -772,14 +788,15 @@ export class DeepSeekProvider implements Provider {
             if (onMetadata) {
               onMetadata({ thinking_elapsed: value });
             }
+          } else if (contentChunkCount === 0) {
+            // Unhandled path — silently ignore
           }
         } catch (_e) {
-          // Ignore malformed JSON lines
+          // Ignore parse errors for non-hint lines (hint errors are re-thrown above)
         }
       }
     }
 
-    logger.debug(`[DeepSeek] Stream ended naturally (no [DONE] token) | session=${sessionId} | msgId=${responseMessageId} | bytesProcessed=${totalBytesProcessed} | contentChunks=${contentChunkCount} | incomplete=${isIncomplete}`);
     logger.debug(`[DeepSeek] parseSSEStream complete | session=${sessionId} | status=${isIncomplete ? 'INCOMPLETE' : 'COMPLETE'} | msgId=${responseMessageId} | totalBytes=${totalBytesProcessed} | contentChunks=${contentChunkCount}`);
     return { incomplete: isIncomplete, responseMessageId, accumulatedContent };
   }
@@ -901,16 +918,38 @@ export class DeepSeekProvider implements Provider {
         { target_path: '/api/v0/chat/completion' },
       );
       let powResponseBase64 = '';
+      logger.debug(
+        `[DeepSeek] PoW challenge response | status=${challengeRes.status} | ok=${challengeRes.ok} | session=${sessionId}`,
+      );
       if (challengeRes.ok) {
-        const challengeJson = await challengeRes.json();
-        const challengeData: PoWChallenge =
-          challengeJson?.data?.biz_data?.challenge;
-        if (challengeData) {
-          const powAnswer = await this.solvePoW(challengeData);
-          powResponseBase64 = Buffer.from(JSON.stringify(powAnswer)).toString(
-            'base64',
+        try {
+          const rawText = await challengeRes.text();
+          logger.debug(
+            `[DeepSeek] PoW challenge raw body | len=${rawText.length} | preview=${rawText.slice(0, 120)}`,
+          );
+          const challengeJson = JSON.parse(rawText);
+          const challengeData: PoWChallenge =
+            challengeJson?.data?.biz_data?.challenge;
+          if (challengeData) {
+            const powAnswer = await this.solvePoW(challengeData);
+            powResponseBase64 = Buffer.from(JSON.stringify(powAnswer)).toString(
+              'base64',
+            );
+          } else {
+            logger.warn(
+              `[DeepSeek] PoW challenge data missing from response | session=${sessionId} | body=${rawText.slice(0, 200)}`,
+            );
+          }
+        } catch (e) {
+          logger.warn(
+            `[DeepSeek] Failed to parse PoW challenge response | session=${sessionId} | error=${e}`,
           );
         }
+      } else {
+        const errText = await challengeRes.text().catch(() => '<unreadable>');
+        logger.warn(
+          `[DeepSeek] PoW challenge request failed | status=${challengeRes.status} | session=${sessionId} | body=${errText.slice(0, 200)}`,
+        );
       }
 
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -1106,14 +1145,21 @@ export class DeepSeekProvider implements Provider {
 
       let powResponseBase64 = '';
       if (challengeRes.ok) {
-        const challengeJson = await challengeRes.json();
-        const challengeData = challengeJson?.data?.biz_data?.challenge;
+        try {
+          const challengeJson = await challengeRes.json();
+          const challengeData = challengeJson?.data?.biz_data?.challenge;
 
-        if (challengeData) {
-          logger.info('[DeepSeek Upload] Solving PoW...');
-          const powAnswer = await this.solvePoW(challengeData);
-          powResponseBase64 = Buffer.from(JSON.stringify(powAnswer)).toString(
-            'base64',
+          if (challengeData) {
+            logger.info('[DeepSeek Upload] Solving PoW...');
+            const powAnswer = await this.solvePoW(challengeData);
+            powResponseBase64 = Buffer.from(JSON.stringify(powAnswer)).toString(
+              'base64',
+            );
+          }
+        } catch (e) {
+          logger.warn(
+            '[DeepSeek Upload] Failed to parse PoW challenge response, continuing without PoW token',
+            e,
           );
         }
       }

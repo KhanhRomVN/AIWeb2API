@@ -202,20 +202,24 @@ export const sendMessageController = async (
       const lastMsgSnippet = typeof lastMsg?.content === 'string'
         ? lastMsg.content.slice(0, 120).replace(/\n/g, ' ')
         : '';
-      logger.info(`[Request] provider=${account.provider_id} model=${model} msgs=${messages?.length} convId=${conversationId || 'none'} | "${lastMsgSnippet}"`);
+      const roleBreakdown = messages?.reduce((acc: Record<string, number>, m: any) => {
+        acc[m.role] = (acc[m.role] || 0) + 1;
+        return acc;
+      }, {});
+      logger.info(`[Request] provider=${account.provider_id} model=${model} msgs=${messages?.length} (${Object.entries(roleBreakdown || {}).map(([r, c]) => `${r}:${c}`).join(',')}) convId=${conversationId || 'none'} | "${lastMsgSnippet}"`);
 
       let accumulatedResponse = '';
 
-      // SSE first-chunk timeout: if no content received within 30s, abort
+      // SSE first-chunk timeout: if no content received within 5 minutes, abort
       let firstChunkReceived = false;
       let streamTimeoutId: ReturnType<typeof setTimeout> | null = null;
       if (stream !== false) {
         streamTimeoutId = setTimeout(() => {
           if (!firstChunkReceived && !res.writableEnded) {
-            res.write(`data: ${JSON.stringify({ error: 'Stream timeout: no response received within 30 seconds' })}\n\n`);
+            res.write(`data: ${JSON.stringify({ error: 'Stream timeout: no response received within 5 minutes' })}\n\n`);
             res.end();
           }
-        }, 30000);
+        }, 300000);
       }
 
       await sendMessage({
@@ -312,12 +316,14 @@ export const sendMessageController = async (
           logger.error('Stream error', error);
           if (stream !== false) {
             if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+              const errPayload: any = { error: error.message };
+              if ((error as any).code) errPayload.error_code = (error as any).code;
+              res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
               res.end();
             }
           } else {
             if (!res.headersSent) {
-              res.status(500).json({ error: error.message });
+              res.status(500).json({ error: error.message, ...(((error as any).code) ? { error_code: (error as any).code } : {}) });
             }
           }
         },
