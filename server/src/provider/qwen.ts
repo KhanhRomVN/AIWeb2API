@@ -393,7 +393,7 @@ export class QwenProvider implements Provider {
     logger.info('Starting Qwen login...');
 
     let capturedHeaders: Record<string, string> = {};
-    
+
     // Store reference to this for use in validate function
     const self = this;
 
@@ -446,24 +446,42 @@ export class QwenProvider implements Provider {
           // If headers are fallback values, trigger a real request to get real headers
           const bxUa = capturedHeaders['bx-ua'];
           // Check for any fallback pattern (defaultFY2_, defaultFY3_, etc.)
-          const isFallback = bxUa && typeof bxUa === 'string' && 
-            (bxUa.includes('defaultFY') || bxUa.includes('_load_failed') || bxUa.includes('not_initialized'));
-          const isRealBxUa = bxUa && typeof bxUa === 'string' && bxUa.startsWith('231!') && bxUa.length > 100;
-          
-          logger.debug(`[Qwen] Header check - bxUa exists: ${!!bxUa}, isFallback: ${isFallback}, isReal: ${isRealBxUa}, value preview: ${bxUa?.substring(0, 50)}`);
-          
+          const isFallback =
+            bxUa &&
+            typeof bxUa === 'string' &&
+            (bxUa.includes('defaultFY') ||
+              bxUa.includes('_load_failed') ||
+              bxUa.includes('not_initialized'));
+          const isRealBxUa =
+            bxUa &&
+            typeof bxUa === 'string' &&
+            bxUa.startsWith('231!') &&
+            bxUa.length > 100;
+
+          logger.debug(
+            `[Qwen] Header check - bxUa exists: ${!!bxUa}, isFallback: ${isFallback}, isReal: ${isRealBxUa}, value preview: ${bxUa?.substring(0, 50)}`,
+          );
+
           if (isFallback || !isRealBxUa) {
-            logger.info('[Qwen] 🔄 Detected fallback or invalid headers, triggering list chats request to get real headers...');
-            logger.debug(`[Qwen] Current headers before fetchListChats:`, JSON.stringify(capturedHeaders, null, 2));
-            
+            logger.info(
+              '[Qwen] 🔄 Detected fallback or invalid headers, triggering list chats request to get real headers...',
+            );
+            logger.debug(
+              `[Qwen] Current headers before fetchListChats:`,
+              JSON.stringify(capturedHeaders, null, 2),
+            );
+
             try {
               await self.fetchListChats(data.cookies, capturedHeaders);
               // After this call, capturedHeaders should be updated with real values
               const newBxUa = capturedHeaders['bx-ua'];
               const newBxUmidToken = capturedHeaders['bx-umidtoken'];
-              const isReal = newBxUa && !newBxUa.includes('defaultFY2_load_failed');
-              
-              logger.info(`[Qwen] 📡 After fetchListChats - has real bxUa: ${isReal}`);
+              const isReal =
+                newBxUa && !newBxUa.includes('defaultFY2_load_failed');
+
+              logger.info(
+                `[Qwen] 📡 After fetchListChats - has real bxUa: ${isReal}`,
+              );
               logger.debug('[Qwen] Real headers after list chats:', {
                 bxUa: newBxUa?.substring(0, 80) + '...',
                 bxUmidToken: newBxUmidToken?.substring(0, 40) + '...',
@@ -474,7 +492,9 @@ export class QwenProvider implements Provider {
               logger.warn('[Qwen] ❌ Failed to fetch list chats:', e);
             }
           } else if (isRealBxUa) {
-            logger.info(`[Qwen] ✅ Already have real headers (starts with 231!), skipping fetchListChats. bxUa length: ${bxUa.length}`);
+            logger.info(
+              `[Qwen] ✅ Already have real headers (starts with 231!), skipping fetchListChats. bxUa length: ${bxUa.length}`,
+            );
           }
 
           if (!email) {
@@ -492,13 +512,16 @@ export class QwenProvider implements Provider {
             } catch (e) {}
           }
 
-          logger.info(`[Qwen] 📝 Final credential prepared - bxUa length: ${capturedHeaders['bx-ua']?.length || 0}, bxUmidToken length: ${capturedHeaders['bx-umidtoken']?.length || 0}`);
+          logger.info(
+            `[Qwen] 📝 Final credential prepared - bxUa length: ${capturedHeaders['bx-ua']?.length || 0}, bxUmidToken length: ${capturedHeaders['bx-umidtoken']?.length || 0}`,
+          );
           logger.debug(`[Qwen] Final headers being saved:`, {
             bxUa_preview: capturedHeaders['bx-ua']?.substring(0, 50) + '...',
-            bxUmidToken_preview: capturedHeaders['bx-umidtoken']?.substring(0, 30) + '...',
+            bxUmidToken_preview:
+              capturedHeaders['bx-umidtoken']?.substring(0, 30) + '...',
             hasUserAgent: !!capturedHeaders['User-Agent'],
           });
-          
+
           return {
             isValid: true,
             // Store as JSON so bx-ua and bx-umidtoken are persisted with the token
@@ -527,7 +550,7 @@ export class QwenProvider implements Provider {
    */
   private async fetchListChats(
     credential: string,
-    headersRef: Record<string, string>
+    headersRef: Record<string, string>,
   ): Promise<void> {
     try {
       // Extract token from credential
@@ -549,7 +572,8 @@ export class QwenProvider implements Provider {
 
       const headers: Record<string, string> = {
         Cookie: cookieValue,
-        'User-Agent': headersRef['User-Agent'] || 
+        'User-Agent':
+          headersRef['User-Agent'] ||
           'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
         accept: 'application/json, text/plain, */*',
         'accept-language': 'en-US,en;q=0.9',
@@ -560,7 +584,8 @@ export class QwenProvider implements Provider {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
       if (headersRef['bx-ua']) headers['bx-ua'] = headersRef['bx-ua'];
-      if (headersRef['bx-umidtoken']) headers['bx-umidtoken'] = headersRef['bx-umidtoken'];
+      if (headersRef['bx-umidtoken'])
+        headers['bx-umidtoken'] = headersRef['bx-umidtoken'];
 
       logger.info('[Qwen] 🌐 Fetching list chats to trigger real headers...');
       logger.debug(`[Qwen] Request headers for list chats:`, {
@@ -569,14 +594,16 @@ export class QwenProvider implements Provider {
         'bx-ua': headersRef['bx-ua']?.substring(0, 50) + '...',
         'bx-umidtoken': headersRef['bx-umidtoken']?.substring(0, 30) + '...',
       });
-      
+
       const response = await fetch(
         `${BASE_URL}/api/v2/chats/?page=1&exclude_project=true`,
-        { headers }
+        { headers },
       );
 
       if (response.ok) {
-        logger.info('[Qwen] ✅ List chats fetched successfully, real headers should be captured');
+        logger.info(
+          '[Qwen] ✅ List chats fetched successfully, real headers should be captured',
+        );
         logger.debug(`[Qwen] Response status: ${response.status}`);
       } else {
         logger.warn(`[Qwen] ❌ Failed to fetch list chats: ${response.status}`);
@@ -685,9 +712,34 @@ export class QwenProvider implements Provider {
       const lastMsg = messages[messages.length - 1];
       const msgFid = crypto.randomUUID();
 
+      // parent_message_id = the last assistant message ID returned by the previous
+      // response.created event.  The browser always sends this on follow-up turns
+      // so Qwen can thread the conversation correctly server-side.
+      // If the client didn't send it (e.g. page refresh), fetch it from the API.
+      let parentId: string | null = options.parent_message_id ?? null;
+      if (!parentId && conversationId && !isNewChat) {
+        try {
+          parentId = await this.getLastMessageId(
+            conversationId,
+            cookieValue,
+            token,
+            bxUa,
+            bxUmidToken,
+            userAgent,
+          );
+          logger.info(
+            `[Qwen] Fetched last message ID for threading: ${parentId}`,
+          );
+        } catch (e) {
+          logger.warn(
+            '[Qwen] Failed to fetch last message ID, proceeding without parent_id',
+          );
+        }
+      }
+
       const msgPayload = {
         fid: msgFid,
-        parentId: null as string | null,
+        parentId: parentId as string | null,
         childrenIds: [] as string[],
         role: lastMsg.role,
         content: lastMsg.content,
@@ -710,7 +762,7 @@ export class QwenProvider implements Provider {
 
       // Use model from options or default
       const modelToUse = options.model || this.defaultModel;
-      
+
       const payload = {
         stream: true,
         version: '2.1',
@@ -718,7 +770,7 @@ export class QwenProvider implements Provider {
         chat_id: conversationId,
         chat_mode: 'normal',
         model: modelToUse,
-        parent_id: null as string | null,
+        parent_id: parentId as string | null,
         messages: [msgPayload],
         timestamp: nowSec,
       };
@@ -752,15 +804,23 @@ export class QwenProvider implements Provider {
       if (bxUa) headers['bx-ua'] = bxUa;
       if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
 
-      logger.info(`[Qwen] Sending chat request to: ${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`);
+      logger.info(
+        `[Qwen] Sending chat request to: ${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`,
+      );
       logger.debug(`[Qwen] Request headers:`, {
         ...headers,
-        Authorization: headers.Authorization ? `${headers.Authorization.substring(0, 30)}...` : 'none',
-        Cookie: headers.Cookie ? `${headers.Cookie.substring(0, 50)}...` : 'none',
-        'bx-ua': headers['bx-ua'] ? `${headers['bx-ua'].substring(0, 50)}...` : 'none',
+        Authorization: headers.Authorization
+          ? `${headers.Authorization.substring(0, 30)}...`
+          : 'none',
+        Cookie: headers.Cookie
+          ? `${headers.Cookie.substring(0, 50)}...`
+          : 'none',
+        'bx-ua': headers['bx-ua']
+          ? `${headers['bx-ua'].substring(0, 50)}...`
+          : 'none',
       });
       logger.debug(`[Qwen] Request payload:`, JSON.stringify(payload, null, 2));
-      
+
       const response = await fetch(
         `${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`,
         {
@@ -770,14 +830,21 @@ export class QwenProvider implements Provider {
         },
       );
 
-      logger.info(`[Qwen] Chat response status: ${response.status} ${response.statusText}`);
-      logger.debug(`[Qwen] Response headers:`, Object.fromEntries(response.headers.entries()));
+      logger.info(
+        `[Qwen] Chat response status: ${response.status} ${response.statusText}`,
+      );
+      logger.debug(
+        `[Qwen] Response headers:`,
+        Object.fromEntries(response.headers.entries()),
+      );
 
       // Check for actual status code in header (Qwen may return 404 in header even with 200 status)
       const actualStatusCode = response.headers.get('x-actual-status-code');
       if (actualStatusCode && actualStatusCode !== '200') {
         const errText = await response.text();
-        logger.error(`[Qwen] API returned actual error status ${actualStatusCode}: ${errText}`);
+        logger.error(
+          `[Qwen] API returned actual error status ${actualStatusCode}: ${errText}`,
+        );
         throw new Error(
           `Qwen API Error ${actualStatusCode}: ${errText.slice(0, 500)}`,
         );
@@ -793,12 +860,20 @@ export class QwenProvider implements Provider {
 
       // For debugging, log response body preview if content-type is JSON and not stream
       const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json') && !contentType.includes('text/event-stream')) {
+      if (
+        contentType &&
+        contentType.includes('application/json') &&
+        !contentType.includes('text/event-stream')
+      ) {
         const responseText = await response.text();
-        logger.debug(`[Qwen] Response body preview: ${responseText.substring(0, 500)}`);
+        logger.debug(
+          `[Qwen] Response body preview: ${responseText.substring(0, 500)}`,
+        );
         // Need to recreate response since we consumed the body
         // For now, throw error to investigate
-        throw new Error(`Unexpected JSON response instead of stream: ${responseText.substring(0, 200)}`);
+        throw new Error(
+          `Unexpected JSON response instead of stream: ${responseText.substring(0, 200)}`,
+        );
       }
 
       logger.info(
@@ -870,6 +945,45 @@ export class QwenProvider implements Provider {
     } catch (error) {
       onError(error);
     }
+  }
+
+  /**
+   * Fetch the current (last) message ID from a Qwen conversation.
+   * Used to set parent_id on follow-up requests when the client doesn't supply it.
+   * Returns the `currentId` from GET /api/v2/chats/{chat_id}.
+   */
+  private async getLastMessageId(
+    chatId: string,
+    cookieValue: string,
+    token: string | null,
+    bxUa: string,
+    bxUmidToken: string,
+    userAgent: string,
+  ): Promise<string | null> {
+    const headers: Record<string, string> = {
+      Cookie: cookieValue,
+      'User-Agent':
+        userAgent ||
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+      accept: 'application/json, text/plain, */*',
+      'accept-language': 'en-US,en;q=0.9',
+      source: 'web',
+      version: '0.2.64',
+      'bx-v': '2.5.36',
+      'x-request-id': crypto.randomUUID(),
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (bxUa) headers['bx-ua'] = bxUa;
+    if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
+
+    const response = await fetch(`${BASE_URL}/api/v2/chats/${chatId}`, {
+      headers,
+    });
+    if (!response.ok) return null;
+
+    const json: any = await response.json();
+    // Response: { data: { currentId: "<last_assistant_msg_id>", ... } }
+    return json?.data?.currentId ?? null;
   }
 
   private async createChat(
