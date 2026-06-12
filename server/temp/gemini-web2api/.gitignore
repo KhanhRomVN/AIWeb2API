@@ -1,8 +1,0 @@
-__pycache__/
-*.pyc
-config.json
-cookie.txt
-cookie.json
-.env
-.idea
-.DS_Store

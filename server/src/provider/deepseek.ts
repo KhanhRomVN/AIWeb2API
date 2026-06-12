@@ -522,6 +522,14 @@ export class DeepSeekProvider implements Provider {
       promptTokens: number;
       completionTokensRef: { value: number };
       currentModeRef: { value: 'THINK' | 'RESPONSE' };
+      /**
+       * Length (in chars) of content already accumulated from previous stream(s).
+       * When DeepSeek's /chat/continue returns a full snapshot of the entire response
+       * (not just the new delta), this offset lets us skip content we've already
+       * emitted and only forward the genuinely new suffix to onContent().
+       * Set to 0 for the initial stream.
+       */
+      priorContentLength?: number;
     },
   ): Promise<{ incomplete: boolean; responseMessageId: number | null; accumulatedContent: string }> {
     const {
@@ -533,6 +541,7 @@ export class DeepSeekProvider implements Provider {
       promptTokens,
       completionTokensRef,
       currentModeRef,
+      priorContentLength = 0,
     } = opts;
 
     let buffer = '';
@@ -542,6 +551,11 @@ export class DeepSeekProvider implements Provider {
     let contentChunkCount = 0;
     let totalBytesProcessed = 0;
     let accumulatedContent = '';
+
+    // Tracks how many chars of the reconstructed full-snapshot we have seen so far.
+    // Used to deduplicate the snapshot content that overlaps with priorContentLength.
+    let snapshotSeenLength = 0;
+    let snapshotMode = false; // true once we detect the stream is a full-snapshot replay
 
     for await (const chunk of responseBody) {
       const chunkStr = chunk.toString();
@@ -675,7 +689,37 @@ export class DeepSeekProvider implements Provider {
           const path = json.p;
           const value = json.v;
 
+          // ── Helper: emit a content chunk, skipping the priorContentLength prefix
+          // when this stream is replaying a full snapshot from /chat/continue.
+          const emitContentChunk = (text: string, fromSnapshot: boolean) => {
+            if (fromSnapshot && priorContentLength > 0) {
+              // The snapshot replays everything from char 0. Skip chars we already saw.
+              const alreadySeen = snapshotSeenLength;
+              snapshotSeenLength += text.length;
+              if (snapshotSeenLength <= priorContentLength) {
+                // Entire chunk is old content — skip silently
+                return;
+              }
+              if (alreadySeen < priorContentLength) {
+                // Chunk straddles the boundary — only emit the new suffix
+                text = text.slice(priorContentLength - alreadySeen);
+              }
+              // If snapshotSeenLength > priorContentLength and alreadySeen >= priorContentLength,
+              // the whole chunk is new → fall through and emit normally.
+            }
+            completionTokensRef.value += countTokens(text);
+            accumulatedContent += text;
+            onContent(text);
+            contentChunkCount++;
+            if (onMetadata) {
+              onMetadata({ total_token: promptTokens + completionTokensRef.value });
+            }
+          };
+
           // ── Initial full object: {"v":{"response":{"fragments":[...]}}} ───
+          // DeepSeek sends this at the START of a /chat/continue stream as a
+          // full replay of everything generated so far (prior + new content).
+          // We must deduplicate using priorContentLength to avoid double-emit.
           if (
             value &&
             typeof value === 'object' &&
@@ -686,6 +730,12 @@ export class DeepSeekProvider implements Provider {
             if (value.response?.message_id != null) {
               responseMessageId = value.response.message_id;
             }
+            // Mark that this stream is operating in snapshot-replay mode.
+            // All RESPONSE content from this point is deduplicated via emitContentChunk.
+            snapshotMode = true;
+            // Reset snapshotSeenLength at start of each snapshot object so we can
+            // correctly measure overlap against priorContentLength.
+            snapshotSeenLength = 0;
             for (const fragment of value.response.fragments) {
               if (fragment.type === 'THINK') {
                 currentModeRef.value = 'THINK';
@@ -696,12 +746,7 @@ export class DeepSeekProvider implements Provider {
               } else if (fragment.type === 'RESPONSE') {
                 currentModeRef.value = 'RESPONSE';
                 if (fragment.content) {
-                  completionTokensRef.value += countTokens(fragment.content);
-                  accumulatedContent += fragment.content;
-                  onContent(fragment.content);
-                  contentChunkCount++;
-                  if (onMetadata)
-                    onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                  emitContentChunk(fragment.content, true /* fromSnapshot */);
                 }
               }
             }
@@ -725,13 +770,7 @@ export class DeepSeekProvider implements Provider {
               } else if (fragment.type === 'RESPONSE') {
                 currentModeRef.value = 'RESPONSE';
                 if (fragment.content) {
-                  completionTokensRef.value += countTokens(fragment.content);
-                  accumulatedContent += fragment.content;
-                  onContent(fragment.content);
-                  contentChunkCount++;
-                  if (onMetadata) {
-                    onMetadata({ total_token: promptTokens + completionTokensRef.value });
-                  }
+                  emitContentChunk(fragment.content, snapshotMode);
                 }
               }
             }
@@ -755,30 +794,26 @@ export class DeepSeekProvider implements Provider {
               if (path === 'response/content') {
                 currentModeRef.value = 'RESPONSE';
               }
-              completionTokensRef.value += countTokens(value);
               if (currentModeRef.value === 'THINK') {
+                completionTokensRef.value += countTokens(value);
                 if (onThinking) onThinking(value);
                 else { onContent(`[Thinking] ${value}\n`); contentChunkCount++; }
+                if (onMetadata) {
+                  onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                }
               } else {
-                accumulatedContent += value;
-                onContent(value);
-                contentChunkCount++;
-              }
-              if (onMetadata) {
-                onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                emitContentChunk(value, snapshotMode);
               }
             } else if (!path) {
-              completionTokensRef.value += countTokens(value);
               if (currentModeRef.value === 'THINK') {
+                completionTokensRef.value += countTokens(value);
                 if (onThinking) onThinking(value);
                 else { onContent(`[Thinking] ${value}\n`); contentChunkCount++; }
+                if (onMetadata) {
+                  onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                }
               } else {
-                accumulatedContent += value;
-                onContent(value);
-                contentChunkCount++;
-              }
-              if (onMetadata) {
-                onMetadata({ total_token: promptTokens + completionTokensRef.value });
+                emitContentChunk(value, snapshotMode);
               }
             }
           } else if (
@@ -1066,6 +1101,9 @@ export class DeepSeekProvider implements Provider {
             promptTokens,
             completionTokensRef,
             currentModeRef,
+            // Tell the parser how many chars are already accumulated so it can
+            // skip the snapshot prefix that DeepSeek replays from /chat/continue.
+            priorContentLength: accumulatedContent.length,
           },
         );
 

@@ -159,6 +159,34 @@ export class LoginService {
 
       const resolveIfReady = async () => {
         if (capturedCookies && !resolved) {
+          // Special handling for Qwen: wait for real bxUa and bxUmidToken headers (not fallback)
+          if (options.providerId === 'qwen') {
+            const hasBxUa = (capturedHeaders as any)['bx-ua'];
+            const hasBxUmidToken = (capturedHeaders as any)['bx-umidtoken'];
+            
+            // Check if headers exist and are real (starts with 231!, not fallback)
+            const isRealBxUa = hasBxUa && 
+              typeof hasBxUa === 'string' && 
+              hasBxUa.startsWith('231!') && 
+              hasBxUa.length > 100 &&
+              !hasBxUa.includes('defaultFY');
+              
+            const isRealBxUmidToken = hasBxUmidToken && 
+              typeof hasBxUmidToken === 'string' && 
+              hasBxUmidToken.length > 50 && 
+              !hasBxUmidToken.includes('defaultFY');
+            
+            logger.debug(`[Login] Qwen headers status - bxUa: ${!!hasBxUa} (real: ${isRealBxUa}, len: ${hasBxUa?.length || 0}), bxUmidToken: ${!!hasBxUmidToken} (real: ${isRealBxUmidToken}, len: ${hasBxUmidToken?.length || 0})`);
+            
+            if (!isRealBxUa || !isRealBxUmidToken) {
+              logger.debug(`[Login] ⏳ Waiting for real Qwen headers - need real bxUa and bxUmidToken`);
+              return; // Don't resolve yet, wait for real headers from /api/v2/chats/ request
+            }
+            logger.info(`[Login] ✅ Qwen real headers ready - bxUa length: ${hasBxUa?.length}, bxUmidToken length: ${hasBxUmidToken?.length}`);
+            logger.debug(`[Login] bxUa preview: ${hasBxUa?.substring(0, 50)}...`);
+            logger.debug(`[Login] bxUmidToken preview: ${hasBxUmidToken?.substring(0, 30)}...`);
+          }
+          
           if (options.validate) {
             try {
               const result = await options.validate({

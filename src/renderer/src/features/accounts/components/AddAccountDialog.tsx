@@ -130,10 +130,14 @@ export function AddAccountDialog({
       return;
     }
     
-    console.log('[AddAccountDialog] handleLogin called for provider:', provider);
+    console.log('[AddAccountDialog] ========== LOGIN START ==========');
+    console.log('[AddAccountDialog] Provider:', provider);
+    console.log('[AddAccountDialog] Login method:', loginMethod);
+    console.log('[AddAccountDialog] Selected provider data:', selectedProviderData);
 
     const hasOAuth = selectedProviderData?.auth_methods?.includes('oauth');
     if (hasOAuth) {
+      console.log('[AddAccountDialog] OAuth provider - skipping custom login flow');
       return;
     }
 
@@ -142,11 +146,15 @@ export function AddAccountDialog({
 
     try {
       const payload: any = { method: provider === 'qwen-cli' ? 'auto' : loginMethod };
+      console.log('[AddAccountDialog] Login payload:', payload);
+      console.log('[AddAccountDialog] Calling login API for provider:', provider);
+      
       const result = await login(provider, payload);
+      
+      console.log('[AddAccountDialog] Login API response:', result);
 
       if (result.success) {
-        console.log('[AddAccountDialog] Login success for', provider, 'Result:', result);
-
+        console.log('[AddAccountDialog] Login success! Account:', result.account);
         // Always show confirmation before saving
         setPendingAccount(result.account);
         setShowConfirm(true);
@@ -156,9 +164,11 @@ export function AddAccountDialog({
         setError(errorMsg || 'Login failed or was cancelled');
       }
     } catch (err) {
+      console.error('[AddAccountDialog] Login exception:', err);
       setError('An unexpected error occurred during login');
     } finally {
       setLoading(false);
+      console.log('[AddAccountDialog] ========== LOGIN END ==========');
     }
   };
 

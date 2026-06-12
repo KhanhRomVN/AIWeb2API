@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, Settings, Globe, PowerOff } from 'lucide-react';
+import { Save, RefreshCw, Settings, Globe, PowerOff, Wifi, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../shared/lib/utils';
 import { useBackendConnection } from '../../core/contexts/BackendConnectionContext';
@@ -8,6 +8,7 @@ const SettingsPage = () => {
   const { isConnected, currentUrl } = useBackendConnection();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [initialUrl, setInitialUrl] = useState('');
   const [apiUrl, setApiUrl] = useState(localStorage.getItem('ELARA_API_URL') || '');
 
@@ -22,21 +23,131 @@ const SettingsPage = () => {
   const saveGeneralConfig = async () => {
     try {
       setSaving(true);
-      if (apiUrl.trim()) {
-        localStorage.setItem('ELARA_API_URL', apiUrl.trim());
+      const trimmedUrl = apiUrl.trim();
+      console.log('[Settings] ========== SAVE SETTINGS START ==========');
+      console.log('[Settings] Raw input URL:', apiUrl);
+      console.log('[Settings] Trimmed URL:', trimmedUrl);
+      
+      if (trimmedUrl) {
+        // Save the full API URL
+        localStorage.setItem('ELARA_API_URL', trimmedUrl);
+        console.log('[Settings] Saved ELARA_API_URL:', trimmedUrl);
+        
+        // Extract port from URL using multiple methods
+        let port = null;
+        
+        // Method 1: Match :port pattern
+        const portMatch = trimmedUrl.match(/:(\d+)(?:\/|$)/);
+        if (portMatch && portMatch[1]) {
+          port = portMatch[1];
+          console.log('[Settings] Method 1 (regex) found port:', port);
+        }
+        
+        // Method 2: Parse URL object (more reliable)
+        try {
+          const urlObj = new URL(trimmedUrl);
+          if (urlObj.port) {
+            port = urlObj.port;
+            console.log('[Settings] Method 2 (URL API) found port:', port);
+          } else if (urlObj.protocol === 'http:' && !urlObj.port) {
+            port = '80';
+            console.log('[Settings] Method 2: default HTTP port 80');
+          } else if (urlObj.protocol === 'https:' && !urlObj.port) {
+            port = '443';
+            console.log('[Settings] Method 2: default HTTPS port 443');
+          }
+        } catch (urlError) {
+          console.error('[Settings] Failed to parse URL:', urlError);
+        }
+        
+        if (port) {
+          localStorage.setItem('ELARA_SERVER_PORT', port);
+          console.log('[Settings] ✓ Synced ELARA_SERVER_PORT to:', port);
+          console.log('[Settings] ✓ Final ELARA_SERVER_PORT:', localStorage.getItem('ELARA_SERVER_PORT'));
+        } else {
+          // URL doesn't contain a port? Use default 8888
+          console.warn('[Settings] ✗ Could not extract port from URL:', trimmedUrl);
+          localStorage.setItem('ELARA_SERVER_PORT', '8888');
+          console.log('[Settings] Set default ELARA_SERVER_PORT to 8888');
+        }
+        
+        // Verify both keys are set correctly
+        console.log('[Settings] Verification - ELARA_API_URL:', localStorage.getItem('ELARA_API_URL'));
+        console.log('[Settings] Verification - ELARA_SERVER_PORT:', localStorage.getItem('ELARA_SERVER_PORT'));
       } else {
+        // Empty URL - remove both keys
         localStorage.removeItem('ELARA_API_URL');
+        localStorage.removeItem('ELARA_SERVER_PORT');
+        console.log('[Settings] Removed both ELARA_API_URL and ELARA_SERVER_PORT');
       }
 
       setInitialUrl(apiUrl);
       window.dispatchEvent(new Event('storage')); // Notify other components
       window.dispatchEvent(new Event('elara-api-url-changed'));
       toast.success('Settings updated successfully');
+      console.log('[Settings] ========== SAVE SETTINGS END ==========');
     } catch (error) {
-      console.error('Failed to save general config:', error);
+      console.error('[Settings] Failed to save general config:', error);
       toast.error('Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const testConnection = async () => {
+    if (!apiUrl.trim()) {
+      toast.error('Please enter an API URL first');
+      return;
+    }
+
+    setTesting(true);
+    const testUrl = apiUrl.trim().replace(/\/$/, '');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(`${testUrl}/v1/health`, {
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        const isOfficial = data.elara === 'khanhromvn/elara';
+        
+        if (data.status === 'ok' && isOfficial) {
+          toast.success(
+            <div>
+              <div className="font-bold">✓ Connection successful!</div>
+              <div className="text-xs opacity-80 mt-1">
+                Server: {data.elara || 'Unknown'}<br />
+                Status: {data.status}<br />
+                Version: {data.version || 'N/A'}
+              </div>
+            </div>,
+            { duration: 5000 }
+          );
+        } else {
+          toast.error('Connected but server is not elara-server');
+        }
+      } else {
+        toast.error(`Connection failed: HTTP ${response.status}`);
+      }
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        toast.error('Connection timeout (5s) - Server not responding');
+      } else if (error.message === 'Failed to fetch') {
+        toast.error('Cannot connect to server - Make sure server is running');
+      } else {
+        toast.error(`Connection error: ${error.message}`);
+      }
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -123,15 +234,34 @@ const SettingsPage = () => {
                     Remote Backend API
                   </label>
                 </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={apiUrl}
-                    onChange={(e) => setApiUrl(e.target.value)}
-                    placeholder="e.g. http://127.0.0.1:8888"
-                    className="w-full px-11 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono transition-all shadow-sm"
-                  />
-                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={apiUrl}
+                      onChange={(e) => setApiUrl(e.target.value)}
+                      placeholder="e.g. http://127.0.0.1:8888"
+                      className="w-full px-11 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono transition-all shadow-sm"
+                    />
+                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <button
+                    onClick={testConnection}
+                    disabled={testing}
+                    className={cn(
+                      'px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm font-medium transition-all shadow-sm',
+                      testing
+                        ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                        : 'bg-secondary hover:bg-secondary/80 text-secondary-foreground active:scale-95'
+                    )}
+                  >
+                    {testing ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Wifi className="w-4 h-4" />
+                    )}
+                    {testing ? 'Testing...' : 'Test'}
+                  </button>
                 </div>
                 <p className="text-[10px] text-muted-foreground px-1">
                   Current connection:{' '}
