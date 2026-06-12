@@ -74,9 +74,16 @@ export const usePlaygroundLogic = ({
     fetchWorkspaces();
   }, []); // Empty dependency - only run once on mount
 
-  const [activeChatId, setActiveChatId] = useState<string | null>(
+  const [activeChatId, setActiveChatIdState] = useState<string | null>(
     () => activeTab?.activeChatId || null,
   );
+  // 🔧 FIX: Keep a ref in sync so handleSend always reads the latest value
+  // without stale closure (handleSend is a plain async fn, not useCallback)
+  const activeChatIdRef = useRef<string | null>(activeChatId);
+  const setActiveChatId = (id: string | null) => {
+    activeChatIdRef.current = id;
+    setActiveChatIdState(id);
+  };
   const [conversationTitle, setConversationTitle] = useState<string>(
     () => activeTab?.conversationTitle || '',
   );
@@ -590,6 +597,11 @@ export const usePlaygroundLogic = ({
       const targetAccountId = account?.id || null;
       const targetModelId = getProviderModel(targetProviderId);
 
+      // DEBUG LOG: trace conversationId being sent — detect stale closure / race condition
+      console.log(
+        `[Elara][handleSend] activeChatId(state)="${activeChatId}" | activeChatIdRef.current="${activeChatIdRef.current}" | messages.length=${messages.length} | isNewSession=${!activeChatIdRef.current || activeChatIdRef.current === 'new-session'}`,
+      );
+
       const response = await fetch(url, {
         signal: controller.signal,
         method: 'POST',
@@ -605,7 +617,7 @@ export const usePlaygroundLogic = ({
               content: firstMessageContent,
             },
           ],
-          conversationId: activeChatId && activeChatId !== 'new-session' ? activeChatId : '',
+          conversationId: activeChatIdRef.current && activeChatIdRef.current !== 'new-session' ? activeChatIdRef.current : '',
           stream: streamEnabled,
           search: searchEnabled,
           ref_file_ids: uploadedFileIds,

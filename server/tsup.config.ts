@@ -29,7 +29,6 @@ export default defineConfig({
     const readmeFile = path.join(__dirname, 'README.md');
     if (fs.existsSync(readmeFile)) {
       fs.copyFileSync(readmeFile, path.join(__dirname, 'dist', 'README.md'));
-      console.log('✅ Copied README.md to dist/');
     }
 
     // 2. Copy better-sqlite3 native bindings (OPTIONAL)
@@ -51,7 +50,6 @@ export default defineConfig({
           bindingSource,
           path.join(distDir, 'better_sqlite3.node'),
         );
-        console.log('✅ Copied better_sqlite3.node to dist/build/Release');
       } else {
         console.warn(
           '⚠️ Warning: better_sqlite3.node not found in node_modules',
@@ -69,7 +67,6 @@ export default defineConfig({
             path.join(providerDir, file),
             path.join(__dirname, 'dist', file),
           );
-          console.log(`✅ Copied ${file} to dist/`);
         }
       }
     }

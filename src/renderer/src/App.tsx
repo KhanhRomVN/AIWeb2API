@@ -28,15 +28,11 @@ function AppContent() {
       const url = getApiBaseUrl();
 
       // Verify connection to the remote backend
-      console.log('[App] Verifying connection to backend...');
       try {
         const res = await fetch(`${url}/v1/health`);
         if (res.ok) {
           const backendInfo = await res.json();
           if (backendInfo?.elara === 'khanhromvn/elara') {
-            console.log('[App] Connected to official Remote Elara backend.');
-          } else {
-            console.log('[App] Connected to custom Remote Elara backend.');
           }
         } else {
           toast.error('Không thể kết nối với Elara backend tại địa chỉ này.');

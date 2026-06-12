@@ -883,6 +883,7 @@ export class QwenProvider implements Provider {
       if (response.body) {
         let buffer = '';
 
+        let debugChunkIndex = 0;
         const processLine = (line: string): boolean => {
           if (!line.startsWith('data: ')) return false;
           const jsonStr = line.slice(6).trim();
@@ -890,6 +891,11 @@ export class QwenProvider implements Provider {
 
           try {
             const json = JSON.parse(jsonStr);
+
+            // DEBUG: log full raw chunk data
+            logger.debug(
+              `[Qwen][SSE chunk #${debugChunkIndex++}] ${JSON.stringify(json)}`,
+            );
 
             if (json['response.created']) {
               if (onMetadata) {
@@ -903,6 +909,9 @@ export class QwenProvider implements Provider {
 
             if (json.choices && json.choices.length > 0) {
               const delta = json.choices[0].delta;
+              logger.debug(
+                `[Qwen][delta] phase=${delta?.phase ?? 'none'} | status=${delta?.status ?? 'none'} | contentLen=${delta?.content?.length ?? 0} | content_preview=${JSON.stringify((delta?.content ?? '').slice(0, 120))}`,
+              );
               if (delta?.content && delta.phase !== 'thinking') {
                 onContent(delta.content);
               }
