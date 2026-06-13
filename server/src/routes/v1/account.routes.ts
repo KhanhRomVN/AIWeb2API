@@ -6,6 +6,8 @@ import {
   deleteAccount,
   login,
   switchAccount,
+  getAccountMemory,
+  updateAccountMemoryController,
 } from '../../controllers/account.controller';
 
 const router = Router();
@@ -27,5 +29,11 @@ router.post('/login/:provider', login);
 
 // POST Chuyển đổi tài khoản đang hoạt động
 router.post('/:id/switch', switchAccount);
+
+// GET Lấy trạng thái memory của account
+router.get('/:id/memory', getAccountMemory);
+
+// PUT Cập nhật trạng thái memory của account
+router.put('/:id/memory', updateAccountMemoryController);
 
 export default router;

@@ -27,7 +27,8 @@ function migrateAccounts(db: Database.Database): void {
         credential TEXT NOT NULL,
         last_refreshed_at INTEGER,
         usage TEXT,
-        reset_period TEXT
+        reset_period TEXT,
+        is_memory_enabled INTEGER DEFAULT 0
       )
     `);
 
@@ -86,6 +87,14 @@ function migrateAccounts(db: Database.Database): void {
         logger.warn('Failed to add reset_period to accounts', e);
       }
     }
+    if (!finalCols.includes('is_memory_enabled')) {
+      try {
+        db.exec('ALTER TABLE accounts ADD COLUMN is_memory_enabled INTEGER DEFAULT 0');
+        logger.info('Added is_memory_enabled column to accounts table');
+      } catch (e) {
+        logger.warn('Failed to add is_memory_enabled to accounts', e);
+      }
+    }
 
     // Migration: Rename provider → provider_id
     const updatedCols = (db.pragma('table_info(accounts)') as any[]).map(
@@ -122,7 +131,7 @@ function migrateProviders(db: Database.Database): void {
         website_url TEXT,
         auth_method TEXT,
         is_pausable INTEGER DEFAULT 0,
-        
+        is_memory INTEGER DEFAULT 0
       )
     `);
 
@@ -176,6 +185,14 @@ function migrateProviders(db: Database.Database): void {
         logger.info('Added is_pausable column to providers table');
       } catch (e) {
         logger.warn('Failed to add is_pausable to providers', e);
+      }
+    }
+    if (!providerCols.includes('is_memory')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN is_memory INTEGER DEFAULT 0');
+        logger.info('Added is_memory column to providers table');
+      } catch (e) {
+        logger.warn('Failed to add is_memory to providers', e);
       }
     }
     

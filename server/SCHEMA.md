@@ -21,6 +21,7 @@ Lưu trữ thông tin tài khoản của các provider AI.
 | `last_refreshed_at` | INTEGER | -           | Thời gian refresh token gần nhất (timestamp ms) |
 | `usage`             | TEXT    | -           | Thông tin usage (JSON)                          |
 | `reset_period`      | TEXT    | -           | Chu kỳ reset (day/month)                        |
+| `is_memory_enabled` | INTEGER | DEFAULT 0   | Trạng thái bật/tắt memory cho account (1 = enabled, 0 = disabled) |
 
 ---
 
@@ -37,6 +38,7 @@ Danh sách các provider đã được đăng ký trong hệ thống.
 | `website_url`      | TEXT    | -                    | URL website chính thức của provider                      |
 | `auth_method`      | TEXT    | -                    | Phương thức xác thực (JSON array: `["basic","google"]`)  |
 | `is_pausable`      | INTEGER | DEFAULT 0            | Có thể tạm dừng conversation không                       |
+| `is_memory`        | INTEGER | DEFAULT 0            | Tham khảo bộ nhớ đã lưu (Memory) - history memory tự động theo logic |
 
 **Giá trị platform:**
 

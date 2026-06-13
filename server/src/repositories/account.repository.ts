@@ -11,6 +11,7 @@ export interface AccountRow {
   last_refreshed_at?: number;
   usage?: string;
   reset_period?: string;
+  is_memory_enabled?: number;
 }
 
 export const findAccountById = (id: string): AccountRow | null => {
@@ -110,11 +111,18 @@ export const insertAccount = (account: {
   provider_id: string;
   email: string;
   credential: string;
+  is_memory_enabled?: boolean;
 }): void => {
   const db = getDb();
   db.prepare(
-    'INSERT INTO accounts (id, provider_id, email, credential) VALUES (?, ?, ?, ?)',
-  ).run(account.id, account.provider_id, account.email, account.credential);
+    'INSERT INTO accounts (id, provider_id, email, credential, is_memory_enabled) VALUES (?, ?, ?, ?, ?)',
+  ).run(
+    account.id,
+    account.provider_id,
+    account.email,
+    account.credential,
+    account.is_memory_enabled ? 1 : 0,
+  );
 };
 
 export const insertAccountsBatch = (
@@ -123,16 +131,23 @@ export const insertAccountsBatch = (
     provider_id: string;
     email: string;
     credential: string;
+    is_memory_enabled?: boolean;
   }>,
 ): void => {
   const db = getDb();
   db.prepare('BEGIN IMMEDIATE').run();
   try {
     const stmt = db.prepare(
-      'INSERT INTO accounts (id, provider_id, email, credential) VALUES (?, ?, ?, ?)',
+      'INSERT INTO accounts (id, provider_id, email, credential, is_memory_enabled) VALUES (?, ?, ?, ?, ?)',
     );
     for (const a of accounts) {
-      stmt.run(a.id, a.provider_id, a.email, a.credential);
+      stmt.run(
+        a.id,
+        a.provider_id,
+        a.email,
+        a.credential,
+        a.is_memory_enabled ? 1 : 0,
+      );
     }
     db.prepare('COMMIT').run();
   } catch (err) {
@@ -170,4 +185,12 @@ export const updateAccountCredentialAndRefresh = (
 export const deleteAccount = (id: string): void => {
   const db = getDb();
   db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
+};
+
+export const updateAccountMemory = (id: string, isMemoryEnabled: boolean): void => {
+  const db = getDb();
+  db.prepare('UPDATE accounts SET is_memory_enabled = ? WHERE id = ?').run(
+    isMemoryEnabled ? 1 : 0,
+    id,
+  );
 };

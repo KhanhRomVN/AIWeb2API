@@ -10,6 +10,7 @@ import {
   insertAccount,
   insertAccountsBatch,
   updateAccountCredential,
+  updateAccountMemory,
   deleteAccount as deleteAccountRow,
 } from '../repositories/account.repository';
 import { ensureProviderExists } from '../repositories/provider.repository';
@@ -117,6 +118,97 @@ export const importAccounts = async (
     }
   } catch (error) {
     logger.error('Error in importAccounts', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: { code: 'INTERNAL_ERROR' },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
+// GET /v1/accounts/:id/memory
+export const getAccountMemory = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const account = findAccountById(id);
+
+    if (!account) {
+      res.status(404).json({
+        success: false,
+        message: 'Account not found',
+        error: { code: 'NOT_FOUND' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        account_id: account.id,
+        is_memory_enabled: account.is_memory_enabled === 1,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error) {
+    logger.error('Error in getAccountMemory', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: { code: 'INTERNAL_ERROR' },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
+// PUT /v1/accounts/:id/memory
+export const updateAccountMemoryController = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { is_memory_enabled } = req.body;
+
+    if (typeof is_memory_enabled !== 'boolean') {
+      res.status(400).json({
+        success: false,
+        message: 'is_memory_enabled must be a boolean',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const account = findAccountById(id);
+    if (!account) {
+      res.status(404).json({
+        success: false,
+        message: 'Account not found',
+        error: { code: 'NOT_FOUND' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    updateAccountMemory(id, is_memory_enabled);
+
+    logger.info(`Memory state updated for account ${id}: ${is_memory_enabled}`);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        account_id: id,
+        is_memory_enabled,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error) {
+    logger.error('Error in updateAccountMemoryController', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',

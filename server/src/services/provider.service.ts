@@ -37,6 +37,7 @@ export interface Provider {
     is_upload?: boolean;
   }[];
   is_pausable?: boolean;
+  is_memory?: boolean;
 }
 
 const fetchProviderConfig = async (): Promise<any[]> => bundledProviders;
@@ -132,11 +133,14 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       dbModelsForProvider.map((m: any) => [m.id.toLowerCase(), m.success_rate ?? null])
     );
 
+    const dbProvider = providersMap.get(p.provider_id.toLowerCase());
     providersWithModels.push({
       ...p,
       // Normalize website_url (config uses website_url; keep backward-compat website alias)
       website_url: p.website_url || (p as any).website,
       website: p.website_url || (p as any).website,
+      // Merge memory settings from database if available, fallback to config
+      is_memory: dbProvider?.is_memory === 1 ? true : (p.is_memory ?? false),
       models: models?.map((m: any) => ({
         ...m,
         is_search:
