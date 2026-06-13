@@ -1,30 +1,26 @@
-import { getDB } from '../utils/database';
-import type { Account } from '../utils/database';
+import { findAccountById, listAccounts } from '../repositories/account.repository';
 
-export type { Account };
+export interface Account {
+  id: string;
+  email: string;
+  provider_id: string;
+  credential: string;
+}
 
 export type SelectionStrategy = 'round-robin' | 'priority' | 'least-used';
 
 export class AccountSelector {
   private roundRobinIndex: Map<string, number> = new Map();
   private requestCounts: Map<string, number> = new Map();
-  private db = getDB();
 
-  /**
-   * Select an account based on the strategy
-   */
   selectAccount(
     provider?: string,
     strategy: SelectionStrategy = 'round-robin',
     email?: string,
   ): Account | null {
     const accounts = this.getActiveAccounts(provider);
+    if (accounts.length === 0) return null;
 
-    if (accounts.length === 0) {
-      return null;
-    }
-
-    // If email is specified, try to find that specific account
     if (email) {
       const account = accounts.find(
         (a) => a.email.toLowerCase() === email.toLowerCase(),
@@ -32,7 +28,6 @@ export class AccountSelector {
       if (account) return account;
     }
 
-    // Otherwise use selection strategy
     switch (strategy) {
       case 'round-robin':
         return this.roundRobin(provider || 'default', accounts);
@@ -47,24 +42,19 @@ export class AccountSelector {
 
   getActiveAccounts(provider_id?: string): Account[] {
     try {
-      const accounts = this.db.getAll();
-      let filtered = accounts;
-      if (provider_id) {
-        const pid = provider_id.toLowerCase();
-        filtered = filtered.filter((a) => a.provider_id.toLowerCase() === pid);
-      }
-      return filtered;
-    } catch (error) {
+      const { rows } = listAccounts({
+        page: 1,
+        limit: 10000,
+        provider_id,
+      });
+      return rows;
+    } catch {
       return [];
     }
   }
 
   getAccountById(id: string): Account | null {
-    try {
-      return this.db.getById(id);
-    } catch (error) {
-      return null;
-    }
+    return findAccountById(id);
   }
 
   private roundRobin(key: string, accounts: Account[]): Account {
@@ -96,22 +86,15 @@ export class AccountSelector {
     this.requestCounts.set(accountId, count + 1);
   }
 
-  /**
-   * Reset request counts
-   */
   resetCounts(): void {
     this.requestCounts.clear();
   }
 
-  /**
-   * Get request count for an account
-   */
   getRequestCount(accountId: string): number {
     return this.requestCounts.get(accountId) || 0;
   }
 }
 
-// Singleton instance
 let accountSelector: AccountSelector | null = null;
 
 export const getAccountSelector = (): AccountSelector => {
@@ -121,9 +104,6 @@ export const getAccountSelector = (): AccountSelector => {
   return accountSelector;
 };
 
-/**
- * Find account from request (like the old account-utils but using DB)
- */
 export const findAccount = (
   req: { headers: { authorization?: string }; query: { email?: string } },
   provider: string,
@@ -136,21 +116,16 @@ export const findAccount = (
 
   let account: Account | null = null;
 
-  // 1. Try by Token (ID) from Authorization header
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     account = accounts.find((a) => a.id === token) || null;
   }
 
-  // 2. Try by Email + Provider
   if (!account && emailQuery) {
     account =
-      accounts.find(
-        (a) => a.email.toLowerCase() === emailQuery.toLowerCase(),
-      ) || null;
+      accounts.find((a) => a.email.toLowerCase() === emailQuery.toLowerCase()) || null;
   }
 
-  // 3. Fall back to any active account for provider
   if (!account && accounts.length > 0) {
     account = accounts[0];
   }

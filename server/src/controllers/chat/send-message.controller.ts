@@ -1,0 +1,323 @@
+import { Request, Response } from 'express';
+import { sendMessage } from '../../services/chat';
+import { createLogger } from '../../utils/logger';
+import { recordRequest } from '../../services/stats.service';
+import { getAllProviders } from '../../services/provider.service';
+import { providerRegistry } from '../../provider/registry';
+import { getAccountSelector } from '../../services/account-selector';
+import { findAccountById } from '../../repositories/account.repository';
+import {
+  findFirstSequenceByProvider,
+  findFirstSequenceGlobal,
+} from '../../repositories/model-sequence.repository';
+
+const logger = createLogger('SendMessageController');
+
+const unescapeHtml = (str: string): string => {
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+};
+
+// POST /v1/accounts/:accountId/messages
+export const sendMessageController = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const accountIdFromParams = req.params.accountId;
+    const {
+      accountId: accountIdFromBody,
+      providerId,
+      modelId,
+      messages,
+      conversationId,
+      parent_message_id,
+      stream,
+      is_search,
+      search,
+      temperature,
+      thinking,
+      ref_file_ids,
+    } = req.body;
+
+    if (messages && messages.length > 1 && providerId !== 'kiro-cli') {
+      if (!conversationId || conversationId.trim() === '') {
+        if (!parent_message_id) {
+          const msg =
+            'Missing Conversation ID: For multi-turn conversations, a valid conversationId must be provided.';
+          logger.error(`[Chat] Validation Error: ${msg}`);
+          res.status(400).json({
+            success: false,
+            message: msg,
+            error: {
+              code: 'BAD_REQUEST',
+              details: 'conversationId is required for messages > 1',
+            },
+          });
+          return;
+        }
+      }
+    }
+
+    let accountId = accountIdFromParams || accountIdFromBody;
+    const useSearch = is_search === true || search === true;
+
+    let account: any | undefined;
+
+    if (accountId) {
+      account = findAccountById(accountId);
+
+      if (account && providerId) {
+        if (account.provider_id.toLowerCase() !== providerId.toLowerCase()) {
+          res.status(400).json({
+            success: false,
+            message: `Account Conflict: The provided accountId belongs to provider '${account.provider_id}', but providerId is '${providerId}'.`,
+            error: { code: 'BAD_REQUEST' },
+          });
+          return;
+        }
+      }
+    } else if (providerId) {
+      account = getAccountSelector().selectAccount(providerId);
+    } else if (modelId) {
+      if (modelId === 'auto') {
+        const bestSequence = findFirstSequenceGlobal();
+        if (bestSequence) {
+          account = getAccountSelector().selectAccount(bestSequence.provider_id);
+        } else {
+          account = getAccountSelector().selectAccount();
+        }
+      } else {
+        const inferredProvider = providerRegistry.getProviderForModel(modelId);
+        if (inferredProvider) {
+          account = getAccountSelector().selectAccount(inferredProvider.name);
+        }
+      }
+    }
+
+    if (!account) {
+      logger.warn(
+        `[Chat] Unauthorized: No active account found. Params - accountId: ${accountId}, providerId: ${providerId}, modelId: ${modelId}`,
+      );
+      res.status(401).json({
+        success: false,
+        message:
+          'No valid account found for this request. Please provide a valid accountId, providerId, or modelId.',
+        error: { code: 'UNAUTHORIZED' },
+      });
+      return;
+    }
+
+    // Resolve "auto" model
+    let finalModel = modelId;
+    if (modelId === 'auto') {
+      const bestModel = findFirstSequenceByProvider(account.provider_id);
+      if (bestModel) {
+        finalModel = bestModel.model_id;
+      } else {
+        logger.warn(`"auto" model requested but no sequence found for ${account.provider_id}`);
+        const provider = providerRegistry.getProvider(account.provider_id);
+        if (provider?.defaultModel) {
+          finalModel = provider.defaultModel;
+        }
+      }
+    }
+
+    const model = finalModel;
+
+    const providers = await getAllProviders();
+    const providerConfig = providers.find(
+      (p) => p.provider_id.toLowerCase() === account.provider_id.toLowerCase(),
+    );
+    const websiteUrl = providerConfig?.website;
+
+    if (useSearch) {
+      if (!providerConfig?.is_search) {
+        res.status(400).json({
+          error: `Provider ${account.provider_id} does not support search`,
+        });
+        return;
+      }
+    }
+
+    const initialMeta: any = {
+      accountId: account.id,
+      providerId: account.provider_id,
+      modelId: model,
+      email: account.email,
+    };
+    if (websiteUrl) {
+      initialMeta.websiteUrl = websiteUrl;
+    }
+
+    if (stream !== false) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      const responseData = { meta: initialMeta };
+      res.write(`data: ${JSON.stringify(responseData)}\n\n`);
+    }
+
+    let accumulatedContent = '';
+    let accumulatedMetadata: any = { ...initialMeta };
+
+    try {
+      recordRequest(account.provider_id, model);
+
+      const lastMsg = messages?.[messages.length - 1];
+      const lastMsgSnippet =
+        typeof lastMsg?.content === 'string'
+          ? lastMsg.content.slice(0, 120).replace(/\n/g, ' ')
+          : '';
+      const roleBreakdown = messages?.reduce(
+        (acc: Record<string, number>, m: any) => {
+          acc[m.role] = (acc[m.role] || 0) + 1;
+          return acc;
+        },
+        {},
+      );
+      logger.info(
+        `[Request] provider=${account.provider_id} model=${model} msgs=${messages?.length} (${Object.entries(roleBreakdown || {}).map(([r, c]) => `${r}:${c}`).join(',')}) convId=${conversationId || 'none'} | "${lastMsgSnippet}"`,
+      );
+
+      let accumulatedResponse = '';
+
+      let firstChunkReceived = false;
+      let streamTimeoutId: ReturnType<typeof setTimeout> | null = null;
+      if (stream !== false) {
+        streamTimeoutId = setTimeout(() => {
+          if (!firstChunkReceived && !res.writableEnded) {
+            res.write(
+              `data: ${JSON.stringify({ error: 'Stream timeout: no response received within 5 minutes' })}\n\n`,
+            );
+            res.end();
+          }
+        }, 300000);
+      }
+
+      await sendMessage({
+        credential: account.credential,
+        provider_id: account.provider_id,
+        accountId: account.id,
+        model,
+        messages,
+        conversationId,
+        parent_message_id,
+        search: useSearch,
+        temperature,
+        thinking,
+        ref_file_ids,
+        onContent: (content: string) => {
+          accumulatedResponse += content;
+          if (stream !== false) {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              if (streamTimeoutId) clearTimeout(streamTimeoutId);
+            }
+            if (res.writableEnded) return;
+            res.write(`data: ${JSON.stringify({ content: unescapeHtml(content) })}\n\n`);
+          } else {
+            accumulatedContent += content;
+          }
+        },
+        onMetadata: (meta: any) => {
+          if (stream !== false) {
+            res.write(`data: ${JSON.stringify({ meta })}\n\n`);
+          } else {
+            accumulatedMetadata = { ...accumulatedMetadata, ...meta };
+          }
+        },
+        onThinking: (content: string) => {
+          if (stream !== false) {
+            res.write(`data: ${JSON.stringify({ thinking: content })}\n\n`);
+          }
+        },
+        onDone: () => {
+          if (streamTimeoutId) clearTimeout(streamTimeoutId);
+          if (stream !== false && res.writableEnded) return;
+
+          const responseSnippet = accumulatedResponse.slice(0, 120).replace(/\n/g, ' ');
+          logger.info(`[Response] len=${accumulatedResponse.length} | "${responseSnippet}"`);
+
+          if (stream !== false) {
+            if (!accumulatedResponse || accumulatedResponse.trim() === '') {
+              logger.warn(
+                `[Response] Provider ${account.provider_id} returned empty content for model=${model}`,
+              );
+              res.write(
+                `data: ${JSON.stringify({ error: 'Provider returned empty response', code: 'EMPTY_RESPONSE' })}\n\n`,
+              );
+            }
+            res.write('data: [DONE]\n\n');
+            res.end();
+          } else {
+            if (!res.headersSent) {
+              if (!accumulatedContent || accumulatedContent.trim() === '') {
+                res.status(502).json({
+                  success: false,
+                  message: 'Provider returned empty response',
+                  error: { code: 'EMPTY_RESPONSE' },
+                });
+                return;
+              }
+              res.status(200).json({
+                success: true,
+                message: {
+                  role: 'assistant',
+                  content: unescapeHtml(accumulatedContent),
+                },
+                metadata: accumulatedMetadata,
+              });
+            }
+          }
+        },
+        onSessionCreated: (sessionId: string) => {
+          if (stream !== false) {
+            res.write(`event: session_created\ndata: ${sessionId}\n\n`);
+            res.write(
+              `data: ${JSON.stringify({ meta: { conversation_id: sessionId } })}\n\n`,
+            );
+          } else {
+            accumulatedMetadata.conversation_id = sessionId;
+          }
+        },
+        onError: (error: Error) => {
+          if (streamTimeoutId) clearTimeout(streamTimeoutId);
+          logger.error('Stream error', error);
+          if (stream !== false) {
+            if (!res.writableEnded) {
+              const errPayload: any = { error: error.message };
+              if ((error as any).code) errPayload.error_code = (error as any).code;
+              res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
+              res.end();
+            }
+          } else {
+            if (!res.headersSent) {
+              res.status(500).json({
+                error: error.message,
+                ...((error as any).code ? { error_code: (error as any).code } : {}),
+              });
+            }
+          }
+        },
+      });
+    } catch (error: any) {
+      logger.error('Error in sendMessage service call', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: error.message });
+      }
+    }
+  } catch (error) {
+    logger.error('Error in sendMessageController', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+};

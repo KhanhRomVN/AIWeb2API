@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { errorHandler } from './middleware/errorHandler';
-import { requestLogger } from './middleware/logger';
+import { errorHandler } from './middleware/error-handler.middleware';
+import { requestLogger } from './middleware/request-logger.middleware';
 import { createLogger } from './utils/logger';
 import { providerRegistry } from './provider/registry';
 import { versionService } from './services/version.service';

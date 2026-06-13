@@ -76,14 +76,13 @@ async function fetchProvidersFromApi(port: number): Promise<ProviderConfig[]> {
     // Transform API response to ProviderConfig format
     cachedProviders = apiProviders.map((p: any) => {
       const originalIcon = getFaviconUrl(p.website);
-      const proxyIconUrl = `${baseUrl}/v1/accounts/proxy-icon?url=${encodeURIComponent(originalIcon)}`;
 
       return {
         id: p.provider_id,
         provider_id: p.provider_id,
         name: p.provider_name,
         provider_name: p.provider_name,
-        icon: proxyIconUrl,
+        icon: originalIcon,
         active: p.is_enabled ?? false,
         is_enabled: p.is_enabled ?? false,
         website: p.website,

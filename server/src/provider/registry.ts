@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Router } from 'express';
-import { Provider } from './types';
+import { Provider } from '../types/index';
 import { createLogger } from '../utils/logger';
 import { proxyService } from '../services/proxy.service';
 

@@ -3,7 +3,7 @@ import { providerRegistry } from '../../provider/registry';
 
 const router = Router();
 
-// Health check endpoint
+// Health check
 router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -12,24 +12,22 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Import route modules
-import chatRouter from './chat';
+// Route modules
+import chatRouter from './chat.routes';
 import accountRouter from './account.routes';
-import providerRouter from './provider';
-import messagesRouter from './messages';
-import debugRouter from './debug';
-import configRouter from './config';
-import modelRouter from './model';
-import statsRouter from './stats';
-
-import modelSequencesRouter from './model-sequences';
+import providerRouter from './provider.routes';
+import messagesRouter from './messages.routes';
+import debugRouter from './debug.routes';
+import configRouter from './config.routes';
+import modelRouter from './model.routes';
+import modelSequencesRouter from './model-sequences.routes';
+import statsRouter from './stats.routes';
 import workspaceRouter from './workspace.routes';
 import gitRouter from './git.routes';
 import commandRouter from './command.routes';
 import proxyRouter from './proxy.routes';
-import claudecodeRouter from './claudecode';
 
-// Register routes
+// Mount routes
 router.use('/chat', chatRouter);
 router.use('/accounts', accountRouter);
 router.use('/providers', providerRouter);
@@ -43,7 +41,7 @@ router.use('/workspaces', workspaceRouter);
 router.use('/git', gitRouter);
 router.use('/commands', commandRouter);
 router.use('/proxy', proxyRouter);
-router.use('/claudecode', claudecodeRouter);
 
 providerRegistry.registerAllRoutes(router);
+
 export default router;

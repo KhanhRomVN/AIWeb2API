@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export default defineConfig({
-  entry: ['src/start.ts'],
+  entry: ['src/index.ts'],
   format: ['cjs'],
   target: 'node18',
   clean: true,

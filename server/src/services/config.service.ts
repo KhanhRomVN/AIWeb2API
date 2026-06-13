@@ -1,20 +1,18 @@
-import { getDb } from './db';
 import { createLogger } from '../utils/logger';
+import { getConfigValue, setConfigValue } from '../repositories/config.repository';
+import { getDb } from '../database';
 
 const logger = createLogger('ConfigService');
 
 export class ConfigService {
   get(key: string, defaultValue: any = null): any {
-    const db = getDb();
     try {
-      const row = db
-        .prepare('SELECT value FROM config WHERE key = ?')
-        .get(key) as { value: string };
-      if (row) {
+      const value = getConfigValue(key);
+      if (value !== null) {
         try {
-          return JSON.parse(row.value);
+          return JSON.parse(value);
         } catch {
-          return row.value;
+          return value;
         }
       }
       return defaultValue;
@@ -25,20 +23,17 @@ export class ConfigService {
   }
 
   set(key: string, value: any): void {
-    const db = getDb();
     const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
     try {
-      db.prepare(
-        'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
-      ).run(key, valueStr);
+      setConfigValue(key, valueStr);
     } catch (err) {
       logger.error(`Failed to set config ${key}`, err);
     }
   }
 
   delete(key: string): void {
-    const db = getDb();
     try {
+      const db = getDb();
       db.prepare('DELETE FROM config WHERE key = ?').run(key);
     } catch (err) {
       logger.error(`Failed to delete config ${key}`, err);

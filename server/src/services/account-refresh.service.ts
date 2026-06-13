@@ -1,13 +1,13 @@
-import { getDb } from './db';
 import { providerRegistry } from '../provider/registry';
 import { createLogger } from '../utils/logger';
+import { getDb } from '../database';
 
 const logger = createLogger('AccountRefreshService');
 
 export class AccountRefreshService {
   private interval: NodeJS.Timeout | null = null;
-  private readonly REFRESH_INTERVAL = 1 * 60 * 60 * 1000; // Check every 1 hour
-  private readonly AUTO_REFRESH_THRESHOLD = 24 * 60 * 60 * 1000; // Refresh once a day
+  private readonly REFRESH_INTERVAL = 1 * 60 * 60 * 1000;    // 1 hour
+  private readonly AUTO_REFRESH_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
 
   start() {
     if (this.interval) return;
@@ -39,7 +39,6 @@ export class AccountRefreshService {
         const now = Date.now();
         const lastRefreshed = account.last_refreshed_at || 0;
         const provider = providerRegistry.getProvider(account.provider_id);
-
         if (!provider) continue;
 
         if (refreshToken && now - lastRefreshed >= this.AUTO_REFRESH_THRESHOLD) {
@@ -54,7 +53,6 @@ export class AccountRefreshService {
               };
               db.prepare('UPDATE accounts SET credential = ?, last_refreshed_at = ? WHERE id = ?')
                 .run(JSON.stringify(updatedCredential), now, account.id);
-
               credential = updatedCredential;
             } catch (err: any) {
               logger.error(`Token refresh failed — ${account.email}: ${err.message}`);
@@ -73,13 +71,11 @@ export class AccountRefreshService {
 
   async refreshUsage(accountId: string) {
     const db = getDb();
-    const account = db
-      .prepare('SELECT * FROM accounts WHERE id = ?')
-      .get(accountId) as any;
+    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as any;
     if (!account) return;
 
     const provider = providerRegistry.getProvider(account.provider_id);
-    if (!provider || !provider.getUsage) return;
+    if (!provider?.getUsage) return;
 
     try {
       let credential: any;
@@ -88,7 +84,6 @@ export class AccountRefreshService {
       } catch (e) {
         credential = { accessToken: account.credential };
       }
-
       const usageInfo = await provider.getUsage(JSON.stringify(credential));
       db.prepare('UPDATE accounts SET usage = ?, reset_period = ? WHERE id = ?')
         .run(usageInfo.usage, usageInfo.resetPeriod, account.id);

@@ -2,7 +2,7 @@ import http from 'http';
 import https from 'https';
 import fs from 'fs';
 import { createApp } from './app';
-import { getServerConfig } from './config/server';
+import { getServerConfig } from './config/server.config';
 import { createLogger } from './utils/logger';
 
 const logger = createLogger('Server');

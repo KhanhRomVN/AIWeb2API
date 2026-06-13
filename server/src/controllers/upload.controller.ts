@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { getDb } from '../services/db';
 import { createLogger } from '../utils/logger';
 import { providerRegistry } from '../provider/registry';
 import { isProviderEnabled } from '../services/provider.service';
+import { findAccountById } from '../repositories/account.repository';
 
 const logger = createLogger('UploadController');
 
@@ -19,12 +19,7 @@ export const uploadFileController = async (
       return;
     }
 
-    // Get account
-    const db = getDb();
-    const account = db
-      .prepare('SELECT * FROM accounts WHERE id = ?')
-      .get(accountId) as any;
-
+    const account = findAccountById(accountId);
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;
@@ -43,19 +38,14 @@ export const uploadFileController = async (
     }
 
     if (!provider.uploadFile) {
-      res
-        .status(400)
-        .json({ error: `Provider ${providerId} does not support file upload` });
+      res.status(400).json({ error: `Provider ${providerId} does not support file upload` });
       return;
     }
 
     try {
       const result = await provider.uploadFile(account.credential, file);
 
-      const responseData: any = {
-        filename: file.originalname,
-      };
-
+      const responseData: any = { filename: file.originalname };
       if (typeof result === 'string') {
         responseData.file_id = result;
       } else if (result && result.id) {
@@ -65,10 +55,7 @@ export const uploadFileController = async (
         responseData.raw = result;
       }
 
-      res.status(200).json({
-        success: true,
-        data: responseData,
-      });
+      res.status(200).json({ success: true, data: responseData });
     } catch (err: any) {
       logger.error(`Error uploading to ${providerId}`, err);
       res.status(500).json({ error: `Upload failed: ${err.message}` });
