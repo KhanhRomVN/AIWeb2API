@@ -604,6 +604,37 @@ export class QwenProvider implements Provider {
     }
   }
 
+  async getModels(credential: string): Promise<any[]> {
+    const { token, cookieValue } = this.parseCredential(credential);
+    const headers: Record<string, string> = {
+      'accept': 'application/json, text/plain, */*',
+      'content-type': 'application/json',
+      'cookie': cookieValue,
+      'origin': BASE_URL,
+      'referer': `${BASE_URL}/`,
+      'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+      'x-request-id': crypto.randomUUID(),
+    };
+    if (token) headers['authorization'] = `Bearer ${token}`;
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/models`, { headers });
+      if (!response.ok) return [];
+      const json: any = await response.json();
+      if (json && Array.isArray(json.data)) {
+        return json.data.map((model: any) => ({
+          id: model.id,
+          name: model.name,
+          is_thinking: model.info?.meta?.capabilities?.thinking || false,
+          context_length: model.info?.meta?.max_context_length,
+        }));
+      }
+      return [];
+    } catch (error) {
+      return [];
+    }
+  }
+
   isModelSupported(model: string): boolean {
     const m = model.toLowerCase();
     return m.includes('qwen') || m.startsWith('qwen-');

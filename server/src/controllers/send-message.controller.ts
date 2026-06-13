@@ -115,14 +115,8 @@ export const sendMessageController = async (
     );
     const websiteUrl = providerConfig?.website;
 
-    if (useSearch) {
-      if (!providerConfig?.is_search) {
-        res.status(400).json({
-          error: `Provider ${account.provider_id} does not support search`,
-        });
-        return;
-      }
-    }
+    // Search capability is now determined at model level, not provider level
+    // The actual search support will be checked by the provider implementation
 
     const initialMeta: any = {
       accountId: account.id,

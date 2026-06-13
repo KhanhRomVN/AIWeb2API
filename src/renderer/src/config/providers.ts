@@ -9,8 +9,7 @@ import { getApiBaseUrl } from '../utils/apiUrl';
  */
 
 export interface ProviderRoutes {
-  is_search?: boolean;
-  is_upload?: boolean;
+  // Deprecated: search and upload capabilities are now at model level
 }
 
 export interface ProviderConfig {
@@ -21,16 +20,12 @@ export interface ProviderConfig {
   icon: string;
   active: boolean;
   website?: string;
-  is_search?: boolean;
-  is_upload?: boolean;
   is_enabled?: boolean;
   auth_methods?: string[];
   detail_fetch_required?: boolean;
   color?: string;
   conflict_search_with_upload?: boolean;
   models?: any[];
-  connection_mode?: 'https_spoofing' | 'headless_browser';
-  concurrency_mode?: 'concurrent' | 'sequential';
 }
 
 // Cache for provider data
@@ -86,8 +81,6 @@ async function fetchProvidersFromApi(port: number): Promise<ProviderConfig[]> {
         active: p.is_enabled ?? false,
         is_enabled: p.is_enabled ?? false,
         website: p.website,
-        is_search: p.is_search,
-        is_upload: p.is_upload,
         auth_methods:
           p.auth_methods ||
           (Array.isArray(p.auth_method) ? p.auth_method : p.auth_method ? [p.auth_method] : []),
@@ -95,8 +88,6 @@ async function fetchProvidersFromApi(port: number): Promise<ProviderConfig[]> {
         color: p.color,
         conflict_search_with_upload: p.conflict_search_with_upload,
         models: p.models,
-        connection_mode: p.connection_mode,
-        concurrency_mode: p.concurrency_mode,
       };
     });
 

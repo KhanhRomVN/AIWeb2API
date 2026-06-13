@@ -72,8 +72,8 @@ export class ZAIProvider implements Provider {
 
   async getModels(_credential: string): Promise<any[]> {
     return [
-      { id: 'GLM-5.1', name: 'GLM-5.1', is_thinking: false, context_length: null },
-      { id: 'GLM-5', name: 'GLM-5', is_thinking: false, context_length: null },
+      { id: 'GLM-5.1', name: 'GLM-5.1', is_thinking: false, max_context_length: null },
+      { id: 'GLM-5', name: 'GLM-5', is_thinking: false, max_context_length: null },
     ];
   }
 

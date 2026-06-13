@@ -11,7 +11,8 @@ import {
   queryAccountStatsByPeriod,
   queryModelStatsByPeriod,
 } from '../repositories/metrics.repository';
-import { upsertModel } from '../repositories/model.repository';
+import { upsertModel, updateModelSuccessRate } from '../repositories/model.repository';
+import { getDb } from '../database';
 
 const logger = createLogger('MetricsService');
 
@@ -38,7 +39,22 @@ export async function recordSuccess(
   } catch (error) {
     logger.error('Error updating success stats:', error);
   }
-  recordMetric(accountId, providerId, modelId, tokens);
+  recordMetric(accountId, providerId, modelId, tokens, 'success');
+}
+
+export async function recordError(
+  accountId: string | undefined,
+  providerId: string,
+  modelId: string,
+  errorMessage?: string,
+) {
+  try {
+    upsertModel(providerId, modelId, modelId, false, null, Date.now());
+  } catch (error) {
+    logger.error('Error updating error stats:', error);
+  }
+  recordMetric(accountId || 'anonymous', providerId, modelId, 0, 'error');
+  logger.warn(`Recorded error metric for ${providerId}/${modelId}: ${errorMessage || 'unknown error'}`);
 }
 
 export function recordMetric(
@@ -46,12 +62,44 @@ export function recordMetric(
   providerId: string,
   modelId: string,
   tokens: number,
+  status: 'success' | 'error' = 'success',
 ) {
   try {
-    insertMetric(providerId, modelId, accountId, tokens);
+    insertMetric(providerId, modelId, accountId, tokens, status);
+    // Update model success rate after each metric insertion
+    updateModelSuccessRateAsync(providerId, modelId);
   } catch (error) {
     logger.error('Error recording metric:', error);
   }
+}
+
+/**
+ * Asynchronously update model success rate based on metrics history
+ */
+function updateModelSuccessRateAsync(providerId: string, modelId: string): void {
+  // Run asynchronously to not block the main flow
+  setImmediate(() => {
+    try {
+      const db = getDb();
+      const result = db.prepare(`
+        SELECT ROUND(
+          SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 
+          2
+        ) as success_rate
+        FROM metrics 
+        WHERE provider_id = ? AND model_id = ?
+      `).get(providerId, modelId);
+      
+      const successRate = (result as any)?.success_rate ?? null;
+      updateModelSuccessRate(providerId, modelId, successRate);
+
+      // Invalidate provider cache so next getAllProviders() returns fresh success_rate
+      const { invalidateProviderCache } = require('./provider.service');
+      invalidateProviderCache();
+    } catch (error) {
+      logger.error(`Error updating success rate for model ${providerId}/${modelId}:`, error);
+    }
+  });
 }
 
 /**

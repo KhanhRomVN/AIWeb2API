@@ -7,13 +7,16 @@ import { findFirstAccountByProvider } from '../repositories/account.repository';
 
 const logger = createLogger('ProviderService');
 
+// Cache for getAllProviders() results
+let cachedProviders: Provider[] | null = null;
+
 export interface Provider {
   provider_id: string;
   provider_name: string;
   is_enabled: boolean;
+  website_url?: string;
+  /** @deprecated use website_url */
   website?: string;
-  is_search?: boolean;
-  is_upload?: boolean;
   auth_method?: string[];
   platform?: string;
   description?: string;
@@ -21,14 +24,19 @@ export interface Provider {
     id: string;
     name: string;
     is_thinking?: boolean;
+    max_context_length?: number | null;
+    /** @deprecated use max_context_length */
     context_length?: number | null;
-    success_rate?: number;
+    success_rate?: number | null;
     max_req_conversation?: number;
     max_token_conversation?: number;
     is_search?: boolean;
+    is_image_upload?: boolean;
+    is_video_upload?: boolean;
+    /** @deprecated use is_image_upload */
     is_upload?: boolean;
   }[];
-  connection_mode?: string;
+  is_pausable?: boolean;
 }
 
 const fetchProviderConfig = async (): Promise<any[]> => bundledProviders;
@@ -39,12 +47,14 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
 
   const account = findFirstAccountByProvider(providerId);
   if (!account) {
-    logger.warn(`No account found for provider ${providerId}, cannot fetch models`);
     return [];
   }
 
   try {
-    const models = await dynamicProvider.getModels(account.credential, account.id);
+    const models = await dynamicProvider.getModels(
+      account.credential,
+      account.id,
+    );
     // Cache models to database for future use
     const now = Date.now();
     for (const model of models) {
@@ -53,8 +63,10 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
         model.id,
         model.name,
         model.is_thinking || false,
-        model.context_length !== undefined ? model.context_length : null,
+        model.max_context_length ?? model.context_length ?? null,
         now,
+        model.is_image_upload ?? model.is_upload ?? false,
+        model.is_video_upload ?? false,
       );
     }
     return models;
@@ -65,6 +77,11 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
 };
 
 export const getAllProviders = async (): Promise<Provider[]> => {
+  // Return cached result if available
+  if (cachedProviders !== null) {
+    return cachedProviders;
+  }
+
   const config = await fetchProviderConfig();
 
   const dbProviders = findAllProviderRows();
@@ -79,7 +96,10 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       id: model.model_id,
       name: model.model_name,
       is_thinking: model.is_thinking === 1,
-      context_length: model.context_length,
+      max_context_length: model.max_context_length,
+      is_image_upload: model.is_image_upload === 1,
+      is_video_upload: model.is_video_upload === 1,
+      success_rate: model.success_rate ?? null,
     });
   });
 
@@ -106,24 +126,61 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       }
     }
 
-    const dbProvider = providersMap.get(p.provider_id.toLowerCase());
+    // Merge success_rate from DB into static config models
+    const dbModelsForProvider = modelsMap.get(p.provider_id.toLowerCase()) || [];
+    const dbModelSuccessRateMap = new Map<string, number | null>(
+      dbModelsForProvider.map((m: any) => [m.id.toLowerCase(), m.success_rate ?? null])
+    );
 
     providersWithModels.push({
       ...p,
+      // Normalize website_url (config uses website_url; keep backward-compat website alias)
+      website_url: p.website_url || (p as any).website,
+      website: p.website_url || (p as any).website,
       models: models?.map((m: any) => ({
         ...m,
-        is_search: m.is_search !== undefined ? m.is_search : (p.is_search ?? false),
-        is_upload: m.is_upload !== undefined ? m.is_upload : (p.is_upload ?? false),
+        is_search:
+          m.is_search !== undefined ? m.is_search : false,
+        is_image_upload:
+          m.is_image_upload !== undefined ? m.is_image_upload : (m.is_upload !== undefined ? m.is_upload : false),
+        is_video_upload:
+          m.is_video_upload !== undefined ? m.is_video_upload : false,
+        // Keep deprecated is_upload alias
+        is_upload:
+          m.is_image_upload !== undefined ? m.is_image_upload : (m.is_upload !== undefined ? m.is_upload : false),
+        // Normalize context length field names
+        max_context_length: m.max_context_length ?? m.context_length ?? null,
+        context_length: m.max_context_length ?? m.context_length ?? null,
+        // Prefer DB success_rate over static config (which never has it)
+        success_rate: dbModelSuccessRateMap.has(m.id?.toLowerCase())
+          ? dbModelSuccessRateMap.get(m.id?.toLowerCase()) ?? null
+          : (m.success_rate !== undefined ? m.success_rate : null),
       })),
     });
   }
 
+  cachedProviders = providersWithModels;
   return providersWithModels;
+};
+
+/**
+ * Invalidate the provider cache (call this when accounts or providers change)
+ */
+export const invalidateProviderCache = (): void => {
+  cachedProviders = null;
+  logger.debug('Provider cache invalidated');
 };
 
 export const getProviderModels = async (
   providerId: string,
-): Promise<{ id: string; name: string; is_thinking?: boolean; context_length?: number | null }[]> => {
+): Promise<
+  {
+    id: string;
+    name: string;
+    is_thinking?: boolean;
+    context_length?: number | null;
+  }[]
+> => {
   const isEnabled = await isProviderEnabled(providerId);
   if (!isEnabled) throw new Error(`Provider ${providerId} is disabled`);
 
@@ -141,7 +198,11 @@ export const getProviderModels = async (
   }
 
   // Fallback to static config if available
-  if (provider?.models && Array.isArray(provider.models) && provider.models.length > 0) {
+  if (
+    provider?.models &&
+    Array.isArray(provider.models) &&
+    provider.models.length > 0
+  ) {
     return provider.models.map((m: any) => ({
       id: m.id,
       name: m.name,
@@ -156,7 +217,10 @@ export const getProviderModels = async (
     const account = findFirstAccountByProvider(providerId);
     if (account) {
       try {
-        const directModels = await dynamicProvider.getModels(account.credential, account.id);
+        const directModels = await dynamicProvider.getModels(
+          account.credential,
+          account.id,
+        );
         if (directModels?.length > 0) return directModels;
       } catch (e) {
         logger.error(`Failed to fetch models directly from ${providerId}:`, e);
@@ -167,7 +231,9 @@ export const getProviderModels = async (
   return [];
 };
 
-export const isProviderEnabled = async (providerId: string): Promise<boolean> => {
+export const isProviderEnabled = async (
+  providerId: string,
+): Promise<boolean> => {
   const remoteConfig = await fetchProviderConfig();
   const config = remoteConfig.find((c: any) => c.provider_id === providerId);
   return config ? config.is_enabled : false;
@@ -182,9 +248,12 @@ export interface ModelWithProvider {
   context_length?: number | null;
   is_search?: boolean;
   is_upload?: boolean;
+  success_rate?: number | null;
 }
 
-export const getAllModelsFromEnabledProviders = async (): Promise<ModelWithProvider[]> => {
+export const getAllModelsFromEnabledProviders = async (): Promise<
+  ModelWithProvider[]
+> => {
   const remoteConfig = await fetchProviderConfig();
   const enabledProviders = remoteConfig.filter((c: any) => c.is_enabled);
   const allModels: ModelWithProvider[] = [];
@@ -198,25 +267,40 @@ export const getAllModelsFromEnabledProviders = async (): Promise<ModelWithProvi
         models = freshModels;
       }
     } catch (e) {
-      logger.warn(`Failed to fetch fresh models for ${provider.provider_id}:`, e);
+      logger.warn(
+        `Failed to fetch fresh models for ${provider.provider_id}:`,
+        e,
+      );
     }
 
     // Fallback to static config
-    if (models.length === 0 && provider.models && Array.isArray(provider.models)) {
+    if (
+      models.length === 0 &&
+      provider.models &&
+      Array.isArray(provider.models)
+    ) {
       models = provider.models;
     }
 
     // Last resort: try direct provider.getModels()
     if (models.length === 0) {
-      const dynamicProvider = providerRegistry.getProvider(provider.provider_id);
+      const dynamicProvider = providerRegistry.getProvider(
+        provider.provider_id,
+      );
       if (dynamicProvider?.getModels) {
         const account = findFirstAccountByProvider(provider.provider_id);
         if (account) {
           try {
-            const directModels = await dynamicProvider.getModels(account.credential, account.id);
+            const directModels = await dynamicProvider.getModels(
+              account.credential,
+              account.id,
+            );
             if (directModels?.length > 0) models = directModels;
           } catch (e) {
-            logger.error(`Failed to fetch models directly from ${provider.provider_id}:`, e);
+            logger.error(
+              `Failed to fetch models directly from ${provider.provider_id}:`,
+              e,
+            );
           }
         }
       }
@@ -229,9 +313,17 @@ export const getAllModelsFromEnabledProviders = async (): Promise<ModelWithProvi
         provider_id: provider.provider_id,
         provider_name: provider.provider_name,
         is_thinking: model.is_thinking || false,
-        context_length: model.context_length !== undefined ? model.context_length : null,
-        is_search: model.is_search !== undefined ? model.is_search : (provider.is_search ?? false),
-        is_upload: model.is_upload !== undefined ? model.is_upload : (provider.is_upload ?? false),
+        context_length:
+          model.context_length !== undefined ? model.context_length : null,
+        is_search:
+          model.is_search !== undefined
+            ? model.is_search
+            : (provider.is_search ?? false),
+        is_upload:
+          model.is_upload !== undefined
+            ? model.is_upload
+            : (provider.is_upload ?? false),
+        success_rate: model.success_rate !== undefined ? model.success_rate : null,
       });
     }
   }

@@ -147,7 +147,7 @@ export class CerebrasCloudProvider implements Provider {
         id: model.id,
         name: model.id,
         description: model.description || '',
-        context_length: model.context_window || model.max_tokens || 8192,
+        max_context_length: model.context_window || model.max_tokens || 8192,
         is_thinking: false,
       }));
     } catch (e: any) {
@@ -161,31 +161,31 @@ export class CerebrasCloudProvider implements Provider {
       {
         id: 'llama-3.3-70b',
         name: 'Llama 3.3 70B',
-        context_length: 128000,
+        max_context_length: 128000,
         is_thinking: false,
       },
       {
         id: 'llama3.1-8b',
         name: 'Llama 3.1 8B',
-        context_length: 128000,
+        max_context_length: 128000,
         is_thinking: false,
       },
       {
         id: 'qwen-3-32b',
         name: 'Qwen 3 32B',
-        context_length: 32768,
+        max_context_length: 32768,
         is_thinking: false,
       },
       {
         id: 'gpt-oss-120b',
         name: 'OpenAI GPT OSS 120B',
-        context_length: 65536,
+        max_context_length: 65536,
         is_thinking: false,
       },
       {
         id: 'zai-glm-4.7',
         name: 'Z.ai GLM 4.7',
-        context_length: 65536,
+        max_context_length: 65536,
         is_thinking: true,
       },
     ];
@@ -194,7 +194,7 @@ export class CerebrasCloudProvider implements Provider {
       models.unshift({
         id: 'debug-error',
         name: `⚠️ ${debugError}`,
-        context_length: 0,
+        max_context_length: 0,
         is_thinking: false,
       });
     }

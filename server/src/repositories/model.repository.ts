@@ -6,8 +6,12 @@ export interface ModelRow {
   model_id: string;
   model_name: string;
   is_thinking: number;
-  context_length?: number | null;
+  max_context_length?: number | null;
+  is_image_upload?: number;
+  is_video_upload?: number;
   updated_at: number;
+  success_rate?: number | null;
+  description?: string | null;
 }
 
 export const findAllModels = (): ModelRow[] => {
@@ -27,19 +31,49 @@ export const upsertModel = (
   modelId: string,
   modelName: string,
   isThinking: boolean,
-  contextLength: number | null,
+  maxContextLength: number | null,
   updatedAt: number,
+  isImageUpload?: boolean,
+  isVideoUpload?: boolean,
+  description?: string | null,
 ): void => {
   const db = getDb();
   db.prepare(
-    `INSERT INTO models (provider_id, model_id, model_name, is_thinking, context_length, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO models (
+       provider_id, model_id, model_name, is_thinking,
+       max_context_length, is_image_upload, is_video_upload, updated_at, description
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(provider_id, model_id) DO UPDATE SET
        model_name = excluded.model_name,
        is_thinking = excluded.is_thinking,
-       context_length = excluded.context_length,
-       updated_at = excluded.updated_at`,
-  ).run(providerId, modelId, modelName, isThinking ? 1 : 0, contextLength, updatedAt);
+       max_context_length = excluded.max_context_length,
+       is_image_upload = excluded.is_image_upload,
+       is_video_upload = excluded.is_video_upload,
+       updated_at = excluded.updated_at,
+       description = excluded.description`,
+  ).run(
+    providerId,
+    modelId,
+    modelName,
+    isThinking ? 1 : 0,
+    maxContextLength ?? null,
+    isImageUpload ? 1 : 0,
+    isVideoUpload ? 1 : 0,
+    updatedAt,
+    description ?? null,
+  );
+};
+
+export const updateModelSuccessRate = (
+  providerId: string,
+  modelId: string,
+  successRate: number | null,
+): void => {
+  const db = getDb();
+  db.prepare(
+    `UPDATE models SET success_rate = ? WHERE provider_id = ? AND model_id = ?`,
+  ).run(successRate, providerId, modelId);
 };
 
 export const deleteModelsByProvider = (providerId: string): void => {

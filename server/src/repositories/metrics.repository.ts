@@ -5,14 +5,15 @@ export const insertMetric = (
   modelId: string,
   accountId: string,
   totalTokens: number,
+  status: 'success' | 'error' = 'success',
   timestamp?: number,
 ): void => {
   const db = getDb();
   const now = timestamp ?? Date.now();
   db.prepare(
-    `INSERT INTO metrics (provider_id, model_id, account_id, total_tokens, timestamp)
-     VALUES (?, ?, ?, ?, ?)`,
-  ).run(providerId, modelId, accountId, totalTokens, now);
+    `INSERT INTO metrics (provider_id, model_id, account_id, status, total_tokens, timestamp)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(providerId, modelId, accountId, status, totalTokens, now);
 };
 
 export const queryUsageHistory = (

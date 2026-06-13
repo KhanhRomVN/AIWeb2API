@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { spawn, ChildProcess } from 'child_process';
+import { ChildProcess } from 'child_process';
 import { createLogger } from '../../utils/logger';
 import { findAvailablePort } from '../../utils/net';
 
@@ -32,7 +32,10 @@ export class CDPService extends EventEmitter {
   private ws: WebSocket | null = null;
   private browserProcess: ChildProcess | null = null;
   private requestId = 0;
-  private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
+  private pendingRequests = new Map<
+    number,
+    { resolve: (val: any) => void; reject: (err: any) => void }
+  >();
   private isConnected = false;
   private debugPort = 0;
   private sessionId: string | null = null;
@@ -49,7 +52,12 @@ export class CDPService extends EventEmitter {
     logger.info(`[CDP] Launching browser with debug port ${debugPort}`);
 
     // Find available browser
-    const browsers = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+    const browsers = [
+      'google-chrome',
+      'google-chrome-stable',
+      'chromium',
+      'chromium-browser',
+    ];
     let executable = '';
     for (const b of browsers) {
       try {
@@ -101,7 +109,7 @@ export class CDPService extends EventEmitter {
     });
 
     // Wait for browser to start and connect CDP
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     return await this.connect(debugPort);
   }
 
@@ -110,13 +118,15 @@ export class CDPService extends EventEmitter {
 
     try {
       const targetsResponse = await fetch(`http://127.0.0.1:${port}/json`);
-      if (!targetsResponse.ok) throw new Error(`HTTP ${targetsResponse.status}`);
+      if (!targetsResponse.ok)
+        throw new Error(`HTTP ${targetsResponse.status}`);
 
-      const targets = await targetsResponse.json() as any[];
+      const targets = (await targetsResponse.json()) as any[];
       logger.info(`[CDP] Found ${targets.length} debuggable targets`);
 
       let pageTarget = targets.find(
-        (t: any) => t.type === 'page' && t.url && !t.url.startsWith('devtools://')
+        (t: any) =>
+          t.type === 'page' && t.url && !t.url.startsWith('devtools://'),
       );
 
       if (!pageTarget) {
@@ -124,10 +134,15 @@ export class CDPService extends EventEmitter {
       }
 
       if (!pageTarget) {
-        logger.info('[CDP] No page target found, connecting to browser and creating target');
-        const versionResponse = await fetch(`http://127.0.0.1:${port}/json/version`);
-        if (!versionResponse.ok) throw new Error(`HTTP ${versionResponse.status}`);
-        const versionData = await versionResponse.json() as any;
+        logger.info(
+          '[CDP] No page target found, connecting to browser and creating target',
+        );
+        const versionResponse = await fetch(
+          `http://127.0.0.1:${port}/json/version`,
+        );
+        if (!versionResponse.ok)
+          throw new Error(`HTTP ${versionResponse.status}`);
+        const versionData = (await versionResponse.json()) as any;
         const browserWsUrl = versionData.webSocketDebuggerUrl;
         if (!browserWsUrl) throw new Error('No webSocketDebuggerUrl found');
         return await this.connectToBrowserAndCreatePage(browserWsUrl);
@@ -139,7 +154,7 @@ export class CDPService extends EventEmitter {
     } catch (error) {
       if (retries > 0) {
         logger.info(`[CDP] Connection failed, retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, delay));
         return this.connect(port, retries - 1, delay);
       }
       logger.error('[CDP] Connection failed after retries:', error);
@@ -168,11 +183,11 @@ export class CDPService extends EventEmitter {
         resolve(true);
       });
 
-      this.ws.on('message', (data) => {
+      this.ws.on('message', (data: { toString: () => string }) => {
         this.handleMessage(data.toString());
       });
 
-      this.ws.on('error', (err) => {
+      this.ws.on('error', (err: any) => {
         logger.error('[CDP] WebSocket error:', err);
         if (!this.isConnected) resolve(false);
       });
@@ -185,7 +200,9 @@ export class CDPService extends EventEmitter {
     });
   }
 
-  private async connectToBrowserAndCreatePage(browserWsUrl: string): Promise<boolean> {
+  private async connectToBrowserAndCreatePage(
+    browserWsUrl: string,
+  ): Promise<boolean> {
     return new Promise((resolve) => {
       const browserWs = new WebSocket(browserWsUrl);
 
@@ -228,7 +245,7 @@ export class CDPService extends EventEmitter {
         }
       });
 
-      browserWs.on('error', (err) => {
+      browserWs.on('error', (err: any) => {
         logger.error('[CDP] Browser WebSocket error:', err);
         resolve(false);
       });
@@ -347,4 +364,5 @@ export class CDPService extends EventEmitter {
   }
 }
 
-export const createCDPService = (profileName: string) => new CDPService(profileName);
+export const createCDPService = (profileName: string) =>
+  new CDPService(profileName);

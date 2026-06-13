@@ -117,12 +117,18 @@ function migrateProviders(db: Database.Database): void {
       CREATE TABLE IF NOT EXISTS providers (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        platform TEXT DEFAULT 'web'
+        platform TEXT DEFAULT 'web',
+        is_enabled INTEGER DEFAULT 1,
+        website_url TEXT,
+        auth_method TEXT,
+        is_pausable INTEGER DEFAULT 0,
+        
       )
     `);
 
-    // Migration for existing databases: add platform column if missing
     const providerCols = (db.pragma('table_info(providers)') as any[]).map((c) => c.name);
+
+    // Migration for existing databases: add platform column if missing
     if (!providerCols.includes('platform')) {
       try {
         db.exec("ALTER TABLE providers ADD COLUMN platform TEXT DEFAULT 'web'");
@@ -131,6 +137,48 @@ function migrateProviders(db: Database.Database): void {
         logger.warn('Failed to add platform column to providers', e);
       }
     }
+    if (!providerCols.includes('is_enabled')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN is_enabled INTEGER DEFAULT 1');
+        logger.info('Added is_enabled column to providers table');
+      } catch (e) {
+        logger.warn('Failed to add is_enabled to providers', e);
+      }
+    }
+    // Rename website → website_url
+    if (providerCols.includes('website') && !providerCols.includes('website_url')) {
+      try {
+        db.exec('ALTER TABLE providers RENAME COLUMN website TO website_url');
+        logger.info('Renamed website to website_url in providers table');
+      } catch (e) {
+        logger.warn('Failed to rename website to website_url in providers', e);
+      }
+    }
+    if (!providerCols.includes('website_url') && !providerCols.includes('website')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN website_url TEXT');
+        logger.info('Added website_url column to providers table');
+      } catch (e) {
+        logger.warn('Failed to add website_url to providers', e);
+      }
+    }
+    if (!providerCols.includes('auth_method')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN auth_method TEXT');
+        logger.info('Added auth_method column to providers table');
+      } catch (e) {
+        logger.warn('Failed to add auth_method to providers', e);
+      }
+    }
+    if (!providerCols.includes('is_pausable')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN is_pausable INTEGER DEFAULT 0');
+        logger.info('Added is_pausable column to providers table');
+      } catch (e) {
+        logger.warn('Failed to add is_pausable to providers', e);
+      }
+    }
+    
   } catch (err) {
     logger.error('Error initializing providers table', err);
   }
@@ -149,11 +197,83 @@ function migrateModels(db: Database.Database): void {
         model_id TEXT NOT NULL,
         model_name TEXT NOT NULL,
         is_thinking INTEGER DEFAULT 0,
-        context_length INTEGER,
+        max_context_length INTEGER,
+        is_image_upload INTEGER DEFAULT 0,
+        is_video_upload INTEGER DEFAULT 0,
         updated_at INTEGER NOT NULL,
+        success_rate REAL DEFAULT NULL,
+        description TEXT,
         UNIQUE(provider_id, model_id)
       )
     `);
+
+    const modelCols = (db.pragma('table_info(models)') as any[]).map((c) => c.name);
+
+    // Rename context_length → max_context_length
+    if (modelCols.includes('context_length') && !modelCols.includes('max_context_length')) {
+      try {
+        db.exec('ALTER TABLE models RENAME COLUMN context_length TO max_context_length');
+        logger.info('Renamed context_length to max_context_length in models table');
+      } catch (e) {
+        logger.warn('Failed to rename context_length to max_context_length in models', e);
+      }
+    }
+    if (!modelCols.includes('max_context_length') && !modelCols.includes('context_length')) {
+      try {
+        db.exec('ALTER TABLE models ADD COLUMN max_context_length INTEGER');
+        logger.info('Added max_context_length column to models table');
+      } catch (e) {
+        logger.warn('Failed to add max_context_length to models', e);
+      }
+    }
+
+    // Rename is_upload → is_image_upload
+    if (modelCols.includes('is_upload') && !modelCols.includes('is_image_upload')) {
+      try {
+        db.exec('ALTER TABLE models RENAME COLUMN is_upload TO is_image_upload');
+        logger.info('Renamed is_upload to is_image_upload in models table');
+      } catch (e) {
+        logger.warn('Failed to rename is_upload to is_image_upload in models', e);
+      }
+    }
+    if (!modelCols.includes('is_image_upload') && !modelCols.includes('is_upload')) {
+      try {
+        db.exec('ALTER TABLE models ADD COLUMN is_image_upload INTEGER DEFAULT 0');
+        logger.info('Added is_image_upload column to models table');
+      } catch (e) {
+        logger.warn('Failed to add is_image_upload to models', e);
+      }
+    }
+
+    // Add is_video_upload
+    if (!modelCols.includes('is_video_upload')) {
+      try {
+        db.exec('ALTER TABLE models ADD COLUMN is_video_upload INTEGER DEFAULT 0');
+        logger.info('Added is_video_upload column to models table');
+      } catch (e) {
+        logger.warn('Failed to add is_video_upload to models', e);
+      }
+    }
+
+    // Add success_rate
+    if (!modelCols.includes('success_rate')) {
+      try {
+        db.exec("ALTER TABLE models ADD COLUMN success_rate REAL DEFAULT NULL");
+        logger.info('Added success_rate column to models table');
+      } catch (e) {
+        logger.warn('Failed to add success_rate column to models', e);
+      }
+    }
+
+    // Add description
+    if (!modelCols.includes('description')) {
+      try {
+        db.exec("ALTER TABLE models ADD COLUMN description TEXT");
+        logger.info('Added description column to models table');
+      } catch (e) {
+        logger.warn('Failed to add description column to models', e);
+      }
+    }
   } catch (err) {
     logger.error('Error initializing models table', err);
   }
@@ -171,10 +291,22 @@ function migrateMetrics(db: Database.Database): void {
         provider_id TEXT NOT NULL,
         model_id TEXT NOT NULL,
         account_id TEXT NOT NULL,
+        status TEXT DEFAULT 'success',
         total_tokens INTEGER DEFAULT 0,
         timestamp INTEGER NOT NULL
       )
     `);
+
+    // Migration for existing databases: add status column if missing
+    const metricsCols = (db.pragma('table_info(metrics)') as any[]).map((c) => c.name);
+    if (!metricsCols.includes('status')) {
+      try {
+        db.exec("ALTER TABLE metrics ADD COLUMN status TEXT DEFAULT 'success'");
+        logger.info('Added status column to metrics table');
+      } catch (e) {
+        logger.warn('Failed to add status column to metrics', e);
+      }
+    }
 
     // Optimization indexes
     db.exec(
@@ -185,6 +317,9 @@ function migrateMetrics(db: Database.Database): void {
     );
     db.exec(
       'CREATE INDEX IF NOT EXISTS idx_metrics_provider_model_time ON metrics(provider_id, model_id, timestamp)',
+    );
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_metrics_status ON metrics(status)',
     );
   } catch (err) {
     logger.error('Error initializing metrics table', err);

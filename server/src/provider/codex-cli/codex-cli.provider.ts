@@ -18,9 +18,7 @@ const logger = createLogger('CodexCLIProvider');
 let compress: any;
 try {
   compress = require('@mongodb-js/zstd').compress;
-} catch (e) {
-  logger.warn('ZSTD disabled');
-}
+} catch (e) {}
 
 export class CodexCLIProvider implements Provider {
   name = 'codex-cli';
@@ -55,7 +53,9 @@ export class CodexCLIProvider implements Provider {
   async login() {
     logger.info('Starting Codex CLI login with real CLI and terminal...');
     const tempHome = path.join(
-      os.homedir(), '.elara', `codex-login-fresh-${Date.now()}`,
+      os.homedir(),
+      '.elara',
+      `codex-login-fresh-${Date.now()}`,
     );
     if (fs.existsSync(tempHome))
       fs.rmSync(tempHome, { recursive: true, force: true });
@@ -66,8 +66,13 @@ export class CodexCLIProvider implements Provider {
     const logFile = path.join(tempHome, 'codex-cli.log');
 
     const terminals = [
-      'gnome-terminal', 'konsole', 'xfce4-terminal', 'kitty',
-      'alacritty', 'xterm', 'x-terminal-emulator',
+      'gnome-terminal',
+      'konsole',
+      'xfce4-terminal',
+      'kitty',
+      'alacritty',
+      'xterm',
+      'x-terminal-emulator',
     ];
     let terminal = '';
     for (const t of terminals) {
@@ -79,7 +84,13 @@ export class CodexCLIProvider implements Provider {
     }
 
     const proxyUrl = `http://127.0.0.1:${port}`;
-    const caCertPath = path.join(os.homedir(), '.elara', 'certs', 'certs', 'ca.pem');
+    const caCertPath = path.join(
+      os.homedir(),
+      '.elara',
+      'certs',
+      'certs',
+      'ca.pem',
+    );
     const env = {
       ...process.env,
       HOME: tempHome,
@@ -97,16 +108,21 @@ export class CodexCLIProvider implements Provider {
     let terminalSpawn: any;
     if (terminal === 'gnome-terminal') {
       terminalSpawn = spawn(
-        terminal, ['--', 'bash', '-c', `${commandStr}; read`],
+        terminal,
+        ['--', 'bash', '-c', `${commandStr}; read`],
         { detached: true, env, stdio: 'ignore' },
       );
     } else if (terminal) {
       terminalSpawn = spawn(terminal, ['-e', `bash -c "${commandStr}; read"`], {
-        detached: true, env, stdio: 'ignore',
+        detached: true,
+        env,
+        stdio: 'ignore',
       });
     } else {
       terminalSpawn = spawn('bash', ['-c', commandStr], {
-        env, detached: true, stdio: 'ignore',
+        env,
+        detached: true,
+        stdio: 'ignore',
       });
     }
 
@@ -133,7 +149,9 @@ export class CodexCLIProvider implements Provider {
                     try {
                       const tokenData = JSON.parse(captured.cookies);
                       if (tokenData.accessToken) {
-                        const profile = await this.getProfile(tokenData.accessToken);
+                        const profile = await this.getProfile(
+                          tokenData.accessToken,
+                        );
                         if (profile && profile.email)
                           return { isValid: true, email: profile.email };
                       }
@@ -178,8 +196,14 @@ export class CodexCLIProvider implements Provider {
 
   async handleMessage(options: SendMessageOptions): Promise<void> {
     const {
-      credential, messages, model, stream,
-      onContent, onDone, onError, accountId,
+      credential,
+      messages,
+      model,
+      stream,
+      onContent,
+      onDone,
+      onError,
+      accountId,
     } = options;
 
     let tokens: any;
@@ -275,7 +299,10 @@ export class CodexCLIProvider implements Provider {
             const trimmed = line.trim();
             if (!trimmed || !trimmed.startsWith('data: ')) continue;
             const jsonStr = trimmed.slice(6).trim();
-            if (jsonStr === '[DONE]') { onDone(); return; }
+            if (jsonStr === '[DONE]') {
+              onDone();
+              return;
+            }
             try {
               const json = JSON.parse(jsonStr);
               const content =

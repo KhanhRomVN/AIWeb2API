@@ -268,7 +268,7 @@ export class HuggingChatProvider implements Provider {
           id: model.id,
           name: model.displayName || model.name || model.id,
           is_thinking: false,
-          context_length: contextLength,
+          max_context_length: contextLength,
         };
       });
     } catch (error) {

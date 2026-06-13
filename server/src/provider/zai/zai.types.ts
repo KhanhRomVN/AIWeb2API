@@ -33,7 +33,7 @@ export interface ZAIModel {
   id: string;
   name: string;
   is_thinking: boolean;
-  context_length: number | null;
+  max_context_length: number | null;
 }
 
 export interface ZAICreateChatPayload {

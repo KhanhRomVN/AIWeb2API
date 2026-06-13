@@ -264,7 +264,7 @@ export class GroqProvider implements Provider {
           id: model.id,
           name: model.metadata?.display_name || model.id,
           description: model.metadata?.model_card,
-          context_length: model.context_window,
+          max_context_length: model.context_window,
           is_thinking: model.features?.reasoning === true,
         }));
     } catch (e: any) {
@@ -279,7 +279,7 @@ export class GroqProvider implements Provider {
       models.unshift({
         id: 'debug-error',
         name: `⚠️ ${debugError}`,
-        context_length: 0,
+        max_context_length: 0,
         is_thinking: false,
       });
     }
