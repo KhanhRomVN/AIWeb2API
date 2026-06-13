@@ -1,5 +1,5 @@
 import { ProxyHandler } from '../../services/proxy.service';
-import { proxyEvents } from '../../services/proxy-events';
+import { proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('GroqProvider');

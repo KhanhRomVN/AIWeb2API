@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import { spawn, execSync } from 'child_process';
 import { createLogger } from '../../utils/logger';
 import { proxyService } from '../../services/proxy.service';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { getDb } from '../../database';
 import { proxyHandler } from './gemini-cli.proxy-handler';
 

@@ -2,9 +2,8 @@ import { createLogger } from '../utils/logger';
 import { providerRegistry } from '../provider/registry';
 import { providers as bundledProviders } from '../provider/provider-config';
 import { findAllProviders as findAllProviderRows } from '../repositories/provider.repository';
-import { findAllProviderModels } from '../repositories/provider-model.repository';
+import { findAllModels, upsertModel } from '../repositories/model.repository';
 import { findFirstAccountByProvider } from '../repositories/account.repository';
-import { getCachedModels, getModelsForProvider, isDynamicProvider } from './models-sync.service';
 
 const logger = createLogger('ProviderService');
 
@@ -16,7 +15,8 @@ export interface Provider {
   is_search?: boolean;
   is_upload?: boolean;
   auth_method?: string[];
-  total_accounts?: number;
+  platform?: string;
+  description?: string;
   models?: {
     id: string;
     name: string;
@@ -33,59 +33,88 @@ export interface Provider {
 
 const fetchProviderConfig = async (): Promise<any[]> => bundledProviders;
 
+const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
+  const dynamicProvider = providerRegistry.getProvider(providerId);
+  if (!dynamicProvider?.getModels) return [];
+
+  const account = findFirstAccountByProvider(providerId);
+  if (!account) {
+    logger.warn(`No account found for provider ${providerId}, cannot fetch models`);
+    return [];
+  }
+
+  try {
+    const models = await dynamicProvider.getModels(account.credential, account.id);
+    // Cache models to database for future use
+    const now = Date.now();
+    for (const model of models) {
+      upsertModel(
+        providerId,
+        model.id,
+        model.name,
+        model.is_thinking || false,
+        model.context_length !== undefined ? model.context_length : null,
+        now,
+      );
+    }
+    return models;
+  } catch (error) {
+    logger.error(`Failed to fetch models from provider ${providerId}:`, error);
+    return [];
+  }
+};
+
 export const getAllProviders = async (): Promise<Provider[]> => {
   const config = await fetchProviderConfig();
 
   const dbProviders = findAllProviderRows();
-  const countsMap = new Map(dbProviders.map((p) => [p.id.toLowerCase(), p.total_accounts]));
+  const providersMap = new Map(dbProviders.map((p) => [p.id.toLowerCase(), p]));
 
-  const dbModelStats = findAllProviderModels();
-  const modelStatsMap = new Map<string, any>();
-  dbModelStats.forEach((stat) => {
-    modelStatsMap.set(`${stat.provider_id}:${stat.model_id}`, stat);
+  const dbModels = findAllModels();
+  const modelsMap = new Map<string, any[]>();
+  dbModels.forEach((model) => {
+    const key = model.provider_id.toLowerCase();
+    if (!modelsMap.has(key)) modelsMap.set(key, []);
+    modelsMap.get(key)!.push({
+      id: model.model_id,
+      name: model.model_name,
+      is_thinking: model.is_thinking === 1,
+      context_length: model.context_length,
+    });
   });
 
   const providersWithModels: Provider[] = [];
 
   for (const p of config) {
-    let models = p.models;
+    let models: any[] | undefined = p.models;
 
-    if (!models || !Array.isArray(models) || models.length === 0) {
-      const cachedModels = getCachedModels(p.provider_id);
-      if (cachedModels.length > 0) {
-        models = cachedModels;
-      } else if (isDynamicProvider(p.provider_id)) {
-        try {
-          const dynamicModels = await getModelsForProvider(p.provider_id);
-          if (dynamicModels.length > 0) models = dynamicModels;
-        } catch (e) {
-          logger.warn(`Failed to get dynamic models for ${p.provider_id}:`, e);
+    // If provider has dynamic models (no static models in config), fetch from provider API
+    if ((!models || models.length === 0) && p.is_enabled) {
+      try {
+        const dynamicModels = await fetchModelsFromProvider(p.provider_id);
+        if (dynamicModels.length > 0) {
+          models = dynamicModels;
+        } else {
+          // Fallback to cached models from database
+          const cached = modelsMap.get(p.provider_id.toLowerCase()) || [];
+          if (cached.length > 0) models = cached;
         }
+      } catch (e) {
+        logger.warn(`Failed to fetch dynamic models for ${p.provider_id}:`, e);
+        const cached = modelsMap.get(p.provider_id.toLowerCase()) || [];
+        if (cached.length > 0) models = cached;
       }
     }
 
-    let modelsWithStats: any[] | undefined = undefined;
-    if (models && Array.isArray(models)) {
-      modelsWithStats = models.map((m: any) => {
-        const stats = modelStatsMap.get(`${p.provider_id}:${m.id || m.model_id}`) || {};
-        const total = stats.total_requests || 0;
-        const success = stats.successful_requests || 0;
-        const successRate = total > 0 ? Math.round((success / total) * 100) : 0;
-        return {
-          ...m,
-          is_search: m.is_search !== undefined ? m.is_search : (p.is_search ?? false),
-          is_upload: m.is_upload !== undefined ? m.is_upload : (p.is_upload ?? false),
-          success_rate: successRate,
-          max_req_conversation: stats.max_req_conversation || 0,
-          max_token_conversation: stats.max_token_conversation || 0,
-        };
-      });
-    }
+    const dbProvider = providersMap.get(p.provider_id.toLowerCase());
 
     providersWithModels.push({
       ...p,
-      total_accounts: countsMap.get(p.provider_id.toLowerCase()) || 0,
-      models: modelsWithStats,
+      models: models?.map((m: any) => ({
+        ...m,
+        is_search: m.is_search !== undefined ? m.is_search : (p.is_search ?? false),
+        is_upload: m.is_upload !== undefined ? m.is_upload : (p.is_upload ?? false),
+      })),
     });
   }
 
@@ -101,36 +130,37 @@ export const getProviderModels = async (
   const remoteConfig = await fetchProviderConfig();
   const provider = remoteConfig.find((c: any) => c.provider_id === providerId);
 
-  if (isDynamicProvider(providerId)) {
-    try {
-      const models = await getModelsForProvider(providerId);
-      if (models.length > 0) return models;
-    } catch (e) {
-      logger.warn(`Failed to get models from sync service for ${providerId}:`, e);
+  // Try to fetch fresh models from provider API
+  try {
+    const freshModels = await fetchModelsFromProvider(providerId);
+    if (freshModels.length > 0) {
+      return freshModels;
     }
+  } catch (e) {
+    logger.warn(`Failed to fetch fresh models from ${providerId}:`, e);
   }
 
-  if (provider?.models && Array.isArray(provider.models)) {
+  // Fallback to static config if available
+  if (provider?.models && Array.isArray(provider.models) && provider.models.length > 0) {
     return provider.models.map((m: any) => ({
       id: m.id,
       name: m.name,
       is_thinking: m.is_thinking || false,
       context_length: m.context_length !== undefined ? m.context_length : null,
-      is_search: m.is_search !== undefined ? m.is_search : (provider.is_search ?? false),
-      is_upload: m.is_upload !== undefined ? m.is_upload : (provider.is_upload ?? false),
     }));
   }
 
+  // Last resort: try direct provider.getModels()
   const dynamicProvider = providerRegistry.getProvider(providerId);
   if (dynamicProvider?.getModels) {
     const account = findFirstAccountByProvider(providerId);
-    try {
-      const credential = account?.credential ?? '';
-      const accountId = account?.id;
-      const dynamicModels = await dynamicProvider.getModels(credential, accountId);
-      if (dynamicModels?.length > 0) return dynamicModels;
-    } catch (e) {
-      logger.error(`Failed to fetch dynamic models for ${providerId}:`, e);
+    if (account) {
+      try {
+        const directModels = await dynamicProvider.getModels(account.credential, account.id);
+        if (directModels?.length > 0) return directModels;
+      } catch (e) {
+        logger.error(`Failed to fetch models directly from ${providerId}:`, e);
+      }
     }
   }
 
@@ -160,43 +190,49 @@ export const getAllModelsFromEnabledProviders = async (): Promise<ModelWithProvi
   const allModels: ModelWithProvider[] = [];
 
   for (const provider of enabledProviders) {
-    if (provider.models && Array.isArray(provider.models)) {
-      for (const model of provider.models) {
-        allModels.push({
-          id: model.id,
-          name: model.name,
-          provider_id: provider.provider_id,
-          provider_name: provider.provider_name,
-          is_thinking: model.is_thinking || false,
-          context_length: model.context_length !== undefined ? model.context_length : null,
-          is_search: model.is_search !== undefined ? model.is_search : (provider.is_search ?? false),
-          is_upload: model.is_upload !== undefined ? model.is_upload : (provider.is_upload ?? false),
-        });
+    // Try to fetch fresh models from provider API
+    let models: any[] = [];
+    try {
+      const freshModels = await fetchModelsFromProvider(provider.provider_id);
+      if (freshModels.length > 0) {
+        models = freshModels;
       }
-    } else {
+    } catch (e) {
+      logger.warn(`Failed to fetch fresh models for ${provider.provider_id}:`, e);
+    }
+
+    // Fallback to static config
+    if (models.length === 0 && provider.models && Array.isArray(provider.models)) {
+      models = provider.models;
+    }
+
+    // Last resort: try direct provider.getModels()
+    if (models.length === 0) {
       const dynamicProvider = providerRegistry.getProvider(provider.provider_id);
       if (dynamicProvider?.getModels) {
         const account = findFirstAccountByProvider(provider.provider_id);
         if (account) {
           try {
-            const dynamicModels = await dynamicProvider.getModels(account.credential, account.id);
-            for (const model of dynamicModels) {
-              allModels.push({
-                id: model.id,
-                name: model.name,
-                provider_id: provider.provider_id,
-                provider_name: provider.provider_name,
-                is_thinking: model.is_thinking || false,
-                context_length: model.context_length !== undefined ? model.context_length : null,
-                is_search: model.is_search !== undefined ? model.is_search : (provider.is_search ?? false),
-                is_upload: model.is_upload !== undefined ? model.is_upload : (provider.is_upload ?? false),
-              });
-            }
+            const directModels = await dynamicProvider.getModels(account.credential, account.id);
+            if (directModels?.length > 0) models = directModels;
           } catch (e) {
-            logger.error(`Failed to fetch dynamic models for ${provider.provider_id}:`, e);
+            logger.error(`Failed to fetch models directly from ${provider.provider_id}:`, e);
           }
         }
       }
+    }
+
+    for (const model of models) {
+      allModels.push({
+        id: model.id,
+        name: model.name,
+        provider_id: provider.provider_id,
+        provider_name: provider.provider_name,
+        is_thinking: model.is_thinking || false,
+        context_length: model.context_length !== undefined ? model.context_length : null,
+        is_search: model.is_search !== undefined ? model.is_search : (provider.is_search ?? false),
+        is_upload: model.is_upload !== undefined ? model.is_upload : (provider.is_upload ?? false),
+      });
     }
   }
 

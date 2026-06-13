@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { providerRegistry } from '../provider/registry';
-import { kiroAccountService } from '../services/kiro-account.service';
+
 import {
   findAccountById,
   findAccountByEmailAndProvider,
@@ -12,12 +12,7 @@ import {
   updateAccountCredential,
   deleteAccount as deleteAccountRow,
 } from '../repositories/account.repository';
-import {
-  ensureProviderExists,
-  incrementProviderCount,
-  decrementProviderCount,
-  recalcProviderCount,
-} from '../repositories/provider.repository';
+import { ensureProviderExists } from '../repositories/provider.repository';
 
 const logger = createLogger('AccountController');
 
@@ -81,7 +76,6 @@ export const importAccounts = async (
         const providerIds = [...new Set(toInsert.map((a) => a.provider_id))];
         for (const pid of providerIds) {
           ensureProviderExists(pid.toLowerCase(), pid);
-          recalcProviderCount(pid);
         }
 
         res.status(200).json({
@@ -206,7 +200,6 @@ export const addAccount = async (
         account.provider_id.toLowerCase(),
         account.provider_id,
       );
-      incrementProviderCount(account.provider_id);
 
       res.status(201).json({
         success: true,
@@ -261,34 +254,8 @@ export const getAccounts = async (
       order: order as 'ASC' | 'DESC',
     });
 
-    const localKiroSession = await kiroAccountService.getFromLocal();
     const accountsWithStatus = rows.map((row) => {
-      let is_active_cli = false;
-      if (row.provider_id === 'kiro-cli' && localKiroSession) {
-        try {
-          const local = JSON.parse(localKiroSession);
-          const stored = JSON.parse(row.credential);
-          if (
-            local.email &&
-            row.email &&
-            local.email.toLowerCase() === row.email.toLowerCase()
-          ) {
-            is_active_cli = true;
-          } else {
-            const localAccess = local.access_token || local.accessToken;
-            const localRefresh = local.refresh_token || local.refreshToken;
-            const storedAccess = stored.access_token || stored.accessToken;
-            const storedRefresh = stored.refresh_token || stored.refreshToken;
-            if (
-              (localAccess && localAccess === storedAccess) ||
-              (localRefresh && localRefresh === storedRefresh)
-            ) {
-              is_active_cli = true;
-            }
-          }
-        } catch (e) {}
-      }
-      return { ...row, is_active_cli };
+      return { ...row };
     });
 
     res.status(200).json({
@@ -350,7 +317,6 @@ export const deleteAccount = async (
         account.provider_id.toLowerCase(),
         account.provider_id,
       );
-      decrementProviderCount(account.provider_id);
 
       res.status(200).json({
         success: true,

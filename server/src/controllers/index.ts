@@ -1,3 +1,6 @@
-export * from './chat/index';
-export * from './messages/index';
-export { sendMessageController as default } from './chat/index';
+export * from './account.controller';
+export * from './models.controller';
+export * from './provider.controller';
+export * from './stats.controller';
+export * from './upload.controller';
+export { sendMessageController as default } from './send-message.controller';

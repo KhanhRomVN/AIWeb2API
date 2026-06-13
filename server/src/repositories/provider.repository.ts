@@ -2,39 +2,32 @@ import { getDb } from '../database';
 
 export interface ProviderRow {
   id: string;
-  name: string;
-  total_accounts: number;
+  title: string;
 }
 
 export const findAllProviders = (): ProviderRow[] => {
   const db = getDb();
-  return db.prepare('SELECT id, total_accounts FROM providers').all() as ProviderRow[];
+  return db.prepare('SELECT id, title FROM providers').all() as ProviderRow[];
 };
 
-export const ensureProviderExists = (id: string, name: string): void => {
+export const findProviderById = (id: string): ProviderRow | null => {
   const db = getDb();
-  db.prepare(
-    'INSERT OR IGNORE INTO providers (id, name, total_accounts) VALUES (?, ?, 0)',
-  ).run(id.toLowerCase(), name);
+  return db.prepare('SELECT id, title FROM providers WHERE id = ?').get(id) as ProviderRow | null;
 };
 
-export const incrementProviderCount = (providerId: string): void => {
+export const ensureProviderExists = (id: string, title: string): void => {
   const db = getDb();
   db.prepare(
-    'UPDATE providers SET total_accounts = total_accounts + 1 WHERE LOWER(id) = LOWER(?)',
-  ).run(providerId);
+    'INSERT OR IGNORE INTO providers (id, title) VALUES (?, ?)',
+  ).run(id.toLowerCase(), title);
 };
 
-export const decrementProviderCount = (providerId: string): void => {
+export const updateProviderTitle = (id: string, title: string): void => {
   const db = getDb();
-  db.prepare(
-    'UPDATE providers SET total_accounts = MAX(0, total_accounts - 1) WHERE LOWER(id) = LOWER(?)',
-  ).run(providerId);
+  db.prepare('UPDATE providers SET title = ? WHERE id = ?').run(title, id.toLowerCase());
 };
 
-export const recalcProviderCount = (providerId: string): void => {
+export const deleteProvider = (id: string): void => {
   const db = getDb();
-  db.prepare(
-    'UPDATE providers SET total_accounts = (SELECT COUNT(*) FROM accounts WHERE LOWER(provider_id) = LOWER(?)) WHERE LOWER(id) = LOWER(?)',
-  ).run(providerId, providerId);
+  db.prepare('DELETE FROM providers WHERE id = ?').run(id.toLowerCase());
 };

@@ -5,15 +5,14 @@ export const insertMetric = (
   modelId: string,
   accountId: string,
   totalTokens: number,
-  conversationId?: string,
   timestamp?: number,
 ): void => {
   const db = getDb();
   const now = timestamp ?? Date.now();
   db.prepare(
-    `INSERT INTO metrics (provider_id, model_id, account_id, conversation_id, total_tokens, timestamp)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(providerId, modelId, accountId, conversationId ?? null, totalTokens, now);
+    `INSERT INTO metrics (provider_id, model_id, account_id, total_tokens, timestamp)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(providerId, modelId, accountId, totalTokens, now);
 };
 
 export const queryUsageHistory = (
@@ -47,9 +46,7 @@ export const queryAccountStatsByPeriod = (
         a.id, a.email, a.provider_id,
         stats.total_requests,
         stats.successful_requests,
-        stats.total_tokens,
-        max_stats.max_req_conversation,
-        max_stats.max_token_conversation
+        stats.total_tokens
        FROM accounts a
        LEFT JOIN (
          SELECT account_id,
@@ -60,22 +57,9 @@ export const queryAccountStatsByPeriod = (
          WHERE timestamp >= ? AND timestamp <= ?
          GROUP BY account_id
        ) stats ON a.id = stats.account_id
-       LEFT JOIN (
-         SELECT account_id,
-           MAX(conv_reqs) as max_req_conversation,
-           MAX(conv_tokens) as max_token_conversation
-         FROM (
-           SELECT account_id, conversation_id,
-             COUNT(id) as conv_reqs, SUM(total_tokens) as conv_tokens
-           FROM metrics
-           WHERE timestamp >= ? AND timestamp <= ?
-           GROUP BY account_id, conversation_id
-         )
-         GROUP BY account_id
-       ) max_stats ON a.id = max_stats.account_id
        ORDER BY total_requests DESC`,
     )
-    .all(startTime, endTime, startTime, endTime);
+    .all(startTime, endTime);
 };
 
 export const queryModelStatsByPeriod = (
@@ -87,9 +71,8 @@ export const queryModelStatsByPeriod = (
     .prepare(
       `SELECT
         m.model_id, m.provider_id,
-        stats.total_requests, stats.total_tokens,
-        max_stats.max_token_conversation
-       FROM provider_models m
+        stats.total_requests, stats.total_tokens
+       FROM models m
        LEFT JOIN (
          SELECT model_id,
            COUNT(id) as total_requests,
@@ -98,17 +81,7 @@ export const queryModelStatsByPeriod = (
          WHERE timestamp >= ? AND timestamp <= ?
          GROUP BY model_id
        ) stats ON m.model_id = stats.model_id
-       LEFT JOIN (
-         SELECT model_id, MAX(conv_tokens) as max_token_conversation
-         FROM (
-           SELECT model_id, conversation_id, SUM(total_tokens) as conv_tokens
-           FROM metrics
-           WHERE timestamp >= ? AND timestamp <= ?
-           GROUP BY model_id, conversation_id
-         )
-         GROUP BY model_id
-       ) max_stats ON m.model_id = max_stats.model_id
        ORDER BY total_requests DESC`,
     )
-    .all(startTime, endTime, startTime, endTime);
+    .all(startTime, endTime);
 };

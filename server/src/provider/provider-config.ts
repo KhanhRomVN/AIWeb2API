@@ -390,16 +390,4 @@ export const providers = [
     connection_mode: 'https_spoofing',
     concurrency_mode: 'concurrent',
   },
-  {
-    provider_id: 'kiro-cli',
-    provider_name: 'Kiro CLI',
-    is_enabled: true,
-    website: 'https://kiro.dev/',
-    is_search: false,
-    is_upload: false,
-    auth_method: ['basic'],
-    is_pausable: false,
-    connection_mode: 'https_spoofing',
-    concurrency_mode: 'concurrent',
-  },
-];
+  ];

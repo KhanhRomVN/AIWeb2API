@@ -61,6 +61,7 @@
     "sqlite3": "^5.1.7",
     "tough-cookie": "^6.0.0",
     "winston": "^3.17.0",
+    "ws": "^8.18.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

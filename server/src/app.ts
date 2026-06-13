@@ -4,8 +4,6 @@ import { errorHandler } from './middleware/error-handler.middleware';
 import { requestLogger } from './middleware/request-logger.middleware';
 import { createLogger } from './utils/logger';
 import { providerRegistry } from './provider/registry';
-import { versionService } from './services/version.service';
-import { versionMiddleware } from './middleware/version.middleware';
 
 import v1Router from './routes/v1/index';
 import { login } from './controllers/account.controller';
@@ -18,14 +16,9 @@ export const createApp = async () => {
   logger.info('Loading providers...');
   await providerRegistry.loadProviders();
 
-  versionService.startChecking().catch((err: any) => {
-    logger.error('Failed to start version checking service', err);
-  });
-
   logger.info('Providers loaded');
 
   app.use(cors());
-  app.use(versionMiddleware);
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(requestLogger);

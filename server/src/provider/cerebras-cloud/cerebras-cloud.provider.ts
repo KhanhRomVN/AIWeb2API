@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import fetch from 'node-fetch';
 import { Provider, SendMessageOptions } from '../../types';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { createLogger } from '../../utils/logger';
 import { countTokens } from '../../utils/tokenizer';
 import { BASE_URL, API_BASE_URL, CerebrasCompletionPayload, CerebrasUserInfo } from './cerebras-cloud.types';

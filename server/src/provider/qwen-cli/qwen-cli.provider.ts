@@ -5,9 +5,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { spawn, execSync } from 'child_process';
 import { createLogger } from '../../utils/logger';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { proxyService } from '../../services/proxy.service';
-import { proxyEvents } from '../../services/proxy-events';
+import { proxyEvents } from '../../services/proxy.service';
 import { getDb } from '../../database';
 import { proxyHandler } from './qwen-cli.proxy-handler';
 

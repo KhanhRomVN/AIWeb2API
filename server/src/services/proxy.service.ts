@@ -1,7 +1,10 @@
+import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger';
-import { configService } from './config.service';
 import { getCertificateManager } from '../utils/cert-manager';
 import * as zlib from 'zlib';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 const logger = createLogger('ProxyService');
 
@@ -18,10 +21,48 @@ export interface ProxyHandler {
   onResponseBody?: (ctx: any, body: string) => void;
 }
 
+const DEFAULT_CONFIG: ProxyConfig = {
+  enabled: false,
+  port: 22122,
+  interceptSSL: true,
+};
+
+const CONFIG_FILE = path.join(os.homedir(), '.elara', 'proxy-config.json');
+
+function loadProxyConfig(): ProxyConfig {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = fs.readFileSync(CONFIG_FILE, 'utf-8');
+      return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+    }
+  } catch (error) {
+    logger.error('Failed to load proxy config:', error);
+  }
+  return { ...DEFAULT_CONFIG };
+}
+
+function saveProxyConfig(config: ProxyConfig): void {
+  try {
+    const dir = path.dirname(CONFIG_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  } catch (error) {
+    logger.error('Failed to save proxy config:', error);
+    throw error;
+  }
+}
+
 export class ProxyService {
   private isRunning = false;
   private proxy: any = null;
   private handlers: ProxyHandler[] = [];
+  private config: ProxyConfig;
+
+  constructor() {
+    this.config = loadProxyConfig();
+  }
 
   registerHandler(handler: ProxyHandler) {
     this.handlers.push(handler);
@@ -182,17 +223,13 @@ export class ProxyService {
   }
 
   getConfig(): ProxyConfig {
-    return configService.get('proxy_config', {
-      enabled: false,
-      port: 22122,
-      interceptSSL: true,
-    });
+    return { ...this.config };
   }
 
   updateConfig(updates: Partial<ProxyConfig>): void {
-    const current = this.getConfig();
-    const updated = { ...current, ...updates };
-    configService.set('proxy_config', updated);
+    const updated = { ...this.config, ...updates };
+    this.config = updated;
+    saveProxyConfig(this.config);
 
     if (this.isRunning) {
       this.stop();
@@ -207,9 +244,10 @@ export class ProxyService {
   getServerInfo() {
     return {
       isRunning: this.isRunning,
-      port: this.getConfig().port,
+      port: this.config.port,
     };
   }
 }
 
+export const proxyEvents = new EventEmitter();
 export const proxyService = new ProxyService();

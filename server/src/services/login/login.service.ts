@@ -2,9 +2,10 @@ import { spawn, execSync, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createLogger } from '../utils/logger';
-import { proxyService } from './proxy.service';
-import { proxyEvents } from './proxy-events';
+import { createLogger } from '../../utils/logger';
+import { proxyService, proxyEvents } from '../proxy.service';
+
+import { cdpLoginService, CDPLoginOptions } from './cdp-login.service';
 
 const logger = createLogger('LoginService');
 
@@ -17,6 +18,7 @@ interface LoginOptions {
   infoEvent?: string;
   extraEvents?: string[]; // Additional provider-specific events
   skipProxy?: boolean;
+  method?: 'mitm' | 'cdp'; // 'mitm' (default) or 'cdp'
   validate?: (data: {
     cookies: string;
     headers?: any;
@@ -73,6 +75,39 @@ export class LoginService {
   async login(
     options: LoginOptions,
   ): Promise<{ cookies: string; email?: string; headers?: any }> {
+    // Use CDP method if specified
+    if (options.method === 'cdp') {
+      logger.info(`[Login] Using CDP method for ${options.providerId}`);
+      const cdpOptions: CDPLoginOptions = {
+        providerId: options.providerId,
+        loginUrl: options.loginUrl,
+        partition: options.partition,
+        timeout: 300000,
+        validate: options.validate ? async (captured) => {
+          const result = await options.validate!({
+            cookies: captured.cookies || '',
+            email: captured.email || '',
+          });
+          return {
+            isValid: result.isValid,
+            cookies: result.cookies,
+            email: result.email || undefined,
+          };
+        } : undefined,
+        extraEvents: options.extraEvents,
+      };
+      
+      const result = await cdpLoginService.login(cdpOptions);
+      if (!result.success) {
+        throw new Error(result.error || 'CDP login failed');
+      }
+      return {
+        cookies: result.cookies || '',
+        email: result.email,
+      };
+    }
+
+    // Default MITM method
     const chromePath = this.findChrome();
     if (!chromePath) {
       throw new Error('Chrome or Chromium not found. Please install it.');

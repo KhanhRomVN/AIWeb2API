@@ -53,7 +53,7 @@ class ProviderRegistry {
       const { default: QwenProvider } = require('./qwen');
       const { default: QwenCliProvider } = require('./qwen-cli');
       const { default: GeminiCliProvider } = require('./gemini-cli');
-      const { default: KiroCliProvider } = require('./kiro-cli');
+      
       const { default: CodexCliProvider } = require('./codex-cli');
       const { default: ZAIProvider } = require('./zai');
       const { default: CerebrasCloudProvider } = require('./cerebras-cloud');
@@ -62,7 +62,7 @@ class ProviderRegistry {
       const providers = [
         ClaudeProvider, HuggingChatProvider, MistralProvider, DeepSeekProvider,
         GroqProvider, QwenProvider, QwenCliProvider, GeminiCliProvider,
-        KiroCliProvider, CodexCliProvider, ZAIProvider, CerebrasCloudProvider,
+        CodexCliProvider, ZAIProvider, CerebrasCloudProvider,
         GeminiProvider,
       ];
       for (const p of providers) {

@@ -1,7 +1,7 @@
 import { Provider, SendMessageOptions } from '../../types';
 import { Router } from 'express';
 import fetch from 'node-fetch';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { createLogger } from '../../utils/logger';
 import { proxyHandler } from './groq.proxy-handler';
 

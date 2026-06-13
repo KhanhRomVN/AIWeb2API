@@ -7,7 +7,7 @@ export { default as GroqProvider } from './groq';
 export { default as QwenProvider } from './qwen';
 export { default as QwenCLIProvider } from './qwen-cli';
 export { default as GeminiCLIProvider } from './gemini-cli';
-export { default as KiroCLIProvider } from './kiro-cli';
+
 export { default as CodexCLIProvider } from './codex-cli';
 export { default as ZAIProvider } from './zai';
 export { default as CerebrasCloudProvider } from './cerebras-cloud';

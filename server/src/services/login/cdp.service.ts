@@ -1,0 +1,350 @@
+import WebSocket from 'ws';
+import { EventEmitter } from 'events';
+import { spawn, ChildProcess } from 'child_process';
+import { createLogger } from '../../utils/logger';
+import { findAvailablePort } from '../../utils/net';
+
+const logger = createLogger('CDPService');
+
+interface CdpRequest {
+  id: number;
+  method: string;
+  params?: any;
+  sessionId?: string;
+}
+
+interface NetworkRequest {
+  id: string;
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  postData?: string;
+}
+
+interface NetworkResponse {
+  id: string;
+  statusCode: number;
+  headers: Record<string, string>;
+  mimeType: string;
+}
+
+export class CDPService extends EventEmitter {
+  private ws: WebSocket | null = null;
+  private browserProcess: ChildProcess | null = null;
+  private requestId = 0;
+  private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
+  private isConnected = false;
+  private debugPort = 0;
+  private sessionId: string | null = null;
+  private profileName: string;
+
+  constructor(profileName: string = 'elara-cdp') {
+    super();
+    this.profileName = profileName;
+  }
+
+  async launchBrowser(url: string): Promise<boolean> {
+    const debugPort = await findAvailablePort(9222);
+    this.debugPort = debugPort;
+    logger.info(`[CDP] Launching browser with debug port ${debugPort}`);
+
+    // Find available browser
+    const browsers = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+    let executable = '';
+    for (const b of browsers) {
+      try {
+        const { execSync } = await import('child_process');
+        execSync(`which ${b}`, { stdio: 'ignore' });
+        executable = b;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!executable) {
+      logger.error('[CDP] No browser found');
+      return false;
+    }
+
+    const userDataDir = `/tmp/elara-cdp-${this.profileName}-${Date.now()}`;
+    const { execSync } = await import('child_process');
+    execSync(`mkdir -p ${userDataDir}`);
+
+    const { spawn } = await import('child_process');
+    this.browserProcess = spawn(
+      executable,
+      [
+        `--remote-debugging-port=${debugPort}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+        `--user-data-dir=${userDataDir}`,
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-site-isolation-trials',
+        '--ignore-certificate-errors',
+        url,
+      ],
+      {
+        detached: true,
+        stdio: 'ignore',
+      },
+    );
+
+    logger.info(`[CDP] Browser launched with PID: ${this.browserProcess.pid}`);
+
+    this.browserProcess.on('exit', (code) => {
+      logger.info(`[CDP] Browser exited with code ${code}`);
+      this.isConnected = false;
+      this.ws = null;
+      this.emit('browser-exit');
+    });
+
+    // Wait for browser to start and connect CDP
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    return await this.connect(debugPort);
+  }
+
+  async connect(port: number, retries = 5, delay = 1000): Promise<boolean> {
+    logger.info(`[CDP] Connecting to localhost:${port}...`);
+
+    try {
+      const targetsResponse = await fetch(`http://127.0.0.1:${port}/json`);
+      if (!targetsResponse.ok) throw new Error(`HTTP ${targetsResponse.status}`);
+
+      const targets = await targetsResponse.json() as any[];
+      logger.info(`[CDP] Found ${targets.length} debuggable targets`);
+
+      let pageTarget = targets.find(
+        (t: any) => t.type === 'page' && t.url && !t.url.startsWith('devtools://')
+      );
+
+      if (!pageTarget) {
+        pageTarget = targets.find((t: any) => t.type === 'page');
+      }
+
+      if (!pageTarget) {
+        logger.info('[CDP] No page target found, connecting to browser and creating target');
+        const versionResponse = await fetch(`http://127.0.0.1:${port}/json/version`);
+        if (!versionResponse.ok) throw new Error(`HTTP ${versionResponse.status}`);
+        const versionData = await versionResponse.json() as any;
+        const browserWsUrl = versionData.webSocketDebuggerUrl;
+        if (!browserWsUrl) throw new Error('No webSocketDebuggerUrl found');
+        return await this.connectToBrowserAndCreatePage(browserWsUrl);
+      }
+
+      const wsUrl = pageTarget.webSocketDebuggerUrl;
+      logger.info(`[CDP] Connecting to page: ${pageTarget.url}`);
+      return await this.connectToPage(wsUrl);
+    } catch (error) {
+      if (retries > 0) {
+        logger.info(`[CDP] Connection failed, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        return this.connect(port, retries - 1, delay);
+      }
+      logger.error('[CDP] Connection failed after retries:', error);
+      return false;
+    }
+  }
+
+  private async connectToPage(wsUrl: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.on('open', async () => {
+        logger.info('[CDP] Connected to page WebSocket');
+        this.isConnected = true;
+        try {
+          await this.send('Network.enable', {
+            maxTotalBufferSize: 10000000,
+            maxResourceBufferSize: 5000000,
+            maxPostDataSize: 5000000,
+          });
+          await this.send('Runtime.enable');
+          logger.info('[CDP] Network and Runtime domains enabled');
+        } catch (e: any) {
+          logger.error('[CDP] Failed to initialize domains:', e?.message || e);
+        }
+        resolve(true);
+      });
+
+      this.ws.on('message', (data) => {
+        this.handleMessage(data.toString());
+      });
+
+      this.ws.on('error', (err) => {
+        logger.error('[CDP] WebSocket error:', err);
+        if (!this.isConnected) resolve(false);
+      });
+
+      this.ws.on('close', () => {
+        logger.info('[CDP] Disconnected');
+        this.isConnected = false;
+        this.ws = null;
+      });
+    });
+  }
+
+  private async connectToBrowserAndCreatePage(browserWsUrl: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const browserWs = new WebSocket(browserWsUrl);
+
+      browserWs.on('open', () => {
+        logger.info('[CDP] Connected to browser WebSocket, creating target...');
+        const createTargetMsg = JSON.stringify({
+          id: 1,
+          method: 'Target.createTarget',
+          params: { url: 'about:blank' },
+        });
+        browserWs.send(createTargetMsg);
+      });
+
+      browserWs.on('message', (data: any) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.id === 1 && msg.result?.targetId) {
+            logger.info(`[CDP] Created target: ${msg.result.targetId}`);
+            const attachMsg = JSON.stringify({
+              id: 2,
+              method: 'Target.attachToTarget',
+              params: { targetId: msg.result.targetId, flatten: true },
+            });
+            browserWs.send(attachMsg);
+          } else if (msg.id === 2 && msg.result?.sessionId) {
+            this.sessionId = msg.result.sessionId;
+            this.ws = browserWs;
+            this.isConnected = true;
+            logger.info('[CDP] Attached to target, enabling Network domain');
+            const enableMsg = JSON.stringify({
+              id: 3,
+              method: 'Network.enable',
+              sessionId: this.sessionId,
+            });
+            browserWs.send(enableMsg);
+            resolve(true);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      });
+
+      browserWs.on('error', (err) => {
+        logger.error('[CDP] Browser WebSocket error:', err);
+        resolve(false);
+      });
+
+      browserWs.on('close', () => {
+        logger.info('[CDP] Browser WebSocket closed');
+        this.isConnected = false;
+        if (this.ws === browserWs) this.ws = null;
+        resolve(false);
+      });
+    });
+  }
+
+  private send(method: string, params: any = {}): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        return reject(new Error('WebSocket not connected'));
+      }
+
+      const id = ++this.requestId;
+      this.pendingRequests.set(id, { resolve, reject });
+
+      const request: CdpRequest = { id, method, params };
+      if (this.sessionId) {
+        request.sessionId = this.sessionId;
+      }
+      this.ws.send(JSON.stringify(request));
+    });
+  }
+
+  private handleMessage(message: string) {
+    try {
+      const data = JSON.parse(message);
+
+      if (data.id && this.pendingRequests.has(data.id)) {
+        const { resolve, reject } = this.pendingRequests.get(data.id)!;
+        this.pendingRequests.delete(data.id);
+        if (data.error) reject(data.error);
+        else resolve(data.result);
+        return;
+      }
+
+      if (data.method) {
+        this.emit(data.method, data.params);
+        this.handleNetworkEvent(data.method, data.params);
+      }
+    } catch (e) {
+      logger.error('[CDP] Error handling message:', e);
+    }
+  }
+
+  private handleNetworkEvent(method: string, params: any) {
+    switch (method) {
+      case 'Network.requestWillBeSent':
+        this.emit('request', {
+          id: params.requestId,
+          url: params.request.url,
+          method: params.request.method,
+          headers: params.request.headers,
+          postData: params.request.postData,
+        } as NetworkRequest);
+        break;
+      case 'Network.responseReceived':
+        this.emit('response', {
+          id: params.requestId,
+          statusCode: params.response.status,
+          headers: params.response.headers,
+          mimeType: params.response.mimeType,
+        } as NetworkResponse);
+        break;
+      case 'Network.loadingFinished':
+        this.getResponseBody(params.requestId);
+        break;
+    }
+  }
+
+  private async getResponseBody(requestId: string) {
+    try {
+      const result = await this.send('Network.getResponseBody', { requestId });
+      this.emit('response-body', {
+        id: requestId,
+        body: result.body,
+        isBinary: result.base64Encoded,
+      });
+    } catch (e: any) {
+      // Ignore - body may not be available
+      if (!e.message?.includes('No resource')) {
+        logger.debug(`[CDP] Failed to get body for ${requestId}:`, e.message);
+      }
+    }
+  }
+
+  async evaluate(expression: string): Promise<any> {
+    const result = await this.send('Runtime.evaluate', { expression });
+    return result.result?.value;
+  }
+
+  async navigate(url: string): Promise<void> {
+    await this.send('Page.navigate', { url });
+  }
+
+  async close(): Promise<void> {
+    if (this.browserProcess) {
+      this.browserProcess.kill();
+      this.browserProcess = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.isConnected = false;
+  }
+
+  isConnectedToBrowser(): boolean {
+    return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
+  }
+}
+
+export const createCDPService = (profileName: string) => new CDPService(profileName);

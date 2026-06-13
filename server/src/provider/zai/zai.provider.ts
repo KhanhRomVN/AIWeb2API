@@ -1,7 +1,7 @@
 import { Provider, SendMessageOptions } from '../../types';
 import { Router } from 'express';
 import { createLogger } from '../../utils/logger';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { getDb } from '../../database';
 import fetch from 'node-fetch';
 import * as crypto from 'crypto';

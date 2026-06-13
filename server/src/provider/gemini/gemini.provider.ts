@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import fetch from 'node-fetch';
 import { createLogger } from '../../utils/logger';
-import { loginService } from '../../services/login.service';
-import { proxyEvents } from '../../services/proxy-events';
+import { loginService } from '../../services/login/login.service';
+import { proxyEvents } from '../../services/proxy.service';
 import { countTokens, countMessagesTokens } from '../../utils/tokenizer';
 import { Provider, SendMessageOptions } from '../../types';
 

@@ -4,7 +4,7 @@ import fetch from 'node-fetch';
 import * as https from 'https';
 import * as crypto from 'crypto';
 import { createLogger } from '../../utils/logger';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { proxyHandler } from './mistral.proxy-handler';
 
 export { proxyHandler };

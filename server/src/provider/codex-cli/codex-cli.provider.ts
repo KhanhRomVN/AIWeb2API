@@ -2,7 +2,7 @@ import { Provider, SendMessageOptions } from '../../types';
 import fetch from 'node-fetch';
 import { createLogger } from '../../utils/logger';
 import { getDb } from '../../database';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { proxyService } from '../../services/proxy.service';
 import * as path from 'path';
 import * as os from 'os';

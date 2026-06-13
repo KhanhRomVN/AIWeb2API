@@ -5,7 +5,7 @@ import * as crypto from 'crypto';
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
 import { HttpClient } from '../../utils/http-client';
 import { createLogger } from '../../utils/logger';
-import { loginService } from '../../services/login.service';
+import { loginService } from '../../services/login/login.service';
 import { countMessagesTokens } from '../../utils/tokenizer';
 import { Provider, SendMessageOptions } from '../../types';
 

@@ -1,25 +1,22 @@
 import { Request, Response } from 'express';
-import { sendMessage } from '../../services/chat';
-import { createLogger } from '../../utils/logger';
-import { recordRequest } from '../../services/stats.service';
-import { getAllProviders } from '../../services/provider.service';
-import { providerRegistry } from '../../provider/registry';
-import { getAccountSelector } from '../../services/account-selector';
-import { findAccountById } from '../../repositories/account.repository';
-import {
-  findFirstSequenceByProvider,
-  findFirstSequenceGlobal,
-} from '../../repositories/model-sequence.repository';
+import { sendMessage } from '../services/chat';
+import { createLogger } from '../utils/logger';
+import { recordRequest } from '../services/metrics.service';
+import { getAllProviders } from '../services/provider.service';
+import { providerRegistry } from '../provider/registry';
+
+import { findAccountById } from '../repositories/account.repository';
+
 
 const logger = createLogger('SendMessageController');
 
 const unescapeHtml = (str: string): string => {
   return str
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/&/g, '&')
+    .replace(/"/g, '"')
+    .replace(/'/g, "'")
     .replace(/&apos;/g, "'");
 };
 
@@ -45,7 +42,7 @@ export const sendMessageController = async (
       ref_file_ids,
     } = req.body;
 
-    if (messages && messages.length > 1 && providerId !== 'kiro-cli') {
+    if (messages && messages.length > 1) {
       if (!conversationId || conversationId.trim() === '') {
         if (!parent_message_id) {
           const msg =
@@ -64,67 +61,49 @@ export const sendMessageController = async (
       }
     }
 
-    let accountId = accountIdFromParams || accountIdFromBody;
+    const accountId = accountIdFromParams || accountIdFromBody;
     const useSearch = is_search === true || search === true;
 
-    let account: any | undefined;
-
-    if (accountId) {
-      account = findAccountById(accountId);
-
-      if (account && providerId) {
-        if (account.provider_id.toLowerCase() !== providerId.toLowerCase()) {
-          res.status(400).json({
-            success: false,
-            message: `Account Conflict: The provided accountId belongs to provider '${account.provider_id}', but providerId is '${providerId}'.`,
-            error: { code: 'BAD_REQUEST' },
-          });
-          return;
-        }
-      }
-    } else if (providerId) {
-      account = getAccountSelector().selectAccount(providerId);
-    } else if (modelId) {
-      if (modelId === 'auto') {
-        const bestSequence = findFirstSequenceGlobal();
-        if (bestSequence) {
-          account = getAccountSelector().selectAccount(bestSequence.provider_id);
-        } else {
-          account = getAccountSelector().selectAccount();
-        }
-      } else {
-        const inferredProvider = providerRegistry.getProviderForModel(modelId);
-        if (inferredProvider) {
-          account = getAccountSelector().selectAccount(inferredProvider.name);
-        }
-      }
-    }
-
-    if (!account) {
-      logger.warn(
-        `[Chat] Unauthorized: No active account found. Params - accountId: ${accountId}, providerId: ${providerId}, modelId: ${modelId}`,
-      );
-      res.status(401).json({
+    if (!accountId) {
+      res.status(400).json({
         success: false,
-        message:
-          'No valid account found for this request. Please provide a valid accountId, providerId, or modelId.',
-        error: { code: 'UNAUTHORIZED' },
+        message: 'Missing accountId. Please provide a valid accountId in params or body.',
+        error: { code: 'BAD_REQUEST' },
+        meta: { timestamp: new Date().toISOString() },
       });
       return;
     }
 
-    // Resolve "auto" model
+    const account = findAccountById(accountId);
+
+    if (!account) {
+      res.status(404).json({
+        success: false,
+        message: `Account not found with id: ${accountId}`,
+        error: { code: 'NOT_FOUND' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    if (providerId && account.provider_id.toLowerCase() !== providerId.toLowerCase()) {
+      res.status(400).json({
+        success: false,
+        message: `Account Conflict: The provided accountId belongs to provider '${account.provider_id}', but providerId is '${providerId}'.`,
+        error: { code: 'BAD_REQUEST' },
+      });
+      return;
+    }
+
+    // Resolve "auto" model - use provider's default model
     let finalModel = modelId;
     if (modelId === 'auto') {
-      const bestModel = findFirstSequenceByProvider(account.provider_id);
-      if (bestModel) {
-        finalModel = bestModel.model_id;
+      const provider = providerRegistry.getProvider(account.provider_id);
+      if (provider?.defaultModel) {
+        finalModel = provider.defaultModel;
+        logger.info(`"auto" model resolved to ${finalModel} for provider ${account.provider_id}`);
       } else {
-        logger.warn(`"auto" model requested but no sequence found for ${account.provider_id}`);
-        const provider = providerRegistry.getProvider(account.provider_id);
-        if (provider?.defaultModel) {
-          finalModel = provider.defaultModel;
-        }
+        logger.warn(`"auto" model requested but no default model for ${account.provider_id}`);
       }
     }
 

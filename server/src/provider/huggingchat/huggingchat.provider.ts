@@ -5,8 +5,8 @@ import { HttpClient } from '../../utils/http-client';
 import * as crypto from 'crypto';
 import { createLogger } from '../../utils/logger';
 import { countTokens, countMessagesTokens } from '../../utils/tokenizer';
-import { loginService } from '../../services/login.service';
-import { proxyEvents } from '../../services/proxy-events';
+import { loginService } from '../../services/login/login.service';
+import { proxyEvents } from '../../services/proxy.service';
 import { proxyHandler } from './huggingchat.proxy-handler';
 
 export { proxyHandler };
