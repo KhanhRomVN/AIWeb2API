@@ -14,8 +14,6 @@ import { startWebSocketServer } from './websocket-server';
 const logger = createLogger('Startup');
 
 const main = async (options?: { dbPath?: string }) => {
-  logger.info('Starting elara-server...');
-
   try {
     initDatabase(options?.dbPath);
   } catch (error) {
@@ -27,11 +25,15 @@ const main = async (options?: { dbPath?: string }) => {
   const result = await startServer();
 
   if (result.success) {
-    logger.info(`Server started on port ${result.port}${result.https ? ' (HTTPS)' : ''}`);
+    logger.info(
+      `Server started on port ${result.port}${result.https ? ' (HTTPS)' : ''}`,
+    );
     // Start WebSocket server for Z.AI Browser extension
     startWebSocketServer();
     logger.info('WebSocket server started on port 8899');
-    const { accountRefreshService } = require('./services/account-refresh.service');
+    const {
+      accountRefreshService,
+    } = require('./services/account-refresh.service');
     accountRefreshService.start();
   } else {
     logger.error(`Failed to start server: ${result.error}`);

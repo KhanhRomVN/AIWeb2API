@@ -1,7 +1,7 @@
 {
-  "name": "@khanhromvn/elara-server",
+  "name": "AIWeb2API",
   "version": "1.2.5",
-  "description": "Elara Backend Server",
+  "description": "",
   "main": "dist/start.js",
   "bin": {
     "elara-server": "dist/start.js"

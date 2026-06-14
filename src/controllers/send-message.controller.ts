@@ -109,6 +109,22 @@ export const sendMessageController = async (
 
     const model = finalModel;
 
+    // Validate credential before proceeding
+    if (!account.credential || account.credential.trim() === '') {
+      if (stream !== false) {
+        res.writeHead(400, { 'Content-Type': 'text/event-stream' });
+        res.write(`data: ${JSON.stringify({ error: 'Account credential is missing or empty' })}\n\n`);
+        res.end();
+      } else {
+        res.status(400).json({
+          success: false,
+          message: 'Account credential is missing or empty',
+          error: { code: 'MISSING_CREDENTIAL' },
+        });
+      }
+      return;
+    }
+
     const providers = await getAllProviders();
     const providerConfig = providers.find(
       (p) => p.provider_id.toLowerCase() === account.provider_id.toLowerCase(),

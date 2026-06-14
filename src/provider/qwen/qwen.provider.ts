@@ -398,23 +398,48 @@ export class QwenProvider implements Provider {
       Cookie: cookieValue,
       source: 'web',
       version: '0.2.64',
+      'Referer': `${BASE_URL}/c/new-chat`,
+      'Origin': BASE_URL,
+      'X-Request-Id': crypto.randomUUID(),
+      'sec-ch-ua': '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Linux"',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Timezone': new Date().toDateString() + ' ' + new Date().toTimeString().split(' ')[0] + ' GMT+0700',
+      'bx-v': '2.5.36',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (bxUa) headers['bx-ua'] = bxUa;
     if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
 
-    const response = await fetch(`${BASE_URL}/api/v2/chats/`, {
+    logger.info(`[Qwen] Creating new chat via POST /api/v2/chats/new`);
+    
+    const response = await fetch(`${BASE_URL}/api/v2/chats/new`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ title: 'New Chat', chat_type: 't2t' }),
+      body: JSON.stringify({}), // Empty body works
     });
 
+    const actualStatusCode = response.headers.get('x-actual-status-code');
+    if (actualStatusCode && actualStatusCode !== '200') {
+      const errorText = await response.text();
+      throw new Error(`Create chat failed: ${actualStatusCode} - ${errorText}`);
+    }
+
     if (!response.ok) {
-      throw new Error(`Failed to create Qwen chat: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Create chat failed: ${response.status} - ${errorText}`);
     }
 
     const json = await response.json();
-    return json.id || json.chat_id;
+    const chatId = json.data?.id || json.id;
+    
+    if (!chatId) {
+      throw new Error(`No chat_id in response: ${JSON.stringify(json)}`);
+    }
+
+    logger.info(`[Qwen] Chat created successfully: ${chatId}`);
+    return chatId;
   }
 
   private async getLastMessageId(
@@ -464,7 +489,11 @@ export class QwenProvider implements Provider {
         this.parseCredential(credential);
 
       const isNewChat = !conversationId;
+      
+      // Qwen API REQUIRES chat_id for EVERY request, even the first one.
+      // So we MUST create a chat first before sending any message.
       if (isNewChat) {
+        logger.info(`[Qwen] No conversationId provided, creating new chat first...`);
         conversationId = await this.createChat(
           credential,
           token,
@@ -474,11 +503,7 @@ export class QwenProvider implements Provider {
           userAgent,
         );
         if (onSessionCreated) onSessionCreated(conversationId);
-        if (onMetadata)
-          onMetadata({
-            conversation_id: conversationId,
-            conversation_title: 'New Chat',
-          });
+        if (onMetadata) onMetadata({ conversation_id: conversationId });
       }
 
       const nowSec = Math.floor(Date.now() / 1000);
@@ -510,7 +535,7 @@ export class QwenProvider implements Provider {
         stream: true,
         version: '2.1',
         incremental_output: true,
-        chat_id: conversationId,
+        ...(conversationId && { chat_id: conversationId }),
         chat_mode: 'normal',
         model: modelToUse,
         parent_id: parentId as string | null,
@@ -546,7 +571,7 @@ export class QwenProvider implements Provider {
         accept: 'application/json',
         'User-Agent': userAgent,
         Origin: BASE_URL,
-        Referer: `${BASE_URL}/c/${conversationId}`,
+        Referer: conversationId ? `${BASE_URL}/c/${conversationId}` : BASE_URL,
         'x-accel-buffering': 'no',
         'x-request-id': requestId,
         Cookie: cookieValue,
@@ -560,10 +585,11 @@ export class QwenProvider implements Provider {
       if (bxUa) headers['bx-ua'] = bxUa;
       if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
 
-      const response = await fetch(
-        `${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`,
-        { method: 'POST', headers, body: JSON.stringify(payload) },
-      );
+      const url = conversationId
+        ? `${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`
+        : `${BASE_URL}/api/v2/chat/completions`;
+
+      const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
 
       const actualStatusCode = response.headers.get('x-actual-status-code');
       if (actualStatusCode && actualStatusCode !== '200') {
@@ -579,24 +605,79 @@ export class QwenProvider implements Provider {
       if (!response.body) throw new Error('No response body');
 
       let buffer = '';
+      let conversationIdCaptured = false;
+      let parentIdCaptured = false;
+      let capturedParentId: string | null = null;
+      
       for await (const chunk of response.body as any) {
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-          const jsonStr = trimmed.slice(6).trim();
+          if (!trimmed) continue;
+          
+          // Handle SSE data lines
+          let jsonStr = trimmed;
+          if (trimmed.startsWith('data: ')) {
+            jsonStr = trimmed.slice(6).trim();
+          } else if (trimmed.startsWith('data:')) {
+            jsonStr = trimmed.slice(5).trim();
+          } else {
+            continue;
+          }
+          
           if (jsonStr === '[DONE]') {
             onDone();
             return;
           }
+          
           try {
             const json = JSON.parse(jsonStr);
-            if (json.choices?.[0]?.delta?.content)
+            
+            // Handle response.created chunk which contains parent_id and response_id
+            let responseCreated = null;
+            if (json['response.created']) {
+              responseCreated = json['response.created'];
+            } else if (json.response && json.response.created) {
+              responseCreated = json.response.created;
+            }
+            
+            if (responseCreated) {
+              // Capture chat_id if this is a new conversation
+              if (isNewChat && !conversationIdCaptured && responseCreated.chat_id) {
+                conversationIdCaptured = true;
+                logger.info(`[Qwen] New conversation created with ID: ${responseCreated.chat_id}`);
+                if (onSessionCreated) onSessionCreated(responseCreated.chat_id);
+                if (onMetadata) onMetadata({ conversation_id: responseCreated.chat_id });
+              }
+              
+              // CRITICAL: For Qwen, parent_message_id must be the assistant's response_id,
+              // NOT the user's parent_id. The response_id is what Qwen expects as parent_id
+              // in subsequent requests to maintain conversation context.
+              if (!parentIdCaptured && responseCreated.response_id) {
+                parentIdCaptured = true;
+                capturedParentId = responseCreated.response_id;
+                logger.info(`[Qwen] Captured response_id (to use as parent_message_id): ${capturedParentId}`);
+                // Emit as parent_message_id so client knows what to send next time
+                if (onMetadata) onMetadata({ parent_message_id: capturedParentId });
+              }
+            }
+            
+            // Extract content
+            if (json.choices?.[0]?.delta?.content) {
               onContent(json.choices[0].delta.content);
-          } catch (e) {}
+            }
+          } catch (e) {
+            // Skip non-JSON lines
+          }
         }
+      }
+      
+      // If we captured a parent_id and this is a new chat with session created,
+      // we should update the conversation's parent_id for future messages
+      if (capturedParentId && onMetadata) {
+        onMetadata({ last_parent_id: capturedParentId });
       }
       onDone();
     } catch (err: any) {

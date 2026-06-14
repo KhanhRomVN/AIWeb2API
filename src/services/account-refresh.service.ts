@@ -35,6 +35,12 @@ export class AccountRefreshService {
           credential = { accessToken: account.credential };
         }
 
+        // Skip if credential is null or undefined
+        if (!credential) {
+          logger.warn(`Account ${account.id} has null credential, skipping refresh`);
+          continue;
+        }
+
         const refreshToken = credential.refreshToken || credential.refresh_token;
         const now = Date.now();
         const lastRefreshed = account.last_refreshed_at || 0;

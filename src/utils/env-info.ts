@@ -1,7 +1,7 @@
 import path from 'path';
 
 /**
- * Detects the current runtime environment of the elara-server.
+ * Detects the current runtime environment
  * Distinguishes between npm package mode and standalone (dev, binary, bundle).
  */
 export const getEnvInfo = () => {
