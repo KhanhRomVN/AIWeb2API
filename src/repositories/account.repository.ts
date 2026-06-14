@@ -214,3 +214,15 @@ export const updateAccountMemory = (id: string, isMemoryEnabled: boolean): void 
     id,
   );
 };
+
+export const findBrowserAccountsByProvider = (providerId: string): AccountRow[] => {
+  const db = getDb();
+  return db
+    .prepare('SELECT * FROM accounts WHERE provider_id = ? AND user_data_dir IS NOT NULL ORDER BY last_refreshed_at DESC')
+    .all(providerId.toLowerCase()) as AccountRow[];
+};
+
+export const updateAccountLastUsed = (id: string): void => {
+  const db = getDb();
+  db.prepare('UPDATE accounts SET last_refreshed_at = ? WHERE id = ?').run(Date.now(), id);
+};

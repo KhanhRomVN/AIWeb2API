@@ -9,6 +9,7 @@ if (dns.setDefaultResultOrder) {
 import { startServer } from './server';
 import { createLogger } from './utils/logger';
 import { initDatabase } from './database';
+import { startWebSocketServer } from './websocket-server';
 
 const logger = createLogger('Startup');
 
@@ -27,6 +28,9 @@ const main = async (options?: { dbPath?: string }) => {
 
   if (result.success) {
     logger.info(`Server started on port ${result.port}${result.https ? ' (HTTPS)' : ''}`);
+    // Start WebSocket server for Z.AI Browser extension
+    startWebSocketServer();
+    logger.info('WebSocket server started on port 8899');
     const { accountRefreshService } = require('./services/account-refresh.service');
     accountRefreshService.start();
   } else {

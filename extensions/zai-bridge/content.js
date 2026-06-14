@@ -412,12 +412,38 @@ function waitForPageReadyAndSignal(context) {
   }, 15000);
 }
 
-function connectWS() {
+// Generate a persistent session ID
+function getOrCreateSessionId() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['sessionId'], (result) => {
+      if (result.sessionId) {
+        resolve(result.sessionId);
+      } else {
+        const newSessionId = 'ext_' + Math.random().toString(36).substring(2, 15);
+        chrome.storage.local.set({ sessionId: newSessionId }, () => {
+          resolve(newSessionId);
+        });
+      }
+    });
+  });
+}
+
+function connectWS(sessionId) {
   if (ws)
     try {
       ws.close();
     } catch (e) {}
-  ws = new WebSocket("ws://127.0.0.1:8899?client=content");
+  
+  // Get sessionId from storage if not provided
+  if (!sessionId) {
+    getOrCreateSessionId().then(sid => {
+      connectWS(sid);
+    });
+    return;
+  }
+  
+  console.log(`[Content] Connecting to WebSocket Server with sessionId: ${sessionId}`);
+  ws = new WebSocket(`ws://127.0.0.1:8899?client=content&sessionId=${sessionId}`);
 
   ws.onopen = () => {
     console.log("[Content] Connected to WS");
@@ -470,6 +496,19 @@ function connectWS() {
         // Ignored reload/redirect to keep the current conversation page active
         console.log("[Content] ℹ️ reset_page received but ignored to keep current chat page.");
         waitForPageReadyAndSignal("reset_ignored");
+      } else if (data.action === "set_session_id") {
+        const newSessionId = data.sessionId;
+        console.log(`[Content] Received set_session_id: ${newSessionId}`);
+        chrome.storage.local.set({ sessionId: newSessionId }, () => {
+          // Reconnect with new session ID
+          console.log("[Content] Session ID updated, reconnecting...");
+          if (ws) {
+            try { ws.close(); } catch (e) {}
+          }
+          connectWS(newSessionId);
+        });
+      } else if (data.action === "session_info") {
+        console.log(`[Content] Session info: ${data.sessionId} - ${data.message}`);
       }
     } catch (e) {
       console.error("[Content] Error parsing WS message:", e);

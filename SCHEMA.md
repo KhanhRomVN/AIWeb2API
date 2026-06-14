@@ -17,11 +17,12 @@ Lưu trữ thông tin tài khoản của các provider AI.
 | `id`                | TEXT    | PRIMARY KEY | UUID xác định tài khoản duy nhất                |
 | `provider_id`       | TEXT    | NOT NULL    | Tên provider (claude, deepseek, gemini, ...)    |
 | `email`             | TEXT    | NOT NULL    | Email đăng nhập                                 |
-| `credential`        | TEXT    | NOT NULL    | Token/cookie/session JSON                       |
-| `last_refreshed_at` | INTEGER | -           | Thời gian refresh token gần nhất (timestamp ms) |
+| `credential`        | TEXT    | NULL        | Token/cookie/session JSON (có thể NULL cho browser-based accounts) |
+| `last_refreshed_at` | INTEGER | -           | Thời gian refresh token gần nhất (timestamp ms) hoặc last used cho browser accounts |
 | `usage`             | TEXT    | -           | Thông tin usage (JSON)                          |
 | `reset_period`      | TEXT    | -           | Chu kỳ reset (day/month)                        |
 | `is_memory_enabled` | INTEGER | DEFAULT 0   | Trạng thái bật/tắt memory cho account (1 = enabled, 0 = disabled) |
+| `user_data_dir`     | TEXT    | -           | Đường dẫn thư mục profile Chrome cho browser-based provider (VD: zai-browser) |
 
 ---
 
@@ -102,34 +103,7 @@ Lưu trữ thống kê sử dụng (request, token, conversation).
 
 ---
 
-## Bảng: `browser_sessions`
 
-Lưu trữ thông tin session cho các browser-based provider (Z.AI Browser, v.v.). Bảng này tách biệt khỏi bảng `accounts` vì không dùng các tính năng refresh token, reset period hay memory tracking.
-
-| Cột              | Kiểu    | Ràng buộc            | Mô tả                                                              |
-| ---------------- | ------- | -------------------- | ------------------------------------------------------------------ |
-| `id`             | TEXT    | PRIMARY KEY          | UUID xác định session duy nhất                                     |
-| `provider_id`    | TEXT    | NOT NULL             | Tên provider (`zai-browser`, ...)                                  |
-| `email`          | TEXT    | -                    | Email người dùng (optional)                                        |
-| `user_data_dir`  | TEXT    | -                    | Đường dẫn đến thư mục profile Chrome (VD: `~/.khanhromvn-elara-server/profiles/zai-browser_default`) |
-| `created_at`     | INTEGER | NOT NULL             | Thời gian tạo session (timestamp ms)                               |
-| `last_used_at`   | INTEGER | -                    | Thời gian sử dụng gần nhất (timestamp ms)                          |
-
-**Indexes:**
-
-- `idx_browser_sessions_provider` trên `provider_id`
-
-**So sánh với bảng `accounts`:**
-
-| Tính năng | `accounts` | `browser_sessions` |
-|-----------|------------|--------------------|
-| Refresh token | ✅ Có | ❌ Không (browser tự refresh) |
-| Reset period | ✅ Có | ❌ Không |
-| Usage tracking | ✅ Có (qua metrics) | ✅ Có (qua metrics) |
-| Memory tracking | ✅ Có (`is_memory_enabled`) | ❌ Không |
-| Profile-based | ❌ Không | ✅ Có (`user_data_dir`) |
-
----
 
 ## Ghi chú kỹ thuật
 

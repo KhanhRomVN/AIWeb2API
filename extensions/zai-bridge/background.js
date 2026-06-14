@@ -31,7 +31,24 @@ function scheduleReconnect(delayMs) {
     }, delayMs);
 }
 
-function connectWS() {
+// Generate a persistent session ID based on extension installation
+function getOrCreateSessionId() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['sessionId'], (result) => {
+            if (result.sessionId) {
+                resolve(result.sessionId);
+            } else {
+                // Generate a random session ID
+                const newSessionId = 'ext_' + Math.random().toString(36).substring(2, 15);
+                chrome.storage.local.set({ sessionId: newSessionId }, () => {
+                    resolve(newSessionId);
+                });
+            }
+        });
+    });
+}
+
+function connectWS(sessionId) {
     if (pendingReconnectTimer) {
         clearTimeout(pendingReconnectTimer);
         pendingReconnectTimer = null;
@@ -41,8 +58,16 @@ function connectWS() {
         ws = null;
     }
 
-    console.log("[Background] Connecting to WebSocket Server...");
-    ws = new WebSocket("ws://127.0.0.1:8899?client=background");
+    // Get sessionId from storage if not provided
+    if (!sessionId) {
+        getOrCreateSessionId().then(sid => {
+            connectWS(sid);
+        });
+        return;
+    }
+
+    console.log(`[Background] Connecting to WebSocket Server with sessionId: ${sessionId}`);
+    ws = new WebSocket(`ws://127.0.0.1:8899?client=background&sessionId=${sessionId}`);
 
     ws.onopen = () => {
         console.log("[Background] WebSocket Connected successfully.");
@@ -66,6 +91,14 @@ function connectWS() {
                     return;
                 }
                 applyProxy(config);
+            } else if (data.action === 'set_session_id') {
+                const newSessionId = data.sessionId;
+                console.log(`[Background] Received set_session_id: ${newSessionId}`);
+                chrome.storage.local.set({ sessionId: newSessionId }, () => {
+                    // Reconnect with new session ID
+                    console.log("[Background] Session ID updated, reconnecting...");
+                    connectWS(newSessionId);
+                });
             }
         } catch (e) {
             console.error("[Background] Error parsing message:", e);

@@ -2,226 +2,230 @@ import { Provider, SendMessageOptions } from '../../types';
 import { Router } from 'express';
 import { createLogger } from '../../utils/logger';
 import { proxyHandler } from './zai-browser.proxy-handler';
-import { ZaiBrowserWebSocketManager } from './zai-browser.websocket';
 import { parseZaiBrowserCredential } from './zai-browser.helpers';
-import { ZaiBrowserExtensionManager } from './zai-browser.extension-manager';
 import {
-    getAllBrowserSessions,
-    touchSession,
-    loginViaCDP,
-} from '../../services/browser-session.service';
+  findBrowserAccountsByProvider,
+  updateAccountLastUsed,
+} from '../../repositories/account.repository';
+import { loginViaCDP } from '../../services/browser-session.service';
+import { getWebSocketServer } from '../../websocket-server';
 
 const logger = createLogger('ZaiBrowserProvider');
 
 export { proxyHandler };
 
 export class ZaiBrowserProvider implements Provider {
-    name = 'Z.AI Browser';
-    defaultModel = 'GLM-5.1';
-    proxyHandler = proxyHandler;
+  name = 'Z.AI Browser';
+  defaultModel = 'GLM-5.1';
+  proxyHandler = proxyHandler;
 
-    private wsManager: ZaiBrowserWebSocketManager | null = null;
-    private isExtensionValidated: boolean = false;
+  private async ensureWebSocket(sessionId: string) {
+    const wsServer = getWebSocketServer();
 
-    constructor() {
-        // Validate extension on startup
-        this.validateExtension();
+    // Wait for extension to connect (max 30 seconds)
+    if (!wsServer.isConnected(sessionId)) {
+      logger.info('[ZaiBrowser] Waiting for extension to connect...');
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          wsServer.off('connected', onConnected);
+          reject(new Error('Extension connection timeout after 30 seconds'));
+        }, 30000);
+
+        const onConnected = (connectedSessionId: string) => {
+          if (connectedSessionId === sessionId) {
+            clearTimeout(timeout);
+            wsServer.off('connected', onConnected);
+            resolve();
+          }
+        };
+
+        wsServer.on('connected', onConnected);
+
+        // Check again in case it connected already
+        if (wsServer.isConnected(sessionId)) {
+          clearTimeout(timeout);
+          wsServer.off('connected', onConnected);
+          resolve();
+        }
+      });
     }
 
-    private validateExtension(): void {
-        this.isExtensionValidated = ZaiBrowserExtensionManager.validateExtension();
-        if (!this.isExtensionValidated) {
-            logger.warn('[ZaiBrowser] Extension not found. Please copy extension to server/extensions/zai-bridge/');
-        }
+    return wsServer;
+  }
+
+  async getModels(_credential: string, _accountId?: string): Promise<any[]> {
+    return [
+      {
+        id: 'GLM-5.1',
+        name: 'GLM-5.1',
+        is_thinking: true,
+        max_context_length: null,
+        is_search: true,
+        is_image_upload: false,
+        is_video_upload: false,
+        description: 'Z.AI GLM-5.1 - Advanced language model with thinking mode and web search',
+      },
+      {
+        id: 'GLM-5',
+        name: 'GLM-5',
+        is_thinking: true,
+        max_context_length: null,
+        is_search: true,
+        is_image_upload: false,
+        is_video_upload: false,
+        description: 'Z.AI GLM-5 - Fast and efficient model with thinking capabilities',
+      },
+    ];
+  }
+
+  async getProfile(
+    credential: string,
+  ): Promise<{ email: string | null; name?: string; id?: string }> {
+    const parsed = parseZaiBrowserCredential(credential);
+    if (!parsed) {
+      return { email: null };
     }
 
-    private async ensureWebSocket(): Promise<ZaiBrowserWebSocketManager> {
-        if (!this.isExtensionValidated) {
-            throw new Error('Z.AI Browser extension not installed. Please copy extension to server/extensions/zai-bridge/');
-        }
-
-        if (!this.wsManager) {
-            this.wsManager = new ZaiBrowserWebSocketManager();
-            this.wsManager.on('disconnected', () => {
-                logger.warn('[ZaiBrowser] WebSocket disconnected');
-            });
-            this.wsManager.on('error', (err) => {
-                logger.error('[ZaiBrowser] WebSocket error:', err);
-            });
-        }
-
-        if (!this.wsManager.isConnected()) {
-            await this.wsManager.connect();
-        }
-
-        return this.wsManager;
+    const emailMatch = parsed.cookie.match(/email=([^;]+)/);
+    if (emailMatch) {
+      return { email: decodeURIComponent(emailMatch[1]) };
     }
 
-    async getModels(credential: string, accountId?: string): Promise<any[]> {
-        // Hardcoded models - không dùng bảng models
-        return [
-            {
-                id: 'GLM-5.1',
-                name: 'GLM-5.1',
-                is_thinking: true,
-                max_context_length: null,
-                is_search: true,
-                is_image_upload: false,
-                is_video_upload: false,
-                description: 'Z.AI GLM-5.1 - Advanced language model with thinking mode and web search',
-            },
-            {
-                id: 'GLM-5',
-                name: 'GLM-5',
-                is_thinking: true,
-                max_context_length: null,
-                is_search: true,
-                is_image_upload: false,
-                is_video_upload: false,
-                description: 'Z.AI GLM-5 - Fast and efficient model with thinking capabilities',
-            },
-        ];
+    return { email: null };
+  }
+
+  async handleMessage(options: SendMessageOptions): Promise<void> {
+    const {
+      messages,
+      onContent,
+      onThinking,
+      onDone,
+      onError,
+      conversationId,
+      search,
+    } = options;
+
+    const isSearch = search === true;
+
+    // Get active browser session from accounts table
+    const sessions = findBrowserAccountsByProvider('zai-browser');
+    const session = sessions.length > 0 ? sessions[0] : null;
+    if (!session) {
+      onError(
+        new Error(
+          'No active browser session. Please create a session via POST /v1/browser-sessions/login or create a session manually.',
+        ),
+      );
+      return;
     }
 
-    async getProfile(credential: string): Promise<{ email: string | null; name?: string; id?: string }> {
-        const parsed = parseZaiBrowserCredential(credential);
-        if (!parsed) {
-            return { email: null };
-        }
+    // Update last_used_at
+    updateAccountLastUsed(session.id);
 
-        // Try to extract email from cookie
-        const emailMatch = parsed.cookie.match(/email=([^;]+)/);
-        if (emailMatch) {
-            return { email: decodeURIComponent(emailMatch[1]) };
-        }
+    const wsSessionId = session.id;
 
-        return { email: null };
+    const lastMessage = messages[messages.length - 1];
+    let prompt = lastMessage.content;
+
+    // Determine if this is a new chat
+    const isNewChat = !conversationId || conversationId.trim() === '';
+
+    // Strip system prompt wrapper for continuation messages
+    if (!isNewChat) {
+      const userContentMatch = prompt.match(
+        /<zen-user-content>([\s\S]*?)<\/zen-user-content>/,
+      );
+      if (userContentMatch && userContentMatch[1]) {
+        prompt = userContentMatch[1].trim();
+        logger.debug(
+          `[ZaiBrowser] Stripped system prompt, sending only user content (${prompt.length} chars)`,
+        );
+      }
     }
 
-    async handleMessage(options: SendMessageOptions): Promise<void> {
-        const {
-            credential,
-            messages,
-            onContent,
-            onThinking,
-            onDone,
-            onError,
-            conversationId,
-            search,
-            thinking,
-        } = options;
+    try {
+      const wsServer = await this.ensureWebSocket(wsSessionId);
 
-        const isSearch = search === true;
-        const isThinking = thinking === true;
+      // Sync session ID with extension
+      wsServer.setAccountId(wsSessionId, session.id);
 
-        // Get active browser session
-        const sessions = getAllBrowserSessions('zai-browser');
-        let session = sessions.length > 0 ? sessions[0] : null;
-        if (!session) {
-            onError(new Error('No active browser session. Please create a session via POST /v1/browser-sessions/login or create a session manually.'));
-            return;
-        }
+      // Reset page if this is a new chat
+      if (isNewChat) {
+        await wsServer.resetPage(wsSessionId);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
 
-        // Touch session to update last_used_at
-        touchSession(session.id);
+      const requestId = await wsServer.sendPrompt(
+        wsSessionId,
+        prompt,
+        isNewChat,
+        isSearch,
+      );
 
-        // Parse credential from session (optional - we may not need actual cookies)
-        // The extension handles cookies directly via browser session
-        let parsed = null;
-        logger.info('[ZaiBrowser] No credential stored in session, continuing with browser instance');
-
-        const lastMessage = messages[messages.length - 1];
-        let prompt = lastMessage.content;
-
-        // Determine if this is a new chat
-        const isNewChat = !conversationId || conversationId.trim() === '';
-
-        // Strip system prompt wrapper for continuation messages
-        if (!isNewChat) {
-            const userContentMatch = prompt.match(/<zen-user-content>([\s\S]*?)<\/zen-user-content>/);
-            if (userContentMatch && userContentMatch[1]) {
-                prompt = userContentMatch[1].trim();
-                logger.debug(`[ZaiBrowser] Stripped system prompt, sending only user content (${prompt.length} chars)`);
-            }
-        }
-
-        try {
-            const ws = await this.ensureWebSocket();
-
-            // Reset page if this is a new chat
-            if (isNewChat) {
-                await ws.resetPage();
-                // Wait a bit for page to reset
-                await new Promise(resolve => setTimeout(resolve, 1500));
-            }
-
-            // Send prompt to extension
-            const requestId = await ws.sendPrompt(prompt, isNewChat, isSearch);
-
-            // Register handlers for this request
-            ws.registerRequestHandler(requestId, {
-                onContent: (chunk: string) => {
-                    onContent(chunk);
-                },
-                onThinking: (chunk: string) => {
-                    if (onThinking) onThinking(chunk);
-                },
-                onDone: () => {
-                    onDone();
-                },
-                onError: (err: Error) => {
-                    onError(err);
-                },
-                onUsage: (usage: any) => {
-                    logger.info(`[ZaiBrowser] Usage: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`);
-                },
-            });
-        } catch (err: any) {
-            logger.error('[ZaiBrowser] Error sending message:', err);
-            onError(err);
-        }
+      wsServer.registerRequestHandler(wsSessionId, requestId, {
+        onContent: (chunk: string) => {
+          onContent(chunk);
+        },
+        onThinking: (chunk: string) => {
+          if (onThinking) onThinking(chunk);
+        },
+        onDone: () => {
+          onDone();
+        },
+        onError: (err: Error) => {
+          onError(err);
+        },
+        onUsage: (usage: any) => {
+          logger.info(
+            `[ZaiBrowser] Usage: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`,
+          );
+        },
+      });
+    } catch (err: any) {
+      logger.error('[ZaiBrowser] Error sending message:', err);
+      onError(err);
     }
+  }
 
-    async login(): Promise<{ cookies: string; email?: string; pending?: boolean; tempSessionId?: string }> {
-        // Login via CDP browser session service
-        const loginUrl = 'https://chat.z.ai/';
-        logger.info(`[ZaiBrowser] Starting login via CDP at ${loginUrl}`);
-        
-        try {
-            // This will wait until browser is closed
-            const result = await loginViaCDP('zai-browser', loginUrl, 'zai-default');
-            
-            // Browser closed, return pending info for email input
-            return {
-                pending: true,
-                tempSessionId: result.tempSessionId,
-                cookies: '',
-                email: '',
-            };
-        } catch (error: any) {
-            logger.error('[ZaiBrowser] Login failed:', error);
-            throw new Error(`Z.AI Browser login failed: ${error.message}`);
-        }
-    }
+  async login(): Promise<{
+    cookies: string;
+    email?: string;
+    pending?: boolean;
+    tempSessionId?: string;
+  }> {
+    const loginUrl = 'https://chat.z.ai/';
+    logger.info(`[ZaiBrowser] Starting login via CDP at ${loginUrl}`);
 
-    isModelSupported(model: string): boolean {
-        const m = model.toLowerCase();
-        return m.includes('glm') || m.includes('z.ai') || m.includes('glm-5');
-    }
+    try {
+      const result = await loginViaCDP('zai-browser', loginUrl, 'zai-default');
 
-    registerRoutes(router: Router): void {
-        router.get('/auth/status', async (_req, res) => {
-            const sessions = getAllBrowserSessions('zai-browser');
-            res.json({ authenticated: sessions.length > 0 });
-        });
+      return {
+        pending: true,
+        tempSessionId: result.tempSessionId,
+        cookies: '',
+        email: '',
+      };
+    } catch (error: any) {
+      logger.error('[ZaiBrowser] Login failed:', error);
+      throw new Error(`Z.AI Browser login failed: ${error.message}`);
     }
+  }
 
-    async disconnect(): Promise<void> {
-        if (this.wsManager) {
-            await this.wsManager.disconnect();
-            this.wsManager = null;
-        }
-    }
+  isModelSupported(model: string): boolean {
+    const m = model.toLowerCase();
+    return m.includes('glm') || m.includes('z.ai') || m.includes('glm-5');
+  }
+
+  registerRoutes(router: Router): void {
+    router.get('/auth/status', async (_req, res) => {
+      const sessions = findBrowserAccountsByProvider('zai-browser');
+      res.json({ authenticated: sessions.length > 0 });
+    });
+  }
+
+  async disconnect(): Promise<void> {
+    logger.info('[ZaiBrowser] Disconnect called (no-op for shared WebSocket)');
+  }
 }
 
 export default new ZaiBrowserProvider();
