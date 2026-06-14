@@ -1,4 +1,0 @@
-[[permission]]
-identifier = "monitor"
-description = "Allows the custom system monitoring commands"
-commands.allow = ["get_system_stats", "get_process_list", "manage_process"]

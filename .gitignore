@@ -1,57 +1,41 @@
-# Common folders/files to ignore
-dist
-node_modules
-out
-src-tauri/target
-backend.log
-server.log
-njsscan.sarif
-.eslintcache
-*.log*
-*.tsbuildinfo
+# Dependencies
+node_modules/
+jspm_packages/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
 
-# Environment Variables
+# Build
+dist/
+build/
+.tsup/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Environment
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-.env.*
-!.env.example
+.env*.local
 
-# IDE / Editor
-.vscode
-.idea
-*.swp
-*.swo
+# Editor/OS
+.vscode/
+.idea/
 .DS_Store
-Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# Project specific ignores
-/backend/database.sqlite
-/backend/database.sqlite-shm
-/backend/database.sqlite-wal
-/backend/dist/
-/backend/dist-bin/
-/backend/node_modules/
-/backend/pids
-/backend/*.pid
-/backend/*.seed
-/backend/*.pid.lock
-/backend/lib-cov
-/backend/coverage
-/backend/.nyc_output
-
-# CLI specific
-/cli/dist/
-/cli/node_modules/
-
-# Temp/Draft files in various locations
-/temp/
-/simple_backend/node_modules/
-
-# Agent specific
-.agent/
-.claude/
-
-temp
+# Testing
+coverage/
+.nyc_output/

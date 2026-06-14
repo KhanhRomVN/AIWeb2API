@@ -1,5 +1,0 @@
-[[permission]]
-identifier = "allow-sidecar"
-description = "Allows spawning the backend sidecar"
-[[permission.scope.allow]]
-sidecar = "server"

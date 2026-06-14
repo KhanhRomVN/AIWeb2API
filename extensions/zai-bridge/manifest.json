@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Z.AI Bridge",
+  "version": "1.0.5",
+  "description": "Bridge between local server and Z.ai - Network Interception Mode",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "z-ai-bridge@example.com",
+      "strict_min_version": "113.0"
+    }
+  },
+  "permissions": [
+    "declarativeNetRequest",
+    "storage",
+    "proxy"
+  ],
+  "host_permissions": [
+    "https://chat.z.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chat.z.ai/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inject.js"],
+      "matches": ["https://chat.z.ai/*"]
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}

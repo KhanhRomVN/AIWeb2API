@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Z.AI Bridge Proxy Config</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+    
+    :root {
+      --bg: #090d16;
+      --panel: rgba(17, 24, 39, 0.7);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #06b6d4;
+      --primary-hover: #22d3ee;
+      --success: #10b981;
+      --danger: #ef4444;
+      --glow: rgba(6, 182, 212, 0.15);
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 380px;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+      transition: all 0.3s ease;
+    }
+    
+    .status-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+    
+    .form-group {
+      margin-bottom: 14px;
+    }
+    
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .form-row .form-group {
+      flex: 1;
+    }
+    
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    
+    input, select, textarea {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--glow);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .toggle-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    
+    .toggle-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .3s;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    
+    .quick-paste-box {
+      background: rgba(6, 182, 212, 0.03);
+      border: 1px dashed rgba(6, 182, 212, 0.25);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .quick-paste-box label {
+      color: var(--primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .quick-paste-box label span.tip {
+      font-size: 9px;
+      text-transform: none;
+      color: var(--text-muted);
+    }
+    
+    .quick-paste-box textarea {
+      height: 50px;
+      resize: none;
+      background: rgba(0, 0, 0, 0.2);
+      border-color: rgba(6, 182, 212, 0.15);
+      font-family: monospace;
+      font-size: 11px;
+    }
+    
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+    
+    button {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: #000;
+      border: none;
+    }
+    
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--text-muted);
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--success);
+      color: #000;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      opacity: 0;
+      z-index: 100;
+    }
+    
+    .toast.show {
+      bottom: 20px;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Z.AI Bridge
+    </div>
+    <div class="status-badge">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Offline</span>
+    </div>
+  </div>
+
+  <div class="toggle-container">
+    <span class="toggle-label">Enable Proxy Socket</span>
+    <label class="switch">
+      <input type="checkbox" id="proxyEnabled">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="quick-paste-box">
+    <label for="proxyQuickPaste">
+      Quick Paste Configuration
+      <span class="tip">ip:port:user:pass</span>
+    </label>
+    <textarea id="proxyQuickPaste" placeholder="Paste raw proxy string here..."></textarea>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group" style="flex: 0.35;">
+      <label for="proxyType">Type</label>
+      <select id="proxyType">
+        <option value="http">HTTP</option>
+        <option value="https">HTTPS</option>
+        <option value="socks5">SOCKS5</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex: 0.65;">
+      <label for="proxyHost">Host Address</label>
+      <input type="text" id="proxyHost" placeholder="127.0.0.1">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="proxyPort">Port</label>
+    <input type="number" id="proxyPort" placeholder="1080" min="1" max="65535">
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="proxyUser">Username (Optional)</label>
+      <input type="text" id="proxyUser" placeholder="User">
+    </div>
+    <div class="form-group">
+      <label for="proxyPass">Password (Optional)</label>
+      <input type="password" id="proxyPass" placeholder="Pass">
+    </div>
+  </div>
+
+  <div class="btn-group" style="margin-top: 10px;">
+    <button type="button" class="btn-secondary" id="btnReset">Reset</button>
+    <button type="button" class="btn-primary" id="btnSave">Apply Changes</button>
+  </div>
+
+  <div id="toast" class="toast">Saved Successfully!</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

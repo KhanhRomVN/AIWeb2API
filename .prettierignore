@@ -1,9 +1,0 @@
-node_modules
-dist
-out
-.git
-media/monaco/
-src/renderer/public/monaco/
-temp/
-https-requests-Gemini.json
-backend/package-lock.json
