@@ -20,47 +20,64 @@ export const queryUsageHistory = (
   groupBy: string,
   startTime: number,
   endTime: number,
+  accountId?: string,
 ): Array<{ date: string; requests: number; tokens: number }> => {
   const db = getDb();
-  return db
-    .prepare(
-      `SELECT
-        strftime(?, datetime(timestamp / 1000, 'unixepoch', 'localtime')) as date,
-        COUNT(*) as requests,
-        SUM(total_tokens) as tokens
-       FROM metrics
-       WHERE timestamp >= ? AND timestamp <= ?
-       GROUP BY date
-       ORDER BY date ASC`,
-    )
-    .all(groupBy, startTime, endTime) as any[];
+  let sql = `
+    SELECT
+      strftime(?, datetime(timestamp / 1000, 'unixepoch', 'localtime')) as date,
+      COUNT(*) as requests,
+      SUM(total_tokens) as tokens
+    FROM metrics
+    WHERE timestamp >= ? AND timestamp <= ?
+  `;
+  
+  const params: any[] = [groupBy, startTime, endTime];
+  
+  if (accountId) {
+    sql += ` AND account_id = ?`;
+    params.push(accountId);
+  }
+  
+  sql += ` GROUP BY date ORDER BY date ASC`;
+  
+  return db.prepare(sql).all(...params) as any[];
 };
 
 export const queryAccountStatsByPeriod = (
   startTime: number,
   endTime: number,
+  accountId?: string,
 ): any[] => {
   const db = getDb();
-  return db
-    .prepare(
-      `SELECT
-        a.id, a.email, a.provider_id,
-        stats.total_requests,
-        stats.successful_requests,
-        stats.total_tokens
-       FROM accounts a
-       LEFT JOIN (
-         SELECT account_id,
-           COUNT(id) as total_requests,
-           SUM(CASE WHEN total_tokens > 0 THEN 1 ELSE 0 END) as successful_requests,
-           SUM(total_tokens) as total_tokens
-         FROM metrics
-         WHERE timestamp >= ? AND timestamp <= ?
-         GROUP BY account_id
-       ) stats ON a.id = stats.account_id
-       ORDER BY total_requests DESC`,
-    )
-    .all(startTime, endTime);
+  let sql = `
+    SELECT
+      a.id, a.email, a.provider_id,
+      stats.total_requests,
+      stats.successful_requests,
+      stats.total_tokens
+    FROM accounts a
+    LEFT JOIN (
+      SELECT account_id,
+        COUNT(id) as total_requests,
+        SUM(CASE WHEN total_tokens > 0 THEN 1 ELSE 0 END) as successful_requests,
+        SUM(total_tokens) as total_tokens
+      FROM metrics
+      WHERE timestamp >= ? AND timestamp <= ?
+      GROUP BY account_id
+    ) stats ON a.id = stats.account_id
+  `;
+  
+  const params: any[] = [startTime, endTime];
+  
+  if (accountId) {
+    sql += ` WHERE a.id = ?`;
+    params.push(accountId);
+  }
+  
+  sql += ` ORDER BY total_requests DESC`;
+  
+  return db.prepare(sql).all(...params);
 };
 
 export const queryModelStatsByPeriod = (

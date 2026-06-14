@@ -181,6 +181,7 @@ function getTimeRange(period: string, offset: number): TimeRange {
 export function getUsageHistory(
   period: 'day' | 'week' | 'month' | 'year' = 'day',
   offset: number = 0,
+  accountId?: string,
 ) {
   let groupBy: string;
   let dateFormat: string;
@@ -257,7 +258,7 @@ export function getUsageHistory(
   }
 
   try {
-    const rows = queryUsageHistory(groupBy, startTime, endTime);
+    const rows = queryUsageHistory(groupBy, startTime, endTime, accountId);
     const dataMap = new Map<string, any>();
     rows.forEach((row) => {
       const key = period === 'day' ? row.date.split(' ')[1] : row.date;
@@ -276,9 +277,10 @@ export function getUsageHistory(
 export function getAccountStatsByPeriod(
   period: 'day' | 'week' | 'month' | 'year' = 'day',
   offset: number = 0,
+  accountId?: string,
 ) {
   const { startTime, endTime } = getTimeRange(period, offset);
-  return queryAccountStatsByPeriod(startTime, endTime);
+  return queryAccountStatsByPeriod(startTime, endTime, accountId);
 }
 
 export function getModelStatsByPeriod(

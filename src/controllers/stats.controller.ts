@@ -51,9 +51,10 @@ export const getStats = async (req: Request, res: Response) => {
       (req.query.period as 'day' | 'week' | 'month' | 'year') || 'day';
     const page = parseInt(req.query.page as string) || 0;
     const offset = parseInt(req.query.offset as string) || page;
+    const accountId = req.query.account_id as string | undefined;
 
-    const usage = getUsageHistory(period, offset);
-    const accounts = getAccountStatsByPeriod(period, offset);
+    const usage = getUsageHistory(period, offset, accountId);
+    const accounts = getAccountStatsByPeriod(period, offset, accountId);
     const models = getModelStatsByPeriod(period, offset);
 
     res.json({

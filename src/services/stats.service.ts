@@ -6,10 +6,22 @@
  * but is not stored (the column was dropped from the metrics table).
  */
 export {
-  getUsageHistory,
-  getAccountStatsByPeriod,
   getModelStatsByPeriod,
 } from './metrics.service';
+
+// Re-export with additional accountId parameter
+import { getAccountStatsByPeriod as _getAccountStatsByPeriod, getUsageHistory as _getUsageHistory } from './metrics.service';
+export const getAccountStatsByPeriod = (
+  period: 'day' | 'week' | 'month' | 'year',
+  offset: number,
+  accountId?: string,
+) => _getAccountStatsByPeriod(period, offset, accountId);
+
+export const getUsageHistory = (
+  period: 'day' | 'week' | 'month' | 'year',
+  offset: number,
+  accountId?: string,
+) => _getUsageHistory(period, offset, accountId);
 
 import { recordSuccess as _recordSuccess } from './metrics.service';
 
