@@ -40,6 +40,7 @@ Danh sách các provider đã được đăng ký trong hệ thống.
 | `auth_method`      | TEXT    | -                    | Phương thức xác thực (JSON array: `["basic","google"]`)  |
 | `is_pausable`      | INTEGER | DEFAULT 0            | Có thể tạm dừng conversation không                       |
 | `is_memory`        | INTEGER | DEFAULT 0            | Tham khảo bộ nhớ đã lưu (Memory) - history memory tự động theo logic |
+| `browser_extension_folder` | TEXT | - | Thư mục chứa extension cho browser-based provider (VD: 'zai-bridge'). NULL nếu không dùng browser |
 
 **Giá trị platform:**
 

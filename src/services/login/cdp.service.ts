@@ -46,7 +46,7 @@ export class CDPService extends EventEmitter {
     this.profileName = profileName;
   }
 
-  async launchBrowser(url: string, customUserDataDir?: string): Promise<boolean> {
+  async launchBrowser(url: string, customUserDataDir?: string, extensionPath?: string): Promise<boolean> {
     const debugPort = await findAvailablePort(9222);
     this.debugPort = debugPort;
     logger.info(`[CDP] Launching browser with debug port ${debugPort}`);
@@ -84,25 +84,33 @@ export class CDPService extends EventEmitter {
     const { execSync } = await import('child_process');
     execSync(`mkdir -p ${userDataDir}`);
 
+    // Build browser arguments
+    const args = [
+      `--remote-debugging-port=${debugPort}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--user-data-dir=${userDataDir}`,
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
+      '--ignore-certificate-errors',
+    ];
+
+    // Add extension arguments if extensionPath is provided
+    if (extensionPath) {
+      args.push(`--disable-extensions-except=${extensionPath}`);
+      args.push(`--load-extension=${extensionPath}`);
+      logger.info(`[CDP] Loading extension from: ${extensionPath}`);
+    }
+
+    // Add URL at the end
+    args.push(url);
+
     const { spawn } = await import('child_process');
-    this.browserProcess = spawn(
-      executable,
-      [
-        `--remote-debugging-port=${debugPort}`,
-        '--no-first-run',
-        '--no-default-browser-check',
-        `--user-data-dir=${userDataDir}`,
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--disable-site-isolation-trials',
-        '--ignore-certificate-errors',
-        url,
-      ],
-      {
-        detached: true,
-        stdio: 'ignore',
-      },
-    );
+    this.browserProcess = spawn(executable, args, {
+      detached: true,
+      stdio: 'ignore',
+    });
 
     logger.info(`[CDP] Browser launched with PID: ${this.browserProcess.pid}`);
 

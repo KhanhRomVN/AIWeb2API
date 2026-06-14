@@ -351,6 +351,7 @@ export const providers = [
     is_pausable: false,
     is_memory: false,
     platform: 'web',
+    browser_extension_folder: 'zai-bridge',
     models: [
       {
         id: 'GLM-5.1',

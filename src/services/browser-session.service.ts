@@ -11,7 +11,7 @@ import {
   updateAccountCredential,
   updateAccountUserDataDir,
 } from '../repositories/account.repository';
-import { ensureProviderExists } from '../repositories/provider.repository';
+import { ensureProviderExists, findProviderById } from '../repositories/provider.repository';
 
 const logger = createLogger('BrowserSessionService');
 
@@ -40,6 +40,17 @@ export const loginViaCDP = async (
     `[BrowserSession] Starting browser session for ${providerId} at ${loginUrl}`,
   );
 
+  // Get provider config to find extension folder
+  const provider = findProviderById(providerId);
+  let extensionPath: string | null = null;
+  
+  if (provider?.browser_extension_folder) {
+    extensionPath = path.join(__dirname, '../../extensions', provider.browser_extension_folder);
+    logger.info(`[BrowserSession] Using extension from: ${extensionPath}`);
+  } else {
+    logger.info(`[BrowserSession] No browser_extension_folder configured for ${providerId}`);
+  }
+
   // Create temp directory for this session
   const tempSessionId = uuidv4();
   const tempDir = path.join(getTempDir(), tempSessionId);
@@ -47,11 +58,11 @@ export const loginViaCDP = async (
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  // Launch browser with temp profile
+  // Launch browser with temp profile and extension if available
   const cdpService = createCDPService(`${providerId}-${tempSessionId}`);
   
-  // Launch browser with temp user data dir
-  const launched = await cdpService.launchBrowser(loginUrl, tempDir);
+  // Launch browser with temp user data dir and extension path
+  const launched = await cdpService.launchBrowser(loginUrl, tempDir, extensionPath || undefined);
   if (!launched) {
     throw new Error('Failed to launch browser');
   }

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { providerRegistry } from '../provider/registry';
+import * as path from 'path';
 
 import {
   findAccountById,
@@ -13,7 +14,7 @@ import {
   updateAccountMemory,
   deleteAccount as deleteAccountRow,
 } from '../repositories/account.repository';
-import { ensureProviderExists } from '../repositories/provider.repository';
+import { ensureProviderExists, findProviderById } from '../repositories/provider.repository';
 import { getBrowserStatus, startBrowserForAccount } from '../services/browser-instance-manager';
 
 const logger = createLogger('AccountController');
@@ -636,7 +637,23 @@ export const startAccountBrowser = async (
       return;
     }
     
-    const result = await startBrowserForAccount(account.user_data_dir, account.provider_id);
+    // Get provider config to find extension folder
+    const provider = findProviderById(account.provider_id);
+    let extensionPath: string | null = null;
+    
+    if (provider?.browser_extension_folder) {
+      extensionPath = path.join(__dirname, '../../extensions', provider.browser_extension_folder);
+      logger.info(`[AccountController] Using extension from: ${extensionPath}`);
+    } else {
+      logger.info(`[AccountController] No browser_extension_folder configured for ${account.provider_id}`);
+    }
+    
+    const result = await startBrowserForAccount(
+      account.user_data_dir, 
+      account.provider_id,
+      undefined, // loginUrl will use default
+      extensionPath || undefined
+    );
     
     res.status(200).json({
       success: true,

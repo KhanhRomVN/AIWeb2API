@@ -45,17 +45,43 @@ const findChrome = (): string | null => {
 };
 
 export const getBrowserStatus = async (userDataDir: string): Promise<{ isRunning: boolean }> => {
-    const process = runningBrowsers.get(userDataDir);
+    logger.info(`[BrowserInstanceManager] getBrowserStatus called for ${userDataDir}`);
+    logger.info(`[BrowserInstanceManager] runningBrowsers Map size: ${runningBrowsers.size}`);
+    logger.info(`[BrowserInstanceManager] runningBrowsers keys: ${Array.from(runningBrowsers.keys()).join(', ')}`);
+    
+    // Normalize path to avoid trailing slash issues
+    const normalizedKey = userDataDir.replace(/\/$/, '');
+    const process = runningBrowsers.get(normalizedKey);
+    
     if (process && !process.killed) {
         // Check if process is still alive
         try {
             process.kill(0); // Signal 0 doesn't kill, just checks
+            logger.info(`[BrowserInstanceManager] Process ${process.pid} is running`);
             return { isRunning: true };
         } catch (e) {
-            runningBrowsers.delete(userDataDir);
+            logger.info(`[BrowserInstanceManager] Process ${process.pid} is dead, removing from Map`);
+            runningBrowsers.delete(normalizedKey);
             return { isRunning: false };
         }
     }
+    
+    // Also try to find by partial match (in case of different normalization)
+    for (const [key, proc] of runningBrowsers.entries()) {
+        if (key.includes(userDataDir) || userDataDir.includes(key)) {
+            logger.info(`[BrowserInstanceManager] Found partial match: key="${key}" vs query="${userDataDir}"`);
+            try {
+                proc.kill(0);
+                logger.info(`[BrowserInstanceManager] Process ${proc.pid} is running (partial match)`);
+                return { isRunning: true };
+            } catch (e) {
+                runningBrowsers.delete(key);
+                break;
+            }
+        }
+    }
+    
+    logger.info(`[BrowserInstanceManager] No process found for ${userDataDir}`);
     return { isRunning: false };
 };
 
@@ -63,6 +89,7 @@ export const startBrowserForAccount = async (
     userDataDir: string,
     providerId: string,
     loginUrl: string = 'https://chat.z.ai/',
+    extensionPath?: string,
 ): Promise<{ pid: number; userDataDir: string }> => {
     // Check if already running
     const status = await getBrowserStatus(userDataDir);
@@ -85,11 +112,21 @@ export const startBrowserForAccount = async (
         `--user-data-dir=${userDataDir}`,
         '--no-first-run',
         '--no-default-browser-check',
-        '--disable-extensions',
         loginUrl,
     ];
 
+    // Add extension arguments if extensionPath is provided
+    if (extensionPath) {
+        args.push(`--disable-extensions-except=${extensionPath}`);
+        args.push(`--load-extension=${extensionPath}`);
+        logger.info(`[BrowserInstanceManager] Loading extension from: ${extensionPath}`);
+    } else {
+        args.push('--disable-extensions');
+        logger.info(`[BrowserInstanceManager] No extension provided, disabling all extensions`);
+    }
+
     logger.info(`[BrowserInstanceManager] Launching browser for ${providerId} with profile: ${userDataDir}`);
+    logger.info(`[BrowserInstanceManager] Browser args: ${args.join(' ')}`);
     
     const chromeProcess = spawn(chromePath, args, {
         detached: false,
@@ -98,8 +135,8 @@ export const startBrowserForAccount = async (
 
     runningBrowsers.set(userDataDir, chromeProcess);
 
-    chromeProcess.on('exit', () => {
-        logger.info(`[BrowserInstanceManager] Browser exited for ${userDataDir}`);
+    chromeProcess.on('exit', (code, signal) => {
+        logger.info(`[BrowserInstanceManager] Browser exited for ${userDataDir} with code: ${code}, signal: ${signal}`);
         runningBrowsers.delete(userDataDir);
     });
 

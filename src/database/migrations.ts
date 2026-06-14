@@ -205,6 +205,15 @@ function migrateProviders(db: Database.Database): void {
         logger.warn('Failed to add is_memory to providers', e);
       }
     }
+
+    if (!providerCols.includes('browser_extension_folder')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN browser_extension_folder TEXT');
+        logger.info('Added browser_extension_folder column to providers table');
+      } catch (e) {
+        logger.warn('Failed to add browser_extension_folder to providers', e);
+      }
+    }
     
   } catch (err) {
     logger.error('Error initializing providers table', err);

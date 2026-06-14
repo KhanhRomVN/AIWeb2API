@@ -10,6 +10,7 @@ export interface ProviderRow {
   auth_method?: string;
   is_pausable?: number;
   is_memory?: number;
+  browser_extension_folder?: string;
 }
 
 export const findAllProviders = (): ProviderRow[] => {
@@ -37,18 +38,20 @@ export const upsertProvider = (
   authMethod?: string[],
   isPausable?: boolean,
   isMemory?: boolean,
+  browserExtensionFolder?: string,
 ): void => {
   const db = getDb();
   db.prepare(
-    `INSERT INTO providers (id, title, website_url, is_enabled, auth_method, is_pausable, is_memory)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO providers (id, title, website_url, is_enabled, auth_method, is_pausable, is_memory, browser_extension_folder)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        title = excluded.title,
        website_url = excluded.website_url,
        is_enabled = excluded.is_enabled,
        auth_method = excluded.auth_method,
        is_pausable = excluded.is_pausable,
-       is_memory = excluded.is_memory`,
+       is_memory = excluded.is_memory,
+       browser_extension_folder = excluded.browser_extension_folder`,
   ).run(
     id.toLowerCase(),
     title,
@@ -57,6 +60,7 @@ export const upsertProvider = (
     authMethod ? JSON.stringify(authMethod) : null,
     isPausable ? 1 : 0,
     isMemory ? 1 : 0,
+    browserExtensionFolder ?? null,
   );
 };
 
