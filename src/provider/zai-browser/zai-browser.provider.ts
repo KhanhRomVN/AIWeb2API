@@ -22,33 +22,55 @@ export class ZaiBrowserProvider implements Provider {
   private async ensureWebSocket(sessionId: string) {
     const wsServer = getWebSocketServer();
 
+    // Check if already connected with this sessionId
+    if (wsServer.isConnected(sessionId)) {
+      return wsServer;
+    }
+
+    // Try to find any active content connection (extension connected with random ID)
+    const anyConnectedSession = wsServer.getAnyConnectedContentSession();
+    if (anyConnectedSession && anyConnectedSession !== sessionId) {
+      logger.info(`[ZaiBrowser] Found active connection with session ${anyConnectedSession}, remapping to ${sessionId}`);
+      // Rename the session to match our account ID
+      wsServer.updateSessionId(anyConnectedSession, sessionId);
+      // Wait a moment for the rename to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Send set_session_id to extension so it reconnects with correct ID
+      wsServer.setAccountId(sessionId, sessionId);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (wsServer.isConnected(sessionId)) {
+        logger.info(`[ZaiBrowser] Successfully remapped session to ${sessionId}`);
+        return wsServer;
+      }
+    }
+
     // Wait for extension to connect (max 30 seconds)
-    if (!wsServer.isConnected(sessionId)) {
-      logger.info('[ZaiBrowser] Waiting for extension to connect...');
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          wsServer.off('connected', onConnected);
-          reject(new Error('Extension connection timeout after 30 seconds'));
-        }, 30000);
+    logger.info('[ZaiBrowser] Waiting for extension to connect...');
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        wsServer.off('connected', onConnected);
+        reject(new Error('Extension connection timeout after 30 seconds'));
+      }, 30000);
 
-        const onConnected = (connectedSessionId: string) => {
-          if (connectedSessionId === sessionId) {
-            clearTimeout(timeout);
-            wsServer.off('connected', onConnected);
-            resolve();
-          }
-        };
-
-        wsServer.on('connected', onConnected);
-
-        // Check again in case it connected already
-        if (wsServer.isConnected(sessionId)) {
+      const onConnected = (connectedSessionId: string) => {
+        if (connectedSessionId === sessionId) {
           clearTimeout(timeout);
           wsServer.off('connected', onConnected);
           resolve();
         }
-      });
-    }
+      };
+
+      wsServer.on('connected', onConnected);
+
+      // Check again in case it connected already
+      if (wsServer.isConnected(sessionId)) {
+        clearTimeout(timeout);
+        wsServer.off('connected', onConnected);
+        resolve();
+      }
+    });
 
     return wsServer;
   }

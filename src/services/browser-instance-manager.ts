@@ -17,25 +17,36 @@ const getUserDataPath = () => {
     }
 };
 
-const findChrome = (): string | null => {
+const findBrowser = (): string | null => {
+    // Priority: Google Chrome (works best, no snap issues), then Firefox, then Chromium
     const commonPaths = [
-        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome',      // Google Chrome (primary)
         '/usr/bin/google-chrome-stable',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/snap/bin/chromium',
+        '/usr/bin/firefox',           // Non-snap Firefox (apt)
+        '/usr/bin/chromium-browser',   // Non-snap Chromium (apt, older Ubuntu)
+        '/usr/bin/chromium',           // Non-snap Chromium (apt, newer Ubuntu)
+        '/snap/bin/firefox',           // Snap Firefox (fallback)
+        '/snap/bin/chromium',          // Snap Chromium (fallback)
     ];
 
     for (const p of commonPaths) {
-        if (fs.existsSync(p)) return p;
+        if (fs.existsSync(p)) {
+            // Skip snap versions if non-snap is available (already prioritized)
+            logger.info(`[BrowserInstanceManager] Found browser at: ${p}`);
+            return p;
+        }
     }
 
     try {
         const { execSync } = require('child_process');
-        const output = execSync('which google-chrome || which chromium', {
-            encoding: 'utf-8',
-            stdio: 'pipe',
-        });
+        // Try firefox first, then chromium, then google-chrome
+        let output = execSync('which firefox', { encoding: 'utf-8', stdio: 'pipe' });
+        if (!output.trim()) {
+            output = execSync('which chromium', { encoding: 'utf-8', stdio: 'pipe' });
+        }
+        if (!output.trim()) {
+            output = execSync('which google-chrome', { encoding: 'utf-8', stdio: 'pipe' });
+        }
         if (output.trim()) return output.trim();
     } catch (e) {
         // ignore
@@ -43,6 +54,9 @@ const findChrome = (): string | null => {
 
     return null;
 };
+
+// Keep alias for backward compatibility
+const findChrome = findBrowser;
 
 export const getBrowserStatus = async (userDataDir: string): Promise<{ isRunning: boolean }> => {
     logger.info(`[BrowserInstanceManager] getBrowserStatus called for ${userDataDir}`);
@@ -98,10 +112,15 @@ export const startBrowserForAccount = async (
         return { pid: -1, userDataDir };
     }
 
-    const chromePath = findChrome();
-    if (!chromePath) {
-        throw new Error('Chrome or Chromium not found. Please install it.');
+    let browserPath = findBrowser();
+    if (!browserPath) {
+        throw new Error('No browser found. Please install Firefox, Chromium, or Google Chrome.');
     }
+    
+    const isFirefox = browserPath.includes('firefox');
+    const isChromiumSnap = browserPath.includes('/snap/') || browserPath.includes('chromium-browser') === false && browserPath.includes('chromium');
+    // Simplified: if it's not firefox, not google-chrome, and contains chromium, assume it's chromium
+    const isChromium = browserPath.includes('chromium') && !isGoogleChrome;
 
     // Ensure directory exists
     if (!fs.existsSync(userDataDir)) {
@@ -117,23 +136,64 @@ export const startBrowserForAccount = async (
 
     // Add extension arguments if extensionPath is provided
     if (extensionPath) {
-        args.push(`--disable-extensions-except=${extensionPath}`);
-        args.push(`--load-extension=${extensionPath}`);
-        logger.info(`[BrowserInstanceManager] Loading extension from: ${extensionPath}`);
+        if (isFirefox) {
+            // Firefox supports --load-extension directly
+            args.push(`--load-extension=${extensionPath}`);
+            // Add --new-window to ensure clean start
+            if (!args.includes('--new-window')) {
+                args.unshift('--new-window');
+            }
+            logger.info(`[BrowserInstanceManager] Loading extension in Firefox from: ${extensionPath}`);
+        } else {
+            // For Chrome/Chromium: rely on manually installed extension in profile
+            // Do NOT use --load-extension flag (blocked in official Chrome)
+            logger.info(`[BrowserInstanceManager] Using Chrome/Chromium with manually installed extension.`);
+            logger.info(`[BrowserInstanceManager] Ensure extension is installed at: chrome://extensions (Developer mode -> Load unpacked) -> ${extensionPath}`);
+        }
     } else {
-        args.push('--disable-extensions');
+        if (!isFirefox) {
+            args.push('--disable-extensions');
+        }
         logger.info(`[BrowserInstanceManager] No extension provided, disabling all extensions`);
     }
 
     logger.info(`[BrowserInstanceManager] Launching browser for ${providerId} with profile: ${userDataDir}`);
     logger.info(`[BrowserInstanceManager] Browser args: ${args.join(' ')}`);
     
-    const chromeProcess = spawn(chromePath, args, {
+    // Add logging flags to capture extension errors
+    const loggingArgs = [...args];
+    if (!loggingArgs.includes('--enable-logging')) {
+        loggingArgs.push('--enable-logging=stderr');
+    }
+    if (!loggingArgs.includes('--v=1')) {
+        loggingArgs.push('--v=1');
+    }
+    
+    const chromeProcess = spawn(browserPath, loggingArgs, {
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     runningBrowsers.set(userDataDir, chromeProcess);
+
+    // Capture stderr for extension loading errors
+    chromeProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        // Log only relevant lines to avoid flooding
+        if (output.includes('extension') || output.includes('Extension') || 
+            output.includes('manifest') || output.includes('CRX') ||
+            output.includes('Failed to load') || output.includes('error')) {
+            logger.info(`[BrowserInstanceManager] Chrome stderr: ${output.trim()}`);
+        } else if (process.env.DEBUG_CHROME === 'true') {
+            logger.debug(`[BrowserInstanceManager] Chrome stderr: ${output.trim()}`);
+        }
+    });
+
+    chromeProcess.stdout.on('data', (data) => {
+        if (process.env.DEBUG_CHROME === 'true') {
+            logger.debug(`[BrowserInstanceManager] Chrome stdout: ${data.toString().trim()}`);
+        }
+    });
 
     chromeProcess.on('exit', (code, signal) => {
         logger.info(`[BrowserInstanceManager] Browser exited for ${userDataDir} with code: ${code}, signal: ${signal}`);

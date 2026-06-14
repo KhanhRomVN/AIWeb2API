@@ -282,6 +282,16 @@ export class ExtensionWebSocketServer extends EventEmitter {
     return Array.from(this.connections.keys());
   }
 
+  getAnyConnectedContentSession(): string | null {
+    for (const [sessionId, connection] of this.connections.entries()) {
+      if (connection.contentWs && connection.contentWs.readyState === WebSocket.OPEN) {
+        logger.debug(`[WebSocketServer] Found active content session: ${sessionId}`);
+        return sessionId;
+      }
+    }
+    return null;
+  }
+
   stop(): void {
     if (this.wss) {
       this.wss.close();
