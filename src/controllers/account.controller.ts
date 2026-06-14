@@ -14,6 +14,7 @@ import {
   deleteAccount as deleteAccountRow,
 } from '../repositories/account.repository';
 import { ensureProviderExists } from '../repositories/provider.repository';
+import { getBrowserStatus, startBrowserForAccount } from '../services/browser-instance-manager';
 
 const logger = createLogger('AccountController');
 
@@ -438,12 +439,23 @@ export const deleteAccount = async (
 
 // POST /v1/accounts/:provider/login
 export const login = async (req: Request, res: Response): Promise<void> => {
+  logger.info(`[Login] ========== LOGIN REQUEST RECEIVED ==========`);
+  logger.info(`[Login] Full URL: ${req.method} ${req.originalUrl}`);
+  logger.info(`[Login] Params: ${JSON.stringify(req.params)}`);
+  logger.info(`[Login] Body: ${JSON.stringify(req.body)}`);
+  
   try {
     const { provider: providerId } = req.params;
     const { method } = req.body;
+    
+    logger.info(`[Login] Provider ID from params: "${providerId}"`);
+    logger.info(`[Login] Method: ${method || 'basic'}`);
 
     const provider = providerRegistry.getProvider(providerId);
+    logger.info(`[Login] Provider found: ${provider ? provider.name : 'null'}`);
+    
     if (!provider) {
+      logger.warn(`[Login] Provider not found: ${providerId}`);
       res.status(404).json({ success: false, message: 'Provider not found' });
       return;
     }
@@ -453,6 +465,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (!provider.login) {
+      logger.warn(`[Login] Provider ${providerId} has no login method`);
       res
         .status(400)
         .json({
@@ -462,21 +475,35 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    logger.info(`[Login] Calling provider.login() for ${providerId}`);
     const result = await provider.login({
       method: method === 'google' ? 'google' : 'basic',
     });
+    
+    logger.info(`[Login] Login successful, result keys: ${Object.keys(result).join(', ')}`);
+    logger.info(`[Login] Email: ${(result as any).email}, Cookies length: ${(result as any).cookies?.length || 0}`);
 
+    const accountResponse: any = {
+      provider_id: providerId,
+      email: (result as any).email || '',
+      credential: (result as any).cookies,
+      headers: (result as any).headers,
+    };
+    
+    // Include pending info for browser providers
+    if ((result as any).pending) {
+      accountResponse.pending = (result as any).pending;
+      accountResponse.tempSessionId = (result as any).tempSessionId;
+    }
+    
     res.status(200).json({
       success: true,
-      account: {
-        provider_id: providerId,
-        email: (result as any).email || '',
-        credential: (result as any).cookies,
-        headers: (result as any).headers,
-      },
+      account: accountResponse,
     });
   } catch (error: any) {
-    logger.error('Login failed', error);
+    logger.error('[Login] Login failed with error:', error);
+    logger.error(`[Login] Error message: ${error.message}`);
+    logger.error(`[Login] Error stack: ${error.stack}`);
     res
       .status(500)
       .json({ success: false, message: error.message || 'Login failed' });
@@ -538,5 +565,89 @@ export const switchAccount = async (
         success: false,
         message: error.message || 'Failed to switch account',
       });
+  }
+};
+
+// GET /v1/accounts/:id/browser/status
+export const getAccountBrowserStatus = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const account = findAccountById(id);
+    
+    if (!account) {
+      res.status(404).json({ success: false, message: 'Account not found' });
+      return;
+    }
+    
+    // Check if this is a browser provider (has user_data_dir)
+    if (!account.user_data_dir) {
+      res.status(200).json({
+        success: true,
+        data: {
+          has_profile: false,
+          is_running: false,
+          message: 'No browser profile associated with this account',
+        },
+      });
+      return;
+    }
+    
+    const status = await getBrowserStatus(account.user_data_dir);
+    res.status(200).json({
+      success: true,
+      data: {
+        has_profile: true,
+        is_running: status.isRunning,
+        user_data_dir: account.user_data_dir,
+        message: status.isRunning ? 'Browser is running' : 'Browser is not running',
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error getting browser status', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get browser status',
+    });
+  }
+};
+
+// POST /v1/accounts/:id/browser/start
+export const startAccountBrowser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const account = findAccountById(id);
+    
+    if (!account) {
+      res.status(404).json({ success: false, message: 'Account not found' });
+      return;
+    }
+    
+    if (!account.user_data_dir) {
+      res.status(400).json({
+        success: false,
+        message: 'No browser profile associated with this account. Please complete login first.',
+      });
+      return;
+    }
+    
+    const result = await startBrowserForAccount(account.user_data_dir, account.provider_id);
+    
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: 'Browser started successfully',
+    });
+  } catch (error: any) {
+    logger.error('Error starting browser', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to start browser',
+    });
   }
 };

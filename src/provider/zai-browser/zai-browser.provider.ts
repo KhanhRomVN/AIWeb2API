@@ -6,9 +6,9 @@ import { ZaiBrowserWebSocketManager } from './zai-browser.websocket';
 import { parseZaiBrowserCredential } from './zai-browser.helpers';
 import { ZaiBrowserExtensionManager } from './zai-browser.extension-manager';
 import {
-    getActiveBrowserSession,
+    getAllBrowserSessions,
     touchSession,
-    parseBrowserCredential,
+    loginViaCDP,
 } from '../../services/browser-session.service';
 
 const logger = createLogger('ZaiBrowserProvider');
@@ -115,7 +115,8 @@ export class ZaiBrowserProvider implements Provider {
         const isThinking = thinking === true;
 
         // Get active browser session
-        let session = getActiveBrowserSession('zai-browser');
+        const sessions = getAllBrowserSessions('zai-browser');
+        let session = sessions.length > 0 ? sessions[0] : null;
         if (!session) {
             onError(new Error('No active browser session. Please create a session via POST /v1/browser-sessions/login or create a session manually.'));
             return;
@@ -124,12 +125,10 @@ export class ZaiBrowserProvider implements Provider {
         // Touch session to update last_used_at
         touchSession(session.id);
 
-        // Parse credential from session
-        const parsed = parseBrowserCredential(session.credential);
-        if (!parsed) {
-            onError(new Error('Invalid credential format in browser session'));
-            return;
-        }
+        // Parse credential from session (optional - we may not need actual cookies)
+        // The extension handles cookies directly via browser session
+        let parsed = null;
+        logger.info('[ZaiBrowser] No credential stored in session, continuing with browser instance');
 
         const lastMessage = messages[messages.length - 1];
         let prompt = lastMessage.content;
@@ -183,10 +182,26 @@ export class ZaiBrowserProvider implements Provider {
         }
     }
 
-    async login(): Promise<{ cookies: string }> {
-        // Login is handled via browser-session service
-        // This method is for compatibility with existing login flow
-        throw new Error('Login for Z.AI Browser must be done via POST /v1/browser-sessions/login');
+    async login(): Promise<{ cookies: string; email?: string; pending?: boolean; tempSessionId?: string }> {
+        // Login via CDP browser session service
+        const loginUrl = 'https://chat.z.ai/';
+        logger.info(`[ZaiBrowser] Starting login via CDP at ${loginUrl}`);
+        
+        try {
+            // This will wait until browser is closed
+            const result = await loginViaCDP('zai-browser', loginUrl, 'zai-default');
+            
+            // Browser closed, return pending info for email input
+            return {
+                pending: true,
+                tempSessionId: result.tempSessionId,
+                cookies: '',
+                email: '',
+            };
+        } catch (error: any) {
+            logger.error('[ZaiBrowser] Login failed:', error);
+            throw new Error(`Z.AI Browser login failed: ${error.message}`);
+        }
     }
 
     isModelSupported(model: string): boolean {
@@ -196,8 +211,8 @@ export class ZaiBrowserProvider implements Provider {
 
     registerRoutes(router: Router): void {
         router.get('/auth/status', async (_req, res) => {
-            const session = getActiveBrowserSession('zai-browser');
-            res.json({ authenticated: !!session });
+            const sessions = getAllBrowserSessions('zai-browser');
+            res.json({ authenticated: sessions.length > 0 });
         });
     }
 

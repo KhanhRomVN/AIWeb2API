@@ -7,11 +7,12 @@ export interface AccountRow {
   id: string;
   provider_id: string;
   email: string;
-  credential: string;
+  credential: string | null;
   last_refreshed_at?: number;
   usage?: string;
   reset_period?: string;
   is_memory_enabled?: number;
+  user_data_dir?: string | null;
 }
 
 export const findAccountById = (id: string): AccountRow | null => {
@@ -110,21 +111,29 @@ export const insertAccount = (account: {
   id: string;
   provider_id: string;
   email: string;
-  credential: string;
-  is_memory_enabled?: boolean;
+  credential: string | null;
+  last_refreshed_at?: number;
+  usage?: string;
+  reset_period?: string;
+  is_memory_enabled?: number;
+  user_data_dir?: string | null;
 }): void => {
   const db = getDb();
   db.prepare(
-    'INSERT INTO accounts (id, provider_id, email, credential, is_memory_enabled) VALUES (?, ?, ?, ?, ?)',
+    `INSERT INTO accounts (id, provider_id, email, credential, last_refreshed_at, usage, reset_period, is_memory_enabled, user_data_dir)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     account.id,
     account.provider_id,
     account.email,
     account.credential,
-    account.is_memory_enabled ? 1 : 0,
+    account.last_refreshed_at || null,
+    account.usage || null,
+    account.reset_period || null,
+    account.is_memory_enabled === 1 ? 1 : 0,
+    account.user_data_dir || null,
   );
 };
-
 export const insertAccountsBatch = (
   accounts: Array<{
     id: string;
@@ -162,11 +171,22 @@ export const insertAccountsBatch = (
 
 export const updateAccountCredential = (
   id: string,
-  credential: string,
+  credential: string | null,
 ): void => {
   const db = getDb();
   db.prepare('UPDATE accounts SET credential = ? WHERE id = ?').run(
     credential,
+    id,
+  );
+};
+
+export const updateAccountUserDataDir = (
+  id: string,
+  userDataDir: string,
+): void => {
+  const db = getDb();
+  db.prepare('UPDATE accounts SET user_data_dir = ? WHERE id = ?').run(
+    userDataDir,
     id,
   );
 };

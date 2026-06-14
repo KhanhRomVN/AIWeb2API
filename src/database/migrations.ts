@@ -359,21 +359,65 @@ function migrateMetrics(db: Database.Database): void {
 
 function migrateBrowserSessions(db: Database.Database): void {
   try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS browser_sessions (
-        id TEXT PRIMARY KEY,
-        provider_id TEXT NOT NULL,
-        email TEXT,
-        user_data_dir TEXT,
-        created_at INTEGER NOT NULL,
-        last_used_at INTEGER
-      )
-    `);
-
-    db.exec('CREATE INDEX IF NOT EXISTS idx_browser_sessions_provider ON browser_sessions(provider_id)');
-    logger.info('Browser sessions table migrated');
+    // First, add user_data_dir column to accounts table if not exists
+    const accountCols = (db.pragma('table_info(accounts)') as any[]).map((c) => c.name);
+    if (!accountCols.includes('user_data_dir')) {
+      db.exec('ALTER TABLE accounts ADD COLUMN user_data_dir TEXT');
+      logger.info('Added user_data_dir column to accounts table');
+    }
+    
+    // Make credential nullable for browser-based accounts
+    // SQLite doesn't support ALTER COLUMN directly, need to recreate table or just allow NULL
+    // We'll just update the column to allow NULL by creating a new table and copying data
+    const hasCredentialNotNull = (db.pragma('table_info(accounts)') as any[]).find(
+      (c) => c.name === 'credential' && c.notnull === 1
+    );
+    
+    if (hasCredentialNotNull) {
+      logger.info('Recreating accounts table to make credential nullable...');
+      // Backup existing data
+      const accountsData = db.prepare('SELECT * FROM accounts').all();
+      
+      // Drop old table
+      db.exec('DROP TABLE accounts');
+      
+      // Recreate with nullable credential
+      db.exec(`
+        CREATE TABLE accounts (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          credential TEXT,
+          last_refreshed_at INTEGER,
+          usage TEXT,
+          reset_period TEXT,
+          is_memory_enabled INTEGER DEFAULT 0,
+          user_data_dir TEXT
+        )
+      `);
+      
+      // Restore data
+      const insertStmt = db.prepare(`
+        INSERT INTO accounts (id, provider_id, email, credential, last_refreshed_at, usage, reset_period, is_memory_enabled, user_data_dir)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      for (const row of accountsData) {
+        insertStmt.run(
+          row.id, row.provider_id, row.email, row.credential,
+          row.last_refreshed_at, row.usage, row.reset_period,
+          row.is_memory_enabled || 0, row.user_data_dir
+        );
+      }
+      
+      logger.info('Accounts table recreated with nullable credential');
+    }
+    
+    // Drop old browser_sessions table
+    db.exec('DROP TABLE IF EXISTS browser_sessions');
+    logger.info('Browser sessions table dropped (merged into accounts)');
   } catch (err) {
-    logger.error('Error migrating browser_sessions table', err);
+    logger.error('Error migrating browser sessions into accounts', err);
   }
 }
 

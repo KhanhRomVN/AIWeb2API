@@ -7,7 +7,7 @@ import { isProviderEnabled } from '../provider.service';
 import { createLogger } from '../../utils/logger';
 import { providerRegistry } from '../../provider/registry';
 import type { SendMessageOptions } from '../../types';
-import { recordChatMetrics } from '../metrics.service';
+import { recordChatMetrics, recordError } from '../metrics.service';
 
 export type { SendMessageOptions };
 
@@ -31,7 +31,6 @@ export const sendMessage = async (options: SendMessageOptions): Promise<void> =>
   if (!(await isProviderEnabled(provider_id))) {
     const error = new Error(`Provider ${provider_id} is disabled`);
     // Record error metric before throwing
-    const { recordError } = await import('../metrics.service');
     recordError(accountId, provider_id, options.model || 'unknown', error.message);
     throw error;
   }
@@ -39,7 +38,6 @@ export const sendMessage = async (options: SendMessageOptions): Promise<void> =>
   const provider = providerRegistry.getProvider(provider_id);
   if (!provider) {
     const error = new Error(`Provider ${provider_id} not supported for sending messages`);
-    const { recordError } = await import('../metrics.service');
     recordError(accountId, provider_id, options.model || 'unknown', error.message);
     throw error;
   }
@@ -80,7 +78,6 @@ export const sendMessage = async (options: SendMessageOptions): Promise<void> =>
     return await provider.handleMessage(wrappedOptions);
   } catch (error) {
     // Record error metric for any unhandled errors from provider
-    const { recordError } = await import('../metrics.service');
     const errorMessage = error instanceof Error ? error.message : String(error);
     recordError(accountId, provider_id, options.model || 'unknown', errorMessage);
     throw error;

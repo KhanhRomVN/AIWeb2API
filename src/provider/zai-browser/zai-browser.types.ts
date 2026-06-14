@@ -1,5 +1,10 @@
 import type WebSocket from 'ws';
 
+export interface ParsedZaiCredential {
+  cookie: string;
+  userAgent: string;
+}
+
 export interface ZaiBrowserConfig {
   wsPort: number;
   extensionReadyTimeout: number;

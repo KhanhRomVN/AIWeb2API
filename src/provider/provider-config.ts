@@ -5,6 +5,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://claude.ai/',
     auth_method: ['basic', 'google'],
+    connection_type: 'https',
     models: [
       {
         id: 'claude-sonnet-4-5-20250929',
@@ -47,6 +48,7 @@ export const providers = [
     website_url: 'https://deepseek.com',
     is_pausable: true,
     auth_method: ['basic', 'google'],
+    connection_type: 'https',
     models: [
       {
         id: 'deepseek-instant',
@@ -77,6 +79,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://gemini.google.com/',
     auth_method: ['google'],
+    connection_type: 'https',
     models: [
       {
         id: 'gemini-3.5-flash',
@@ -148,6 +151,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://groq.com',
     auth_method: ['basic'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: false,
   },
@@ -157,6 +161,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://huggingface.co/',
     auth_method: ['basic'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: false,
   },
@@ -184,6 +189,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://mistral.ai/',
     auth_method: ['basic'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: false,
   },
@@ -193,6 +199,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://www.perplexity.ai/',
     auth_method: ['basic'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: false,
   },
@@ -202,6 +209,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://qwenlm.ai/',
     auth_method: ['basic', 'google'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: true,
     models: [
@@ -311,6 +319,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://cloud.cerebras.ai/',
     auth_method: ['basic', 'google'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: false,
   },
@@ -338,6 +347,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://chat.z.ai/',
     auth_method: ['google', 'basic'],
+    connection_type: 'browser',
     is_pausable: false,
     is_memory: false,
     platform: 'web',
@@ -370,6 +380,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://qwenlm.ai/',
     auth_method: ['basic'],
+    connection_type: 'https',
     models: [
       {
         id: 'coder-model',
@@ -391,6 +402,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://gemini.google.com/',
     auth_method: ['google'],
+    connection_type: 'https',
     is_pausable: false,
     is_memory: false,
   },
@@ -409,6 +421,7 @@ export const providers = [
     is_enabled: true,
     website_url: 'https://google.com/',
     auth_method: ['google', 'basic'],
+    connection_type: 'https',
     models: [
       {
         id: 'gpt-5.3-codex',

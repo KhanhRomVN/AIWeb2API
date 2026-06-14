@@ -12,11 +12,30 @@ class ProviderRegistry {
 
   register(provider: Provider) {
     const key = provider.name.toLowerCase();
+    logger.info(`[Registry] Registering provider: ${provider.name} -> key: "${key}"`);
     this.providers.set(key, provider);
 
+    // Create aliases for common variations
+    const aliases: string[] = [];
+    
     if (key.includes('.')) {
-      const alias = key.split('.')[0];
+      aliases.push(key.split('.')[0]);
+    }
+    
+    // Special alias for Z.AI Browser
+    if (key === 'z.ai browser') {
+      aliases.push('zai-browser', 'zai');
+    }
+    
+    // General: remove dots, spaces, replace with dash
+    const normalized = key.replace(/[.\s]/g, '-');
+    if (normalized !== key) {
+      aliases.push(normalized);
+    }
+    
+    for (const alias of aliases) {
       if (!this.providers.has(alias)) {
+        logger.info(`[Registry] Also registering alias: "${alias}" for ${provider.name}`);
         this.providers.set(alias, provider);
       }
     }
@@ -27,7 +46,13 @@ class ProviderRegistry {
   }
 
   getProvider(name: string): Provider | undefined {
-    return this.providers.get(name.toLowerCase());
+    const key = name.toLowerCase();
+    const provider = this.providers.get(key);
+    logger.info(`[Registry] getProvider("${name}") -> key: "${key}", found: ${!!provider}`);
+    if (!provider) {
+      logger.info(`[Registry] Available providers: ${Array.from(this.providers.keys()).join(', ')}`);
+    }
+    return provider;
   }
 
   getAllProviders(): Provider[] {
@@ -67,9 +92,15 @@ class ProviderRegistry {
         GeminiProvider,
       ];
       for (const p of providers) {
-        if (p && p.name) this.register(p);
+        if (p && p.name) {
+          logger.info(`[Registry] Loading provider: ${p.name}`);
+          this.register(p);
+        } else {
+          logger.warn(`[Registry] Invalid provider: ${p}`);
+        }
       }
-      logger.info(`Registered ${this.providers.size} providers`);
+      logger.info(`[Registry] Total registered providers: ${this.providers.size}`);
+      logger.info(`[Registry] Provider keys: ${Array.from(this.providers.keys()).join(', ')}`);
     } catch (error) {
       logger.error('Failed to load providers', error);
     }

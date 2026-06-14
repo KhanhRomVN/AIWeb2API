@@ -8,6 +8,8 @@ import {
   switchAccount,
   getAccountMemory,
   updateAccountMemoryController,
+  getAccountBrowserStatus,
+  startAccountBrowser,
 } from '../../controllers/account.controller';
 
 const router = Router();
@@ -35,5 +37,9 @@ router.get('/:id/memory', getAccountMemory);
 
 // PUT Cập nhật trạng thái memory của account
 router.put('/:id/memory', updateAccountMemoryController);
+
+// Browser session management for browser-based providers
+router.get('/:id/browser/status', getAccountBrowserStatus);
+router.post('/:id/browser/start', startAccountBrowser);
 
 export default router;
