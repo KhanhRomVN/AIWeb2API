@@ -118,6 +118,7 @@ export const startBrowserForAccount = async (
     }
     
     const isFirefox = browserPath.includes('firefox');
+    const isGoogleChrome = browserPath.includes('google-chrome') || browserPath.includes('Google Chrome');
     const isChromiumSnap = browserPath.includes('/snap/') || browserPath.includes('chromium-browser') === false && browserPath.includes('chromium');
     // Simplified: if it's not firefox, not google-chrome, and contains chromium, assume it's chromium
     const isChromium = browserPath.includes('chromium') && !isGoogleChrome;

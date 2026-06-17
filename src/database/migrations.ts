@@ -385,7 +385,18 @@ function migrateBrowserSessions(db: Database.Database): void {
     if (hasCredentialNotNull) {
       logger.info('Recreating accounts table to make credential nullable...');
       // Backup existing data
-      const accountsData = db.prepare('SELECT * FROM accounts').all();
+      interface AccountRow {
+        id: string;
+        provider_id: string;
+        email: string;
+        credential: string | null;
+        last_refreshed_at: number | null;
+        usage: string | null;
+        reset_period: string | null;
+        is_memory_enabled: number | null;
+        user_data_dir: string | null;
+      }
+      const accountsData = db.prepare('SELECT * FROM accounts').all() as AccountRow[];
       
       // Drop old table
       db.exec('DROP TABLE accounts');

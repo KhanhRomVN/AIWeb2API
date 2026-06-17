@@ -43,6 +43,10 @@ export const uploadFileController = async (
     }
 
     try {
+      if (account.credential === null) {
+        res.status(400).json({ error: 'Account has no credential configured' });
+        return;
+      }
       const result = await provider.uploadFile(account.credential, file);
 
       const responseData: any = { filename: file.originalname };

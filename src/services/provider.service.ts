@@ -47,7 +47,7 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
   if (!dynamicProvider?.getModels) return [];
 
   const account = findFirstAccountByProvider(providerId);
-  if (!account) {
+  if (!account || account.credential === null) {
     return [];
   }
 
@@ -219,7 +219,7 @@ export const getProviderModels = async (
   const dynamicProvider = providerRegistry.getProvider(providerId);
   if (dynamicProvider?.getModels) {
     const account = findFirstAccountByProvider(providerId);
-    if (account) {
+    if (account && account.credential !== null) {
       try {
         const directModels = await dynamicProvider.getModels(
           account.credential,
@@ -293,7 +293,7 @@ export const getAllModelsFromEnabledProviders = async (): Promise<
       );
       if (dynamicProvider?.getModels) {
         const account = findFirstAccountByProvider(provider.provider_id);
-        if (account) {
+        if (account && account.credential !== null) {
           try {
             const directModels = await dynamicProvider.getModels(
               account.credential,
