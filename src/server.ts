@@ -4,6 +4,8 @@ import fs from 'fs';
 import { createApp } from './app';
 import { getServerConfig } from './config/server.config';
 import { createLogger } from './utils/logger';
+import { askYesNo } from './utils/prompt';
+import { killProcessOnPort } from './utils/kill-port';
 
 const logger = createLogger('Server');
 
@@ -45,9 +47,61 @@ export const startServer = async (): Promise<{
             https: config.tls.enable,
           });
         });
-        server.on('error', (e: any) => {
+        server.on('error', async (e: any) => {
           if (e.code === 'EADDRINUSE') {
             logger.error(`Port ${config.port} already in use`);
+            
+            // Check if we're in interactive mode
+            const isTTY = process.stdin.isTTY;
+            let shouldKill = false;
+            
+            if (isTTY) {
+              const answer = await askYesNo(`Port ${config.port} is already in use. Do you want to kill the process using this port?`);
+              shouldKill = answer === true;
+            } else {
+              logger.info('Non-interactive mode - skipping port kill prompt');
+            }
+            
+            if (shouldKill) {
+              logger.info(`Attempting to kill process on port ${config.port}...`);
+              const killed = await killProcessOnPort(config.port);
+              
+              if (killed) {
+                logger.info(`Process on port ${config.port} killed. Retrying...`);
+                // Retry: close current server and try listening again
+                server?.close(() => {
+                  // Try listening again
+                  const newServer = http.createServer(app);
+                  newServer.listen(config.port, config.host, () => {
+                    logger.info(`Listening on ${config.host}:${config.port} (after killing port)`);
+                    server = newServer;
+                    resolve({
+                      success: true,
+                      port: config.port,
+                      https: config.tls.enable,
+                    });
+                  });
+                  newServer.on('error', (err: any) => {
+                    logger.error(`Retry failed: ${err.message}`);
+                    resolve({
+                      success: false,
+                      error: `Retry failed: ${err.message}`,
+                      code: err.code || 'RETRY_FAILED',
+                    });
+                  });
+                });
+                return;
+              } else {
+                logger.error(`Failed to kill process on port ${config.port}`);
+                resolve({
+                  success: false,
+                  error: `Port ${config.port} is already in use and could not be killed`,
+                  code: 'EADDRINUSE_KILL_FAILED',
+                });
+                return;
+              }
+            }
+            
             resolve({
               success: false,
               error: `Port ${config.port} is already in use`,
