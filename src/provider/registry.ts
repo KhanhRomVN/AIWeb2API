@@ -84,12 +84,14 @@ class ProviderRegistry {
       const { default: ZaiBrowserProvider } = require('./zai-browser');
       const { default: CerebrasCloudProvider } = require('./cerebras-cloud');
       const { default: GeminiProvider } = require('./gemini');
+      const { default: GLM52Provider } = require('./glm52');
+      const { default: MoonshotAIProvider } = require('./moonshotai');
 
       const providers = [
         ClaudeProvider, HuggingChatProvider, MistralProvider, DeepSeekProvider,
         GroqProvider, QwenProvider, QwenCliProvider, GeminiCliProvider,
         CodexCliProvider, ZAIProvider, ZaiBrowserProvider, CerebrasCloudProvider,
-        GeminiProvider,
+        GeminiProvider, GLM52Provider, MoonshotAIProvider,
       ];
       for (const p of providers) {
         if (p && p.name) {

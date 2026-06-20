@@ -67,7 +67,7 @@ export const isPortInUse = async (port: number): Promise<boolean> => {
     // Check with lsof
     try {
       const { stdout } = await execAsync(`lsof -ti :${port} 2>/dev/null`);
-      return stdout && stdout.trim().length > 0;
+      return !!stdout && stdout.trim().length > 0;
     } catch (e) {
       return false;
     }
