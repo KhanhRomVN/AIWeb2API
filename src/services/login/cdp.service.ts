@@ -1,6 +1,9 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { ChildProcess } from 'child_process';
+import { ChildProcess, execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { createLogger } from '../../utils/logger';
 import { findAvailablePort } from '../../utils/net';
 
@@ -46,29 +49,47 @@ export class CDPService extends EventEmitter {
     this.profileName = profileName;
   }
 
+  private findChrome(): string | null {
+    const commonPaths = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/snap/bin/chromium',
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ];
+
+    if (process.platform === 'win32') {
+      const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+      commonPaths.push(path.join(localAppData, 'Google/Chrome/Application/chrome.exe'));
+      commonPaths.push(path.join(localAppData, 'Chromium/Application/chrome.exe'));
+    }
+
+    for (const p of commonPaths) {
+      if (fs.existsSync(p)) return p;
+    }
+
+    try {
+      const output = execSync(process.platform === 'win32' ? 'where chrome' : 'which google-chrome || which chromium', {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      if (output.trim()) return output.trim().split('\r\n')[0].split('\n')[0];
+    } catch (e) {
+      // ignore
+    }
+
+    return null;
+  }
+
   async launchBrowser(url: string, customUserDataDir?: string, extensionPath?: string): Promise<boolean> {
     const debugPort = await findAvailablePort(9222);
     this.debugPort = debugPort;
     logger.info(`[CDP] Launching browser with debug port ${debugPort}`);
 
-    // Find available browser
-    const browsers = [
-      'google-chrome',
-      'google-chrome-stable',
-      'chromium',
-      'chromium-browser',
-    ];
-    let executable = '';
-    for (const b of browsers) {
-      try {
-        const { execSync } = await import('child_process');
-        execSync(`which ${b}`, { stdio: 'ignore' });
-        executable = b;
-        break;
-      } catch {
-        continue;
-      }
-    }
+    const executable = this.findChrome();
 
     if (!executable) {
       logger.error('[CDP] No browser found');
@@ -78,11 +99,12 @@ export class CDPService extends EventEmitter {
     // Use custom user data dir if provided, otherwise create temp one
     let userDataDir = customUserDataDir;
     if (!userDataDir) {
-      userDataDir = `/tmp/elara-cdp-${this.profileName}-${Date.now()}`;
+      userDataDir = path.join(os.tmpdir(), `elara-cdp-${this.profileName}-${Date.now()}`);
     }
     
-    const { execSync } = await import('child_process');
-    execSync(`mkdir -p ${userDataDir}`);
+    if (!fs.existsSync(userDataDir)) {
+      fs.mkdirSync(userDataDir, { recursive: true });
+    }
 
     // Build browser arguments
     const args = [

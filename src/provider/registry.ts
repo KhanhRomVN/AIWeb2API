@@ -84,14 +84,13 @@ class ProviderRegistry {
       const { default: ZaiBrowserProvider } = require('./zai-browser');
       const { default: CerebrasCloudProvider } = require('./cerebras-cloud');
       const { default: GeminiProvider } = require('./gemini');
-      const { default: GLM52Provider } = require('./glm52');
-      const { default: MoonshotAIProvider } = require('./moonshotai');
+      const { default: ZenMuxProvider } = require('./zenmux');
 
       const providers = [
         ClaudeProvider, HuggingChatProvider, MistralProvider, DeepSeekProvider,
         GroqProvider, QwenProvider, QwenCliProvider, GeminiCliProvider,
         CodexCliProvider, ZAIProvider, ZaiBrowserProvider, CerebrasCloudProvider,
-        GeminiProvider, GLM52Provider, MoonshotAIProvider,
+        GeminiProvider, ZenMuxProvider,
       ];
       for (const p of providers) {
         if (p && p.name) {
@@ -101,6 +100,16 @@ class ProviderRegistry {
           logger.warn(`[Registry] Invalid provider: ${p}`);
         }
       }
+
+      // Backward-compat aliases: old accounts stored with provider_id='moonshotai'
+      // or 'glm52' must still resolve to ZenMuxProvider.
+      for (const alias of ['moonshotai', 'glm52', 'kimi']) {
+        if (!this.providers.has(alias)) {
+          this.providers.set(alias, ZenMuxProvider);
+          logger.info(`[Registry] Alias '${alias}' → ZenMuxProvider`);
+        }
+      }
+
       logger.info(`[Registry] Total registered providers: ${this.providers.size}`);
       logger.info(`[Registry] Provider keys: ${Array.from(this.providers.keys()).join(', ')}`);
     } catch (error) {

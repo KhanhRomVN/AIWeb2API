@@ -45,6 +45,7 @@ export const sendMessageController = async (
     let accountId = accountIdFromParams || accountIdFromBody;
     let finalModel = modelId;
     let conversationId: string | undefined = undefined;
+    let restoredFromCompoundId = false;
 
     if (rawConversationId && typeof rawConversationId === 'string') {
       if (rawConversationId.includes('@')) {
@@ -59,6 +60,7 @@ export const sendMessageController = async (
           accountId = accountIdOfChat;
           finalModel = modelIdOfChat;
           conversationId = realChatId;
+          restoredFromCompoundId = true;
           logger.info(`[Controller] Restored accountId: ${accountId}, modelId: ${finalModel} from conversationId: ${rawConversationId}`);
         } else {
           logger.warn(`[Controller] Account from conversationId not found: ${accountIdOfChat}. Falling back to request parameters.`);
@@ -111,7 +113,10 @@ export const sendMessageController = async (
       return;
     }
 
-    if (providerId && account.provider_id.toLowerCase() !== providerId.toLowerCase()) {
+    // Skip providerId conflict check if account was restored from compound conversationId —
+    // in that case, the account is authoritative and the request body's providerId may
+    // reflect the newly selected provider (not the one associated with this compound session).
+    if (!restoredFromCompoundId && providerId && account.provider_id.toLowerCase() !== providerId.toLowerCase()) {
       res.status(400).json({
         success: false,
         message: `Account Conflict: The provided accountId belongs to provider '${account.provider_id}', but providerId is '${providerId}'.`,
@@ -297,9 +302,10 @@ export const sendMessageController = async (
             }
           },
           onSessionCreated: (sessionId: string) => {
-            const compoundId = (account.provider_id === 'moonshotai' || account.provider_id === 'glm52')
-              ? `${sessionId}@${account.id}@${finalModel}`
-              : sessionId;
+            // Always embed accountId and modelId into the conversationId so that
+            // the frontend can restore the correct account/model for any provider
+            // when the user continues the conversation in a later session.
+            const compoundId = `${sessionId}@${account.id}@${finalModel}`;
 
             if (stream !== false) {
               res.write(`event: session_created\ndata: ${compoundId}\n\n`);

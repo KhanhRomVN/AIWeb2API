@@ -479,32 +479,10 @@ export const providers = [
     is_memory: false,
   },
   {
-    provider_id: 'glm52',
-    provider_name: 'GLM 5.2',
+    provider_id: 'zenmux',
+    provider_name: 'ZenMux AI',
     is_enabled: true,
-    website_url: 'https://chat.z.ai/',
-    auth_method: ['google', 'basic'],
-    connection_type: 'https',
-    models: [
-      {
-        id: 'GLM-5.2',
-        name: 'GLM 5.2',
-        is_thinking: true,
-        max_context_length: 128000,
-        is_search: true,
-        is_image_upload: true,
-        is_video_upload: false,
-        description: 'GLM 5.2 reasoning and search model'
-      }
-    ],
-    is_pausable: false,
-    is_memory: false,
-  },
-  {
-    provider_id: 'moonshotai',
-    provider_name: 'Moonshot AI',
-    is_enabled: true,
-    website_url: 'https://www.moonshot.cn/',
+    website_url: 'https://zenmux.ai/',
     auth_method: ['basic'],
     connection_type: 'https',
     models: [
@@ -516,8 +494,18 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Kimi K2.7 Code reasoning model'
-      }
+        description: 'Kimi K2.7 Code - Moonshot AI advanced coding & reasoning model (262K context) via ZenMux platform',
+      },
+      {
+        id: 'GLM-5.2',
+        name: 'GLM 5.2',
+        is_thinking: true,
+        max_context_length: 128000,
+        is_search: true,
+        is_image_upload: true,
+        is_video_upload: false,
+        description: 'GLM 5.2 - BigModel multimodal reasoning model with web search and image upload via ZenMux platform',
+      },
     ],
     is_pausable: false,
     is_memory: false,
