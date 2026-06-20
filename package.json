@@ -2,17 +2,18 @@
   "name": "AIWeb2API",
   "version": "1.2.5",
   "description": "",
-  "main": "dist/start.js",
+  "main": "dist/src/index.js",
   "bin": {
-    "elara-server": "dist/start.js"
+    "elara-server": "dist/src/index.js"
   },
   "files": [
     "dist"
   ],
   "pkg": {
-    "scripts": "dist/**/*.js",
+    "scripts": "dist/src/**/*.js",
     "assets": [
-      "dist/**/*",
+      "dist/src/**/*",
+      "dist/extensions/**/*",
       "node_modules/**/*"
     ],
     "targets": [
