@@ -382,6 +382,23 @@ export class CDPService extends EventEmitter {
     await this.send('Page.navigate', { url });
   }
 
+  async getCookies(): Promise<string> {
+    try {
+      // Try Network.getAllCookies first to get all cookies across domains/subdomains
+      let result = await this.send('Network.getAllCookies').catch(() => null);
+      if (!result || !Array.isArray(result.cookies)) {
+        // Fallback to Network.getCookies
+        result = await this.send('Network.getCookies').catch(() => null);
+      }
+      if (result && Array.isArray(result.cookies)) {
+        return result.cookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
+      }
+    } catch (e: any) {
+      logger.error('[CDP] Failed to get cookies:', e.message);
+    }
+    return '';
+  }
+
   async close(): Promise<void> {
     if (this.browserProcess) {
       this.browserProcess.kill();

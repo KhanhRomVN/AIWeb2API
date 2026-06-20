@@ -131,6 +131,7 @@ class ZenMuxProvider implements Provider {
     const result = await cdpLoginService.login({
       providerId: 'zenmux',
       loginUrl: 'https://zenmux.ai/',
+      keepBrowserOpen: true,
       validate: async (data: { cookies: string; email?: string }) => {
         if (!data.cookies) return { isValid: false };
 

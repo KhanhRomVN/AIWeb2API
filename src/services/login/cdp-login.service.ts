@@ -11,6 +11,7 @@ export interface CDPLoginOptions {
   timeout?: number;
   validate?: (captured: any) => Promise<{ isValid: boolean; cookies?: string; email?: string }>;
   extraEvents?: string[];
+  keepBrowserOpen?: boolean;
 }
 
 export interface CDPLoginResult {
@@ -24,7 +25,7 @@ export class CDPLoginService extends EventEmitter {
   private activeSessions: Map<string, { cdpService: any; browserProcess: any }> = new Map();
 
   async login(options: CDPLoginOptions): Promise<CDPLoginResult> {
-    const { providerId, loginUrl, timeout = 120000, validate, extraEvents = [] } = options;
+    const { providerId, loginUrl, timeout = 120000, validate, extraEvents = [], keepBrowserOpen = false } = options;
     const sessionId = `${providerId}-${Date.now()}`;
 
     logger.info(`[CDP Login] Starting login for ${providerId} with URL ${loginUrl}`);
@@ -35,11 +36,49 @@ export class CDPLoginService extends EventEmitter {
     let resolvePromise: ((value: CDPLoginResult) => void) | null = null;
     let rejectPromise: ((reason: any) => void) | null = null;
     let timeoutId: NodeJS.Timeout | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
 
     const resultPromise = new Promise<CDPLoginResult>((resolve, reject) => {
       resolvePromise = resolve;
       rejectPromise = reject;
     });
+
+    const cleanup = async () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+      if (!keepBrowserOpen) {
+        await cdpService.close();
+      }
+      this.activeSessions.delete(sessionId);
+    };
+
+    const checkLoginStatus = async () => {
+      if (!validate) return;
+      try {
+        const activeCookies = await cdpService.getCookies();
+        const cookiesToValidate = activeCookies || capturedCookies;
+        
+        if (cookiesToValidate || capturedEmail) {
+          const validation = await validate({ cookies: cookiesToValidate, email: capturedEmail });
+          if (validation.isValid) {
+            logger.info(`[CDP Login] Validation successful for ${providerId}`);
+            if (resolvePromise) {
+              const res = resolvePromise;
+              resolvePromise = null;
+              rejectPromise = null;
+              await cleanup();
+              res({
+                success: true,
+                cookies: validation.cookies || cookiesToValidate,
+                email: validation.email || capturedEmail,
+              });
+            }
+          }
+        }
+      } catch (e: any) {
+        logger.error(`[CDP Login] Error in validation check for ${providerId}:`, e.message);
+      }
+    };
 
     // Listen for cookie changes via Network events
     cdpService.on('response', async (response: any) => {
@@ -50,6 +89,7 @@ export class CDPLoginService extends EventEmitter {
           capturedCookies += cookies + '; ';
         }
       }
+      checkLoginStatus();
     });
 
     cdpService.on('response-body', async (data: any) => {
@@ -67,28 +107,18 @@ export class CDPLoginService extends EventEmitter {
         // Not JSON
       }
 
-      // Trigger validation if we have cookies or email
-      if (validate && (capturedCookies || capturedEmail)) {
-        const validation = await validate({ cookies: capturedCookies, email: capturedEmail });
-        if (validation.isValid) {
-          logger.info(`[CDP Login] Validation successful for ${providerId}`);
-          if (resolvePromise) {
-            if (timeoutId) clearTimeout(timeoutId);
-            await cdpService.close();
-            this.activeSessions.delete(sessionId);
-            resolvePromise({
-              success: true,
-              cookies: validation.cookies || capturedCookies,
-              email: validation.email || capturedEmail,
-            });
-          }
-        }
-      }
+      checkLoginStatus();
     });
 
-    cdpService.on('browser-exit', () => {
+    cdpService.on('browser-exit', async () => {
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+      this.activeSessions.delete(sessionId);
       if (rejectPromise) {
-        rejectPromise({ success: false, error: 'Browser closed unexpectedly' });
+        const rej = rejectPromise;
+        resolvePromise = null;
+        rejectPromise = null;
+        rej({ success: false, error: 'Browser closed unexpectedly' });
       }
     });
 
@@ -104,11 +134,16 @@ export class CDPLoginService extends EventEmitter {
     timeoutId = setTimeout(async () => {
       if (resolvePromise) {
         logger.warn(`[CDP Login] Timeout after ${timeout}ms for ${providerId}`);
-        await cdpService.close();
-        this.activeSessions.delete(sessionId);
-        resolvePromise({ success: false, error: `Login timeout after ${timeout}ms` });
+        const res = resolvePromise;
+        resolvePromise = null;
+        rejectPromise = null;
+        await cleanup();
+        res({ success: false, error: `Login timeout after ${timeout}ms` });
       }
     }, timeout);
+
+    // Set up periodic cookie checking
+    intervalId = setInterval(checkLoginStatus, 1500);
 
     // Wait for user to login manually or auto-fill credentials
     logger.info(`[CDP Login] Browser opened at ${loginUrl}. Waiting for login...`);
