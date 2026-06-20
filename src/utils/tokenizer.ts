@@ -1,4 +1,4 @@
-import { getEncoding, TiktokenEncoding } from 'js-tiktoken';
+import type { TiktokenEncoding } from 'js-tiktoken';
 import { createLogger } from './logger';
 
 const logger = createLogger('Tokenizer');
@@ -7,11 +7,13 @@ const logger = createLogger('Tokenizer');
 const ENCODING_NAME: TiktokenEncoding = 'cl100k_base';
 let encoding: any = null;
 
-try {
-  encoding = getEncoding(ENCODING_NAME);
-} catch (error) {
-  logger.error(`Failed to initialize tiktoken (${ENCODING_NAME})`, error);
-}
+import('js-tiktoken')
+  .then((tiktoken) => {
+    encoding = tiktoken.getEncoding(ENCODING_NAME);
+  })
+  .catch((error) => {
+    logger.error(`Failed to initialize tiktoken (${ENCODING_NAME})`, error);
+  });
 
 /**
  * Counts the number of tokens in a string using tiktoken.

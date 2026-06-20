@@ -32,7 +32,7 @@ export const sendMessageController = async (
       providerId,
       modelId,
       messages,
-      conversationId,
+      conversationId: rawConversationId,
       parent_message_id,
       stream,
       is_search,
@@ -41,6 +41,32 @@ export const sendMessageController = async (
       thinking,
       ref_file_ids,
     } = req.body;
+
+    let accountId = accountIdFromParams || accountIdFromBody;
+    let finalModel = modelId;
+    let conversationId: string | undefined = undefined;
+
+    if (rawConversationId && typeof rawConversationId === 'string') {
+      if (rawConversationId.includes('@')) {
+        const parts = rawConversationId.split('@');
+        const realChatId = parts[0];
+        const accountIdOfChat = parts[1];
+        const modelIdOfChat = parts[2];
+
+        // Check if the chat's account still exists in our database to restore it
+        const chatAccount = findAccountById(accountIdOfChat);
+        if (chatAccount) {
+          accountId = accountIdOfChat;
+          finalModel = modelIdOfChat;
+          conversationId = realChatId;
+          logger.info(`[Controller] Restored accountId: ${accountId}, modelId: ${finalModel} from conversationId: ${rawConversationId}`);
+        } else {
+          logger.warn(`[Controller] Account from conversationId not found: ${accountIdOfChat}. Falling back to request parameters.`);
+        }
+      } else {
+        conversationId = rawConversationId;
+      }
+    }
 
     if (messages && messages.length > 1) {
       if (!conversationId || conversationId.trim() === '') {
@@ -61,7 +87,6 @@ export const sendMessageController = async (
       }
     }
 
-    const accountId = accountIdFromParams || accountIdFromBody;
     const useSearch = is_search === true || search === true;
 
     if (!accountId) {
@@ -96,8 +121,7 @@ export const sendMessageController = async (
     }
 
     // Resolve "auto" model - use provider's default model
-    let finalModel = modelId;
-    if (modelId === 'auto') {
+    if (finalModel === 'auto') {
       const provider = providerRegistry.getProvider(account.provider_id);
       if (provider?.defaultModel) {
         finalModel = provider.defaultModel;
@@ -191,112 +215,165 @@ export const sendMessageController = async (
         }, 300000);
       }
 
-      await sendMessage({
-        credential: account.credential,
-        provider_id: account.provider_id,
-        accountId: account.id,
-        model,
-        messages,
-        conversationId,
-        parent_message_id,
-        search: useSearch,
-        temperature,
-        thinking,
-        ref_file_ids,
-        onContent: (content: string) => {
-          accumulatedResponse += content;
-          if (stream !== false) {
-            if (!firstChunkReceived) {
-              firstChunkReceived = true;
-              if (streamTimeoutId) clearTimeout(streamTimeoutId);
-            }
-            if (res.writableEnded) return;
-            res.write(`data: ${JSON.stringify({ content: unescapeHtml(content) })}\n\n`);
-          } else {
-            accumulatedContent += content;
-          }
-        },
-        onMetadata: (meta: any) => {
-          if (stream !== false) {
-            res.write(`data: ${JSON.stringify({ meta })}\n\n`);
-          } else {
-            accumulatedMetadata = { ...accumulatedMetadata, ...meta };
-          }
-        },
-        onThinking: (content: string) => {
-          if (stream !== false) {
-            res.write(`data: ${JSON.stringify({ thinking: content })}\n\n`);
-          }
-        },
-        onDone: () => {
-          if (streamTimeoutId) clearTimeout(streamTimeoutId);
-          if (stream !== false && res.writableEnded) return;
+      let hasRetried = false;
 
-          const responseSnippet = accumulatedResponse.slice(0, 120).replace(/\n/g, ' ');
-          logger.info(`[Response] len=${accumulatedResponse.length} | "${responseSnippet}"`);
-
-          if (stream !== false) {
-            if (!accumulatedResponse || accumulatedResponse.trim() === '') {
-              logger.warn(
-                `[Response] Provider ${account.provider_id} returned empty content for model=${model}`,
-              );
-              res.write(
-                `data: ${JSON.stringify({ error: 'Provider returned empty response', code: 'EMPTY_RESPONSE' })}\n\n`,
-              );
-            }
-            res.write('data: [DONE]\n\n');
-            res.end();
-          } else {
-            if (!res.headersSent) {
-              if (!accumulatedContent || accumulatedContent.trim() === '') {
-                res.status(502).json({
-                  success: false,
-                  message: 'Provider returned empty response',
-                  error: { code: 'EMPTY_RESPONSE' },
-                });
-                return;
+      const executeSend = async (convId: string | undefined): Promise<void> => {
+        logger.info(`[Controller] executeSend conversationId: ${convId}, modelId: ${finalModel}`);
+        await sendMessage({
+          credential: account.credential!,
+          provider_id: account.provider_id,
+          accountId: account.id,
+          model,
+          messages,
+          conversationId: convId,
+          parent_message_id,
+          search: useSearch,
+          temperature,
+          thinking,
+          ref_file_ids,
+          onContent: (content: string) => {
+            accumulatedResponse += content;
+            if (stream !== false) {
+              if (!firstChunkReceived) {
+                firstChunkReceived = true;
+                if (streamTimeoutId) clearTimeout(streamTimeoutId);
               }
-              res.status(200).json({
-                success: true,
-                message: {
-                  role: 'assistant',
-                  content: unescapeHtml(accumulatedContent),
-                },
-                metadata: accumulatedMetadata,
-              });
+              if (res.writableEnded) return;
+              res.write(`data: ${JSON.stringify({ content: unescapeHtml(content) })}\n\n`);
+            } else {
+              accumulatedContent += content;
             }
-          }
-        },
-        onSessionCreated: (sessionId: string) => {
-          if (stream !== false) {
-            res.write(`event: session_created\ndata: ${sessionId}\n\n`);
-            res.write(
-              `data: ${JSON.stringify({ meta: { conversation_id: sessionId } })}\n\n`,
-            );
-          } else {
-            accumulatedMetadata.conversation_id = sessionId;
-          }
-        },
-        onError: (error: Error) => {
-          if (streamTimeoutId) clearTimeout(streamTimeoutId);
-          logger.error('Stream error', error);
-          if (stream !== false) {
-            if (!res.writableEnded) {
-              const errPayload: any = { error: error.message };
-              if ((error as any).code) errPayload.error_code = (error as any).code;
-              res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
+          },
+          onMetadata: (meta: any) => {
+            if (stream !== false) {
+              res.write(`data: ${JSON.stringify({ meta })}\n\n`);
+            } else {
+              accumulatedMetadata = { ...accumulatedMetadata, ...meta };
+            }
+          },
+          onThinking: (content: string) => {
+            if (stream !== false) {
+              res.write(`data: ${JSON.stringify({ thinking: content })}\n\n`);
+            }
+          },
+          onDone: () => {
+            if (streamTimeoutId) clearTimeout(streamTimeoutId);
+            if (stream !== false && res.writableEnded) return;
+
+            const responseSnippet = accumulatedResponse.slice(0, 120).replace(/\n/g, ' ');
+            logger.info(`[Response] len=${accumulatedResponse.length} | "${responseSnippet}"`);
+
+            if (stream !== false) {
+              if (!accumulatedResponse || accumulatedResponse.trim() === '') {
+                logger.warn(
+                  `[Response] Provider ${account.provider_id} returned empty content for model=${model}`,
+                );
+                res.write(
+                  `data: ${JSON.stringify({ error: 'Provider returned empty response', code: 'EMPTY_RESPONSE' })}\n\n`,
+                );
+              }
+              res.write('data: [DONE]\n\n');
               res.end();
+            } else {
+              if (!res.headersSent) {
+                if (!accumulatedContent || accumulatedContent.trim() === '') {
+                  res.status(502).json({
+                    success: false,
+                    message: 'Provider returned empty response',
+                    error: { code: 'EMPTY_RESPONSE' },
+                  });
+                  return;
+                }
+
+                res.status(200).json({
+                  success: true,
+                  message: {
+                    role: 'assistant',
+                    content: unescapeHtml(accumulatedContent),
+                  },
+                  metadata: accumulatedMetadata,
+                });
+              }
             }
-          } else {
-            if (!res.headersSent) {
-              res.status(500).json({
-                error: error.message,
-                ...((error as any).code ? { error_code: (error as any).code } : {}),
-              });
+          },
+          onSessionCreated: (sessionId: string) => {
+            const compoundId = (account.provider_id === 'moonshotai' || account.provider_id === 'glm52')
+              ? `${sessionId}@${account.id}@${finalModel}`
+              : sessionId;
+
+            if (stream !== false) {
+              res.write(`event: session_created\ndata: ${compoundId}\n\n`);
+              res.write(
+                `data: ${JSON.stringify({ meta: { conversation_id: compoundId } })}\n\n`,
+              );
+            } else {
+              accumulatedMetadata.conversation_id = compoundId;
+            }
+          },
+          onError: async (error: Error) => {
+            const errorMsg = error.message || '';
+            if (convId && !hasRetried && (errorMsg.includes('session not exist') || errorMsg.includes('Failed to append round'))) {
+              logger.warn(`[Controller] Session mismatch/not found for conversationId: ${convId}. Retrying with conversationId = undefined.`);
+              hasRetried = true;
+              try {
+                await executeSend(undefined);
+                return;
+              } catch (retryError: any) {
+                error = retryError;
+              }
+            }
+
+            if (streamTimeoutId) clearTimeout(streamTimeoutId);
+            logger.error('Stream error', error);
+            if (stream !== false) {
+              if (!res.writableEnded) {
+                const errPayload: any = { error: error.message };
+                if ((error as any).code) errPayload.error_code = (error as any).code;
+                res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
+                res.end();
+              }
+            } else {
+              if (!res.headersSent) {
+                res.status(500).json({
+                  error: error.message,
+                  ...((error as any).code ? { error_code: (error as any).code } : {}),
+                });
+              }
+            }
+          },
+        });
+      };
+
+      try {
+        await executeSend(conversationId);
+      } catch (error: any) {
+        const errorMsg = error.message || '';
+        if (conversationId && !hasRetried && (errorMsg.includes('session not exist') || errorMsg.includes('Failed to append round'))) {
+          logger.warn(`[Controller] Caught error in outer catch. Session mismatch/not found for conversationId: ${conversationId}. Retrying with conversationId = undefined.`);
+          hasRetried = true;
+          try {
+            await executeSend(undefined);
+          } catch (retryError: any) {
+            logger.error('Retry failed in outer catch', retryError);
+            if (streamTimeoutId) clearTimeout(streamTimeoutId);
+            if (stream !== false && !res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ error: retryError.message })}\n\n`);
+              res.end();
+            } else if (!res.headersSent) {
+              res.status(500).json({ error: retryError.message });
             }
           }
-        },
-      });
+        } else {
+          logger.error('Error in sendMessage service call', error);
+          if (streamTimeoutId) clearTimeout(streamTimeoutId);
+          if (stream !== false && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+          } else if (!res.headersSent) {
+            res.status(500).json({ error: error.message });
+          }
+        }
+      }
     } catch (error: any) {
       logger.error('Error in sendMessage service call', error);
       if (!res.headersSent) {
