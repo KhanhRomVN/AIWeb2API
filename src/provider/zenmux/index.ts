@@ -7,36 +7,6 @@ import { StringDecoder } from 'string_decoder';
 
 const logger = createLogger('ZenMuxProvider');
 
-// ---------------------------------------------------------------------------
-// Per-model configuration table.
-// Add a new row here to support additional models on the zenmux.ai platform.
-// ---------------------------------------------------------------------------
-interface ModelConfig {
-  slug: string;               // ZenMux internal model slug
-  endpointProviderName: string; // Backend provider label stored in "extra" JSON
-  maxTokens: number;          // max_tokens for the Anthropic-compatible API call
-}
-
-const MODEL_CONFIG: Record<string, ModelConfig> = {
-  // Kimi K2.7 Code (Moonshot AI)
-  'kimi-k2.7-code': {
-    slug: 'moonshotai/kimi-k2.7-code-free',
-    endpointProviderName: 'MoonshotAI',
-    maxTokens: 262144,
-  },
-  // GLM 5.2 (BigModel / Z.AI)
-  'glm-5.2': {
-    slug: 'z-ai/glm-5.2-free',
-    endpointProviderName: 'BigModel',
-    maxTokens: 128000,
-  },
-};
-
-/** Resolve model config, case-insensitive. Falls back to Kimi. */
-function resolveModelConfig(modelId: string): ModelConfig {
-  const key = modelId.toLowerCase().replace(/^glm-?5\.2$/i, 'glm-5.2');
-  return MODEL_CONFIG[key] ?? MODEL_CONFIG['kimi-k2.7-code'];
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,7 +91,7 @@ class ZenMuxProvider implements Provider {
   // ---- Interface: isModelSupported --------------------------------------
   isModelSupported(model: string): boolean {
     const m = model.toLowerCase();
-    return m.includes('kimi') || m.includes('moonshot') || m.includes('glm');
+    return m.includes(':') || m.includes('kimi') || m.includes('moonshot') || m.includes('glm');
   }
 
   // ---- Interface: login ------------------------------------------------
@@ -200,9 +170,37 @@ class ZenMuxProvider implements Provider {
       const ctoken = cookies['ctoken'];
       if (!ctoken) throw new Error('ctoken is missing in credentials/cookies');
 
-      // --- Resolve model config ---
-      const modelCfg = resolveModelConfig(params.model);
-      logger.info(`[ZenMux] model=${params.model} → slug=${modelCfg.slug} provider=${modelCfg.endpointProviderName} maxTokens=${modelCfg.maxTokens}`);
+      // Parse model details dynamically
+      const modelId = params.model || 'moonshotai/kimi-k2.7-code-free:moonshotai';
+      let slug = 'moonshotai/kimi-k2.7-code-free';
+      let providerSlug = 'moonshotai';
+      if (modelId.includes(':')) {
+        const parts = modelId.split(':');
+        slug = parts[0];
+        providerSlug = parts[1];
+      } else {
+        slug = modelId;
+      }
+
+      const getEndpointProviderName = (pSlug: string): string => {
+        const lower = pSlug.toLowerCase();
+        if (lower === 'bigmodel') return 'BigModel';
+        if (lower === 'z-ai' || lower === 'zai') return 'BigModel';
+        if (lower === 'moonshotai' || lower === 'moonshot-ai') return 'MoonshotAI';
+        return pSlug.charAt(0).toUpperCase() + pSlug.slice(1);
+      };
+      const endpointProviderName = getEndpointProviderName(providerSlug);
+
+      const getMaxTokens = (s: string): number => {
+        if (s.includes('kimi')) return 262144;
+        if (s.includes('glm-5.2')) return 128000;
+        if (s.includes('glm-4.7')) return 128000;
+        if (s.includes('glm-4.6')) return 128000;
+        return 128000;
+      };
+      const maxTokens = getMaxTokens(slug);
+
+      logger.info(`[ZenMux] model=${params.model} → slug=${slug} provider=${endpointProviderName} maxTokens=${maxTokens}`);
 
       // --- Determine if new or existing chat room ---
       let chatId: string | undefined;
@@ -227,8 +225,8 @@ class ZenMuxProvider implements Provider {
 
       const commonExtraBase = {
         subChatId,
-        modelInfo: { slug: modelCfg.slug },
-        endpointProviderName: modelCfg.endpointProviderName,
+        modelInfo: { slug },
+        endpointProviderName,
         chatRequestId,
       };
 
@@ -272,7 +270,7 @@ class ZenMuxProvider implements Provider {
           extra: JSON.stringify({
             subChats: [{
               subChatId,
-              chatModel: { modelInfo: { slug: modelCfg.slug } },
+              chatModel: { modelInfo: { slug } },
               selectedProtocolId: 'anthropic',
               billing: { mode: 'payg' },
               imageConfig: { aspectRatio: '1:1', imageSize: '1K', quality: '' },
@@ -329,8 +327,8 @@ class ZenMuxProvider implements Provider {
       };
 
       const streamBody: any = {
-        model: `${modelCfg.slug}:${modelCfg.endpointProviderName.toLowerCase()}`,
-        max_tokens: modelCfg.maxTokens,
+        model: params.model.includes(':') ? params.model : `${slug}:${providerSlug}`,
+        max_tokens: maxTokens,
         messages: formattedMessages,
         stream: true,
       };
@@ -358,6 +356,21 @@ class ZenMuxProvider implements Provider {
 
       if (!response.ok) {
         const errText = await response.text();
+        if (response.status === 429 || errText.includes('rate_limit') || errText.includes('usage limit')) {
+          try {
+            const db = require('../../database').getDb();
+            const accountRow = db.prepare('SELECT id FROM accounts WHERE credential LIKE ?')
+              .get(`%${ctoken}%`);
+            if (accountRow) {
+              const cooldownTime = Date.now() + 30 * 60 * 1000; // 30 minutes cooldown
+              db.prepare('UPDATE accounts SET usage = ?, reset_period = ? WHERE id = ?')
+                .run('Rate Limited', String(cooldownTime), accountRow.id);
+              logger.info(`[ZenMux] Account ${accountRow.id} marked as Rate Limited until ${new Date(cooldownTime).toISOString()}`);
+            }
+          } catch (dbErr: any) {
+            logger.error(`[ZenMux] Failed to mark account as rate limited in DB: ${dbErr.message}`);
+          }
+        }
         throw new Error(`ZenMux API Error ${response.status}: ${errText}`);
       }
       if (!response.body) throw new Error('No response body');
@@ -433,14 +446,14 @@ class ZenMuxProvider implements Provider {
           subChatId,
           chatRequestId,
           status: 'success',
-          modelInfo: { slug: modelCfg.slug },
+          modelInfo: { slug },
           usage: { prompt_tokens: inputTokens, completion_tokens: outputTokens },
           firstTokenLatency,
           totalTokenTime,
           requestId: chatRequestId,
           chatRequestTime: new Date(startTime).toISOString(),
           zenmuxRequestId: chatRequestId,
-          endpointProviderName: modelCfg.endpointProviderName,
+          endpointProviderName,
         };
         if (fullThinking) {
           extraObj.reasoning = fullThinking;
@@ -481,14 +494,195 @@ class ZenMuxProvider implements Provider {
   }
 
   // ---- Interface: getModels --------------------------------------------
-  async getModels(): Promise<Array<{
-    id: string; name: string; is_thinking?: boolean;
-    max_context_length?: number | null; is_image_upload?: boolean; is_video_upload?: boolean;
-  }>> {
-    return [
-      { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', is_thinking: true, max_context_length: 262144, is_image_upload: false, is_video_upload: false },
-      { id: 'GLM-5.2',        name: 'GLM 5.2',         is_thinking: true, max_context_length: 128000, is_image_upload: true,  is_video_upload: false },
-    ];
+  async getModels(credential: string, accountId?: string): Promise<Array<{ id: string; name: string; is_thinking?: boolean; max_context_length?: number | null; is_image_upload?: boolean; is_video_upload?: boolean; is_search?: boolean }>> {
+    try {
+      let cred: any;
+      try {
+        cred = JSON.parse(credential);
+      } catch {
+        cred = { cookies: credential };
+      }
+
+      const cookieStr = cred.cookies || credential;
+      const cookies = parseCookies(cookieStr);
+      const ctoken = cookies['ctoken'];
+      if (!ctoken) {
+        throw new Error('ctoken is missing in credentials/cookies');
+      }
+
+      logger.info(`[ZenMux] Fetching available models from ZenMux...`);
+      const response = await fetch(`https://zenmux.ai/api/frontend/model/available/list?ctoken=${encodeURIComponent(ctoken)}`, {
+        headers: {
+          'Cookie': cookieStr,
+          'x-api-version': '2026-04-20',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        },
+        timeout: 10000
+      } as any);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models from ZenMux: ${response.status} ${response.statusText}`);
+      }
+
+      const json = await response.json() as any;
+      if (!json.success || !json.data) {
+        throw new Error(`ZenMux API returned unsuccessful response: ${JSON.stringify(json)}`);
+      }
+
+      let models: any[] = [];
+      if (Array.isArray(json.data)) {
+        models = json.data;
+      } else if (json.data && Array.isArray(json.data.models)) {
+        models = json.data.models;
+      } else {
+        throw new Error(`ZenMux API returned invalid models structure: ${JSON.stringify(json)}`);
+      }
+
+      // Filter all free models
+      const filtered = models.filter((m: any) => {
+        return m.isFree === true || (Array.isArray(m.plans) && m.plans.includes('free'));
+      });
+
+      logger.info(`[ZenMux] Found ${filtered.length} free models on ZenMux`);
+
+      if (filtered.length === 0) {
+        return [
+          { id: 'moonshotai/kimi-k2.7-code-free:moonshotai', name: 'Kimi K2.7 Code (Free)', is_thinking: true, is_search: false, is_image_upload: true, max_context_length: 262144 },
+          { id: 'z-ai/glm-5.2-free:bigmodel', name: 'GLM 5.2 (Free)', is_thinking: true, is_search: true, is_image_upload: true, max_context_length: 128000 },
+        ];
+      }
+
+      return filtered.map((m: any) => {
+        const pSlug = m.provider_slug || m.providerSlug || 'zenmux';
+        const endpoint = m.endpoint || `${m.slug}:${pSlug}`;
+        
+        const isThinking = m.flags?.includes('reasoning_to_reasoning_content') || m.supports_reasoning === 1 || m.supports_reasoning === 2;
+        const isSearch = m.flags?.includes('web_search') || m.supported_parameters?.includes('web_search') || m.slug?.includes('glm-5.2');
+        const isImage = m.input_modalities?.includes('image') || m.slug?.includes('vision') || m.slug?.includes('4.6v') || m.slug?.includes('glm-5.2');
+
+        return {
+          id: endpoint,
+          name: m.name || m.slug,
+          is_thinking: isThinking,
+          is_search: isSearch,
+          is_image_upload: isImage,
+          max_context_length: m.max_completion_tokens || m.maxTokens || 128000,
+        };
+      });
+    } catch (error: any) {
+      logger.error('[ZenMux] Error in getModels:', error);
+      return [
+        { id: 'moonshotai/kimi-k2.7-code-free:moonshotai', name: 'Kimi K2.7 Code (Free)', is_thinking: true, is_search: false, is_image_upload: true, max_context_length: 262144 },
+        { id: 'z-ai/glm-5.2-free:bigmodel', name: 'GLM 5.2 (Free)', is_thinking: true, is_search: true, is_image_upload: true, max_context_length: 128000 },
+      ];
+    }
+  }
+
+  // ---- Interface: getUsage ----------------------------------------------
+  async getUsage(credential: string): Promise<{ usage: string; resetPeriod: string }> {
+    try {
+      let cred: any;
+      try {
+        cred = JSON.parse(credential);
+      } catch {
+        cred = { cookies: credential };
+      }
+      const cookieStr = cred.cookies || credential;
+      const cookies = parseCookies(cookieStr);
+      const ctoken = cookies['ctoken'];
+      if (!ctoken) {
+        throw new Error('ctoken is missing in credentials/cookies');
+      }
+
+      // Check database to see if we recently marked it as Rate Limited
+      const db = require('../../database').getDb();
+      const accountRow = db.prepare('SELECT id, usage, reset_period FROM accounts WHERE credential LIKE ?')
+        .get(`%${ctoken}%`);
+
+      if (accountRow && accountRow.usage && accountRow.usage.startsWith('Rate Limited')) {
+        const resetTime = parseInt(accountRow.reset_period || '0', 10);
+        if (Date.now() < resetTime) {
+          const remainingMinutes = Math.ceil((resetTime - Date.now()) / 60000);
+          logger.info(`[ZenMux] Account ${accountRow.id} is in cooldown (Rate Limited) for ${remainingMinutes} more minutes`);
+          return {
+            usage: `Rate Limited (${remainingMinutes}m)`,
+            resetPeriod: `${remainingMinutes}m`,
+          };
+        } else {
+          logger.info(`[ZenMux] Cooldown expired for account ${accountRow.id}, resetting status`);
+          db.prepare('UPDATE accounts SET usage = NULL, reset_period = NULL WHERE id = ?')
+            .run(accountRow.id);
+        }
+      }
+
+      logger.info(`[ZenMux] Fetching subscription usage...`);
+
+      // 1. Fetch subscription details (for period_quota and plan name)
+      const subRes = await fetch(`https://zenmux.ai/api/subscription/get_current?ctoken=${encodeURIComponent(ctoken)}`, {
+        headers: {
+          'Cookie': cookieStr,
+          ...COMMON_HEADERS,
+        },
+        timeout: 5000,
+      } as any);
+
+      if (!subRes.ok) {
+        throw new Error(`Failed to fetch subscription: ${subRes.status} ${subRes.statusText}`);
+      }
+
+      const subJson = await subRes.json() as any;
+      if (!subJson.success || !subJson.data) {
+        throw new Error(`Subscription API returned unsuccessful: ${JSON.stringify(subJson)}`);
+      }
+
+      const planName = subJson.data.name || 'Free Plan';
+      const periodQuota = subJson.data.period_quota ?? 5;
+      const resetDesc = subJson.data.desc || '5 Flows/5h';
+
+      // Parse reset period from description (e.g. "5h") or default to "5h"
+      let resetPeriod = '5h';
+      const descParts = resetDesc.split('/');
+      if (descParts.length > 1) {
+        resetPeriod = descParts[1].trim();
+      }
+
+      // 2. Fetch current usage (flows used)
+      const usageRes = await fetch(`https://zenmux.ai/api/subscription/get_current_usage?ctoken=${encodeURIComponent(ctoken)}`, {
+        headers: {
+          'Cookie': cookieStr,
+          ...COMMON_HEADERS,
+        },
+        timeout: 5000,
+      } as any);
+
+      if (!usageRes.ok) {
+        throw new Error(`Failed to fetch usage: ${usageRes.status} ${usageRes.statusText}`);
+      }
+
+      const usageJson = await usageRes.json() as any;
+      if (!usageJson.success) {
+        throw new Error(`Usage API returned unsuccessful: ${JSON.stringify(usageJson)}`);
+      }
+
+      let used = 0;
+      if (usageJson.data) {
+        // Safe check for potential used/count properties
+        used = usageJson.data.used ?? usageJson.data.count ?? usageJson.data.flowCount ?? usageJson.data.totalFlows ?? 0;
+      }
+
+      const usageStr = `${used}/${periodQuota} Flows`;
+
+      return {
+        usage: usageStr,
+        resetPeriod: resetPeriod,
+      };
+    } catch (error: any) {
+      logger.error('[ZenMux] Error in getUsage:', error.message);
+      return {
+        usage: 'Unknown',
+        resetPeriod: 'unknown',
+      };
+    }
   }
 }
 

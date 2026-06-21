@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { providerRegistry } from '../provider/registry';
 import * as path from 'path';
+import { getDb } from '../database';
 
 import {
   findAccountById,
@@ -348,9 +349,37 @@ export const getAccounts = async (
       order: order as 'ASC' | 'DESC',
     });
 
-    const accountsWithStatus = rows.map((row) => {
-      return { ...row };
-    });
+    const accountsWithStatus = await Promise.all(
+      rows.map(async (row) => {
+        const provider = providerRegistry.getProvider(row.provider_id);
+        if (provider?.getUsage && row.credential) {
+          try {
+            // Live fetch with a 3s timeout
+            const usagePromise = provider.getUsage(row.credential);
+            const timeoutPromise = new Promise<{ usage: string; resetPeriod: string }>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout')), 3000)
+            );
+            const usageInfo = await Promise.race([usagePromise, timeoutPromise]);
+
+            // Update database asynchronously if not rate limited
+            if (!usageInfo.usage.startsWith('Rate Limited')) {
+              const db = getDb();
+              db.prepare('UPDATE accounts SET usage = ?, reset_period = ? WHERE id = ?')
+                .run(usageInfo.usage, usageInfo.resetPeriod, row.id);
+            }
+
+            return {
+              ...row,
+              usage: usageInfo.usage,
+              reset_period: usageInfo.resetPeriod,
+            };
+          } catch (err: any) {
+            logger.warn(`On-demand usage check failed for ${row.email}: ${err.message}`);
+          }
+        }
+        return { ...row };
+      })
+    );
 
     res.status(200).json({
       success: true,
