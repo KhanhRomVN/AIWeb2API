@@ -54,14 +54,27 @@ export const sendMessageController = async (
         const accountIdOfChat = parts[1];
         const modelIdOfChat = parts[2];
 
+        // Detect model/account switch: if the request body explicitly specifies a different
+        // model or account than what is embedded in the compound conversationId, the user
+        // has switched mid-session. We must NOT restore the old model/account from the
+        // compound ID — doing so would silently use the wrong model (root cause of the race).
+        const requestedModel = modelId; // model from request body (new selection)
+        const requestedAccount = accountIdFromBody || accountIdFromParams;
+        const modelSwitched = requestedModel && modelIdOfChat && requestedModel !== modelIdOfChat;
+        const accountSwitched = requestedAccount && accountIdOfChat && requestedAccount !== accountIdOfChat;
+
         // Check if the chat's account still exists in our database to restore it
         const chatAccount = findAccountById(accountIdOfChat);
-        if (chatAccount) {
+        if (chatAccount && !modelSwitched && !accountSwitched) {
           accountId = accountIdOfChat;
           finalModel = modelIdOfChat;
           conversationId = realChatId;
           restoredFromCompoundId = true;
           logger.info(`[Controller] Restored accountId: ${accountId}, modelId: ${finalModel} from conversationId: ${rawConversationId}`);
+        } else if (modelSwitched || accountSwitched) {
+          // Model/account switched — use request body values and start a NEW session (no conversationId)
+          logger.info(`[Controller] Model/account switched detected. Old: model=${modelIdOfChat} acc=${accountIdOfChat} → New: model=${requestedModel} acc=${requestedAccount}. Starting new session.`);
+          conversationId = undefined; // force new backend session
         } else {
           logger.warn(`[Controller] Account from conversationId not found: ${accountIdOfChat}. Falling back to request parameters.`);
         }
@@ -70,6 +83,7 @@ export const sendMessageController = async (
       }
     }
 
+    /*
     if (messages && messages.length > 1) {
       if (!conversationId || conversationId.trim() === '') {
         if (!parent_message_id) {
@@ -88,6 +102,7 @@ export const sendMessageController = async (
         }
       }
     }
+    */
 
     const useSearch = is_search === true || search === true;
 

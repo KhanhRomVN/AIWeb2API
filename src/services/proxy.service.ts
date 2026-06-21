@@ -82,6 +82,24 @@ export class ProxyService {
       }
 
       const MitmProxy = MitmProxyModule.Proxy || MitmProxyModule;
+
+      if (MitmProxy.prototype && typeof MitmProxy.prototype._onWebSocketClose === 'function') {
+        const originalOnWebSocketClose = MitmProxy.prototype._onWebSocketClose;
+        MitmProxy.prototype._onWebSocketClose = function (ctx: any, closedByServer: boolean, code: any, message: any) {
+          let safeCode = code;
+          if (typeof code === 'number') {
+            const isValid = (code >= 1000 && code <= 1013 && code !== 1004 && code !== 1005 && code !== 1006) ||
+                            (code >= 3000 && code <= 4999);
+            if (!isValid) {
+              safeCode = undefined;
+            }
+          } else {
+            safeCode = undefined;
+          }
+          return originalOnWebSocketClose.call(this, ctx, closedByServer, safeCode, message);
+        };
+      }
+
       this.proxy = new MitmProxy();
 
       const config = this.getConfig();
