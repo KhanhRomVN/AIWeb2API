@@ -63,9 +63,13 @@ export async function uploadFile(
           );
         }
       } catch (e) {
-        logger.warn(
+        logger.error(
           '[DeepSeek Upload] Failed to parse PoW challenge response, continuing without PoW token',
-          e,
+          {
+            error: e,
+            challengeResStatus: challengeRes.status,
+            challengeResText: await challengeRes.text().catch(() => '<unreadable>'),
+          }
         );
       }
     }
@@ -148,7 +152,16 @@ export async function uploadFile(
               }
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          logger.error(
+            `[DeepSeek Upload] Failed to check file status | fileId=${fileId} | attempt=${attempts + 1}`,
+            {
+              error: e,
+              fileId,
+              attempt: attempts + 1,
+            }
+          );
+        }
         attempts++;
       }
       return { id: fileId, token_usage: 0 };

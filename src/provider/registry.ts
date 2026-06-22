@@ -12,9 +12,6 @@ class ProviderRegistry {
 
   register(provider: Provider) {
     const key = provider.name.toLowerCase();
-    logger.info(
-      `[Registry] Registering provider: ${provider.name} -> key: "${key}"`,
-    );
     this.providers.set(key, provider);
 
     // Create aliases for common variations
@@ -37,9 +34,6 @@ class ProviderRegistry {
 
     for (const alias of aliases) {
       if (!this.providers.has(alias)) {
-        logger.info(
-          `[Registry] Also registering alias: "${alias}" for ${provider.name}`,
-        );
         this.providers.set(alias, provider);
       }
     }
@@ -52,14 +46,6 @@ class ProviderRegistry {
   getProvider(name: string): Provider | undefined {
     const key = name.toLowerCase();
     const provider = this.providers.get(key);
-    logger.info(
-      `[Registry] getProvider("${name}") -> key: "${key}", found: ${!!provider}`,
-    );
-    if (!provider) {
-      logger.info(
-        `[Registry] Available providers: ${Array.from(this.providers.keys()).join(', ')}`,
-      );
-    }
     return provider;
   }
 
@@ -112,7 +98,6 @@ class ProviderRegistry {
       ];
       for (const p of providers) {
         if (p && p.name) {
-          logger.info(`[Registry] Loading provider: ${p.name}`);
           this.register(p);
         } else {
           logger.warn(`[Registry] Invalid provider: ${p}`);
@@ -124,16 +109,8 @@ class ProviderRegistry {
       for (const alias of ['moonshotai', 'glm52', 'kimi']) {
         if (!this.providers.has(alias)) {
           this.providers.set(alias, ZenMuxProvider);
-          logger.info(`[Registry] Alias '${alias}' → ZenMuxProvider`);
         }
       }
-
-      logger.info(
-        `[Registry] Total registered providers: ${this.providers.size}`,
-      );
-      logger.info(
-        `[Registry] Provider keys: ${Array.from(this.providers.keys()).join(', ')}`,
-      );
     } catch (error) {
       logger.error('Failed to load providers', error);
     }

@@ -4,6 +4,7 @@ import { createLogger } from '../utils/logger';
 import { recordRequest } from '../services/metrics.service';
 import { getAllProviders } from '../services/provider.service';
 import { providerRegistry } from '../provider/registry';
+import { countMessagesTokens, countTokens } from '../utils/tokenizer';
 
 import { findAccountById } from '../repositories/account.repository';
 
@@ -165,6 +166,8 @@ export const sendMessageController = async (
 
     let accumulatedContent = '';
     let accumulatedMetadata: any = { ...initialMeta };
+    let finalOutputMessage = '';
+    let finalError: Error | null = null;
 
     try {
       recordRequest(account.provider_id, model);
@@ -180,15 +183,6 @@ export const sendMessageController = async (
           return acc;
         },
         {},
-      );
-      logger.info(
-        `[Request] provider=${account.provider_id} model=${model} msgs=${messages?.length} (${Object.entries(
-          roleBreakdown || {},
-        )
-          .map(([r, c]) => `${r}:${c}`)
-          .join(
-            ',',
-          )}) convId=${conversationId || 'none'} | "${lastMsgSnippet}"`,
       );
 
       let accumulatedResponse = '';
@@ -220,6 +214,7 @@ export const sendMessageController = async (
         ref_file_ids,
         onContent: (content: string) => {
           accumulatedResponse += content;
+          finalOutputMessage = accumulatedResponse;
           if (stream !== false) {
             if (!firstChunkReceived) {
               firstChunkReceived = true;
@@ -231,6 +226,7 @@ export const sendMessageController = async (
             );
           } else {
             accumulatedContent += content;
+            finalOutputMessage = accumulatedContent;
           }
         },
         onMetadata: (meta: any) => {
@@ -248,6 +244,27 @@ export const sendMessageController = async (
         onDone: () => {
           if (streamTimeoutId) clearTimeout(streamTimeoutId);
           if (stream !== false && res.writableEnded) return;
+
+          // Log transaction details
+          const MAX_PREVIEW_LENGTH = 200;
+          const truncate = (str: string) => {
+            if (str.length <= MAX_PREVIEW_LENGTH) return str;
+            return str.slice(0, MAX_PREVIEW_LENGTH) + '...';
+          };
+
+          const outputPreview = finalOutputMessage
+            ? truncate(finalOutputMessage)
+            : '';
+
+          // Calculate tokens
+          const inputToken = messages ? countMessagesTokens(messages) : 0;
+          const outputToken = finalOutputMessage
+            ? countTokens(finalOutputMessage)
+            : 0;
+
+          logger.info(
+            `[Transaction Complete] provider_id=${account.provider_id} model_id=${model} account_id=${account.id} conversation_id=${conversationId || 'none'} input_token=${inputToken} output_token=${outputToken}`,
+          );
 
           if (stream !== false) {
             if (!accumulatedResponse || accumulatedResponse.trim() === '') {
@@ -293,7 +310,29 @@ export const sendMessageController = async (
         },
         onError: (error: Error) => {
           if (streamTimeoutId) clearTimeout(streamTimeoutId);
-          logger.error('Stream error', error);
+
+          // Log transaction details with error
+          const MAX_PREVIEW_LENGTH = 200;
+          const truncate = (str: string) => {
+            if (str.length <= MAX_PREVIEW_LENGTH) return str;
+            return str.slice(0, MAX_PREVIEW_LENGTH) + '...';
+          };
+
+          const outputPreview = finalOutputMessage
+            ? truncate(finalOutputMessage)
+            : '';
+
+          // Calculate tokens
+          const inputToken = messages ? countMessagesTokens(messages) : 0;
+          const outputToken = finalOutputMessage
+            ? countTokens(finalOutputMessage)
+            : 0;
+
+          logger.error(
+            `[Transaction Error] provider_id=${account.provider_id} model_id=${model} account_id=${account.id} conversation_id=${conversationId || 'none'} input_token=${inputToken} output_token=${outputToken} error=${error.message}`,
+            { stack: error.stack, code: (error as any).code },
+          );
+
           if (stream !== false) {
             if (!res.writableEnded) {
               const errPayload: any = { error: error.message };

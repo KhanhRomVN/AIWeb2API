@@ -18,7 +18,9 @@ const logger = createLogger('ChatService');
 // ---------------------------------------------------------------------------
 const pendingConversations = new Map<string, Promise<string>>();
 
-export const sendMessage = async (options: SendMessageOptions): Promise<void> => {
+export const sendMessage = async (
+  options: SendMessageOptions,
+): Promise<void> => {
   const {
     provider_id,
     messages,
@@ -31,20 +33,30 @@ export const sendMessage = async (options: SendMessageOptions): Promise<void> =>
   if (!(await isProviderEnabled(provider_id))) {
     const error = new Error(`Provider ${provider_id} is disabled`);
     // Record error metric before throwing
-    recordError(accountId, provider_id, options.model || 'unknown', error.message);
+    recordError(
+      accountId,
+      provider_id,
+      options.model || 'unknown',
+      error.message,
+    );
     throw error;
   }
 
   const provider = providerRegistry.getProvider(provider_id);
   if (!provider) {
-    const error = new Error(`Provider ${provider_id} not supported for sending messages`);
-    recordError(accountId, provider_id, options.model || 'unknown', error.message);
+    const error = new Error(
+      `Provider ${provider_id} not supported for sending messages`,
+    );
+    recordError(
+      accountId,
+      provider_id,
+      options.model || 'unknown',
+      error.message,
+    );
     throw error;
   }
 
   let accumulatedAssistantContent = '';
-
-  logger.info(`sendMessage — provider: ${provider_id}`);
 
   const wrappedOptions: SendMessageOptions = {
     ...options,
@@ -79,7 +91,12 @@ export const sendMessage = async (options: SendMessageOptions): Promise<void> =>
   } catch (error) {
     // Record error metric for any unhandled errors from provider
     const errorMessage = error instanceof Error ? error.message : String(error);
-    recordError(accountId, provider_id, options.model || 'unknown', errorMessage);
+    recordError(
+      accountId,
+      provider_id,
+      options.model || 'unknown',
+      errorMessage,
+    );
     throw error;
   }
 };

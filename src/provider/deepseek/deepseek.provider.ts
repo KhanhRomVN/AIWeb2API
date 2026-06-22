@@ -246,8 +246,11 @@ export class DeepSeekProvider implements Provider {
       headers: baseHeaders,
     });
 
+    // Declare variables outside try-catch so they're accessible in catch block
+    let sessionId: string | undefined = options.conversationId;
+    let currentModel = model;
+
     try {
-      let sessionId = options.conversationId;
       if (!sessionId) {
         const sessionRes = await client.post('/api/v0/chat_session/create', {
           character_id: null,
@@ -270,6 +273,7 @@ export class DeepSeekProvider implements Provider {
       }
 
       if (!sessionId) throw new Error('Failed to obtain session ID');
+      currentModel = model;
 
       if (onSessionCreated) onSessionCreated(sessionId);
       if (onMetadata) {
@@ -299,15 +303,9 @@ export class DeepSeekProvider implements Provider {
         { target_path: '/api/v0/chat/completion' },
       );
       let powResponseBase64 = '';
-      logger.debug(
-        `[DeepSeek] PoW challenge response | status=${challengeRes.status} | ok=${challengeRes.ok} | session=${sessionId}`,
-      );
       if (challengeRes.ok) {
         try {
           const rawText = await challengeRes.text();
-          logger.debug(
-            `[DeepSeek] PoW challenge raw body | len=${rawText.length} | preview=${rawText.slice(0, 120)}`,
-          );
           const challengeJson = JSON.parse(rawText);
           const challengeData: PoWChallenge =
             challengeJson?.data?.biz_data?.challenge;
@@ -495,6 +493,16 @@ export class DeepSeekProvider implements Provider {
 
       onDone();
     } catch (err: any) {
+      // Log full error details for debugging
+      logger.error('[DeepSeek] handleMessage error:', {
+        message: err.message,
+        stack: err.stack,
+        code: err.code,
+        status: err.status,
+        response: err.response,
+        sessionId: sessionId || 'unknown',
+        model: currentModel || 'unknown',
+      });
       onError(err);
     }
   }

@@ -120,7 +120,11 @@ export const proxyHandler: ProxyHandler = {
           delete (ctx as any).capturedUnmaskedEmail;
         }
       } catch (e) {
-        logger.error('[Proxy] Failed to parse DeepSeek Login Response:', e);
+        logger.error('[Proxy] Failed to parse DeepSeek Login Response:', {
+          error: e,
+          body: body.slice(0, 500),
+          url: url,
+        });
       }
     }
 
@@ -173,7 +177,11 @@ export const proxyHandler: ProxyHandler = {
           }
         }
       } catch (e) {
-        logger.error('[Proxy] Failed to parse DeepSeek User Info:', e);
+        logger.error('[Proxy] Failed to parse DeepSeek User Info:', {
+          error: e,
+          body: body.slice(0, 500),
+          url: url,
+        });
       }
     }
   },

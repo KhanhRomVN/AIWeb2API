@@ -100,10 +100,6 @@ export async function parseSSEStream(
   // regardless of whether we see a {response: {fragments}} object up front.
   let snapshotMode = priorContentLength > 0;
 
-  logger.debug(
-    `[DeepSeek] parseSSEStream START | session=${sessionId} | priorContentLength=${priorContentLength} | snapshotMode=${snapshotMode}`,
-  );
-
   for await (const chunk of responseBody) {
     const chunkStr = chunk.toString();
     totalBytesProcessed += chunkStr.length;
@@ -170,8 +166,15 @@ export async function parseSSEStream(
             const hintMsg =
               json.content || 'Unknown DeepSeek server hint error';
             const finishReason = json.finish_reason || '';
-            logger.warn(
+            // Log full error details with logger.error for debugging
+            logger.error(
               `[DeepSeek] Server hint error | session=${sessionId} | finish_reason=${finishReason} | message=${hintMsg}`,
+              {
+                fullJson: json,
+                sessionId,
+                finishReason,
+                hintMsg,
+              }
             );
             const err: any = new Error(hintMsg);
             if (finishReason) err.code = finishReason;
@@ -307,10 +310,7 @@ export async function parseSSEStream(
           if (snapshotSeenLength === 0) {
             snapshotSeenLength = 0; // explicit no-op: already 0, kept for clarity
           }
-          const fragmentCount = value.response.fragments?.length ?? 0;
-          logger.debug(
-            `[DeepSeek] fragments snapshot | session=${sessionId} | msgId=${responseMessageId} | fragments=${fragmentCount} | priorContentLength=${priorContentLength} | snapshotSeenLength=${snapshotSeenLength}`,
-          );
+
           for (const fragment of value.response.fragments) {
             if (fragment.type === 'THINK') {
               currentModeRef.value = 'THINK';
@@ -422,17 +422,20 @@ export async function parseSSEStream(
         } else if (contentChunkCount === 0) {
           // Unhandled path — silently ignore
         }
-      } catch (_e) {
-        // Ignore parse errors for non-hint lines (hint errors are re-thrown above)
-        logger.debug(
-          `[DeepSeek] SSE parse error (ignored) | session=${sessionId} | line="${line.slice(0, 80)}" | err=${(_e as any)?.message}`,
+      } catch (e) {
+        // Log all parse errors with full details for debugging
+        const err = e as any;
+        logger.error(
+          `[DeepSeek] SSE parse error | session=${sessionId} | line="${line.slice(0, 200)}"`,
+          {
+            message: err?.message || 'Unknown parse error',
+            stack: err?.stack,
+            linePreview: line.slice(0, 500),
+          }
         );
       }
     }
   }
 
-  logger.debug(
-    `[DeepSeek] parseSSEStream complete | session=${sessionId} | status=${isIncomplete ? 'INCOMPLETE' : 'COMPLETE'} | msgId=${responseMessageId} | totalBytes=${totalBytesProcessed} | contentChunks=${contentChunkCount} | accLen=${accumulatedContent.length} | snapshotMode=${snapshotMode} | snapshotSeenLength=${snapshotSeenLength}`,
-  );
   return { incomplete: isIncomplete, responseMessageId, accumulatedContent };
 }
