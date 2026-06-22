@@ -1,9 +1,6 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { ChildProcess, execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { ChildProcess } from 'child_process';
 import { createLogger } from '../../utils/logger';
 import { findAvailablePort } from '../../utils/net';
 
@@ -49,47 +46,29 @@ export class CDPService extends EventEmitter {
     this.profileName = profileName;
   }
 
-  private findChrome(): string | null {
-    const commonPaths = [
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-      '/snap/bin/chromium',
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    ];
-
-    if (process.platform === 'win32') {
-      const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-      commonPaths.push(path.join(localAppData, 'Google/Chrome/Application/chrome.exe'));
-      commonPaths.push(path.join(localAppData, 'Chromium/Application/chrome.exe'));
-    }
-
-    for (const p of commonPaths) {
-      if (fs.existsSync(p)) return p;
-    }
-
-    try {
-      const output = execSync(process.platform === 'win32' ? 'where chrome' : 'which google-chrome || which chromium', {
-        encoding: 'utf-8',
-        stdio: 'pipe',
-      });
-      if (output.trim()) return output.trim().split('\r\n')[0].split('\n')[0];
-    } catch (e) {
-      // ignore
-    }
-
-    return null;
-  }
-
   async launchBrowser(url: string, customUserDataDir?: string, extensionPath?: string): Promise<boolean> {
     const debugPort = await findAvailablePort(9222);
     this.debugPort = debugPort;
     logger.info(`[CDP] Launching browser with debug port ${debugPort}`);
 
-    const executable = this.findChrome();
+    // Find available browser
+    const browsers = [
+      'google-chrome',
+      'google-chrome-stable',
+      'chromium',
+      'chromium-browser',
+    ];
+    let executable = '';
+    for (const b of browsers) {
+      try {
+        const { execSync } = await import('child_process');
+        execSync(`which ${b}`, { stdio: 'ignore' });
+        executable = b;
+        break;
+      } catch {
+        continue;
+      }
+    }
 
     if (!executable) {
       logger.error('[CDP] No browser found');
@@ -99,12 +78,11 @@ export class CDPService extends EventEmitter {
     // Use custom user data dir if provided, otherwise create temp one
     let userDataDir = customUserDataDir;
     if (!userDataDir) {
-      userDataDir = path.join(os.tmpdir(), `elara-cdp-${this.profileName}-${Date.now()}`);
+      userDataDir = `/tmp/elara-cdp-${this.profileName}-${Date.now()}`;
     }
     
-    if (!fs.existsSync(userDataDir)) {
-      fs.mkdirSync(userDataDir, { recursive: true });
-    }
+    const { execSync } = await import('child_process');
+    execSync(`mkdir -p ${userDataDir}`);
 
     // Build browser arguments
     const args = [
@@ -380,23 +358,6 @@ export class CDPService extends EventEmitter {
 
   async navigate(url: string): Promise<void> {
     await this.send('Page.navigate', { url });
-  }
-
-  async getCookies(): Promise<string> {
-    try {
-      // Try Network.getAllCookies first to get all cookies across domains/subdomains
-      let result = await this.send('Network.getAllCookies').catch(() => null);
-      if (!result || !Array.isArray(result.cookies)) {
-        // Fallback to Network.getCookies
-        result = await this.send('Network.getCookies').catch(() => null);
-      }
-      if (result && Array.isArray(result.cookies)) {
-        return result.cookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
-      }
-    } catch (e: any) {
-      logger.error('[CDP] Failed to get cookies:', e.message);
-    }
-    return '';
   }
 
   async close(): Promise<void> {

@@ -15,7 +15,8 @@ export const providers = [
         is_search: false,
         is_image_upload: true,
         is_video_upload: false,
-        description: 'Anthropic\'s Claude Sonnet 4.5 - Balanced performance for everyday tasks with strong reasoning and image understanding',
+        description:
+          "Anthropic's Claude Sonnet 4.5 - Balanced performance for everyday tasks with strong reasoning and image understanding",
       },
       {
         id: 'claude-haiku-4-5-20251001',
@@ -25,7 +26,8 @@ export const providers = [
         is_search: false,
         is_image_upload: true,
         is_video_upload: false,
-        description: 'Anthropic\'s Claude Haiku 4.5 - Fast, compact model optimized for low-latency responses and efficient processing',
+        description:
+          "Anthropic's Claude Haiku 4.5 - Fast, compact model optimized for low-latency responses and efficient processing",
       },
       {
         id: 'claude-sonnet-4-6',
@@ -35,7 +37,8 @@ export const providers = [
         is_search: false,
         is_image_upload: true,
         is_video_upload: false,
-        description: 'Anthropic\'s Claude Sonnet 4.6 - Enhanced version with improved accuracy and broader knowledge base',
+        description:
+          "Anthropic's Claude Sonnet 4.6 - Enhanced version with improved accuracy and broader knowledge base",
       },
     ],
     is_pausable: false,
@@ -58,7 +61,8 @@ export const providers = [
         is_search: true,
         is_image_upload: true,
         is_video_upload: false,
-        description: 'DeepSeek Instant - Fast responses with web search capability and image understanding, supports thinking mode',
+        description:
+          'DeepSeek Instant - Fast responses with web search capability and image understanding, supports thinking mode',
       },
       {
         id: 'deepseek-expert',
@@ -68,7 +72,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'DeepSeek Expert - Specialized reasoning model with deep analytical capabilities, no search or upload support',
+        description:
+          'DeepSeek Expert - Specialized reasoning model with deep analytical capabilities, no search or upload support',
       },
     ],
     is_memory: false,
@@ -89,7 +94,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Google Gemini 3.5 Flash - Fast and efficient model for everyday tasks, optimized for quick responses',
+        description:
+          'Google Gemini 3.5 Flash - Fast and efficient model for everyday tasks, optimized for quick responses',
       },
       {
         id: 'gemini-3.5-flash-thinking',
@@ -99,7 +105,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Google Gemini 3.5 Flash Thinking - Enhanced reasoning with step-by-step thinking process for complex problems',
+        description:
+          'Google Gemini 3.5 Flash Thinking - Enhanced reasoning with step-by-step thinking process for complex problems',
       },
       {
         id: 'gemini-3.5-flash-thinking-lite',
@@ -109,7 +116,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Google Gemini 3.5 Flash Thinking Lite - Lightweight version with thinking mode, balances speed and depth',
+        description:
+          'Google Gemini 3.5 Flash Thinking Lite - Lightweight version with thinking mode, balances speed and depth',
       },
       {
         id: 'gemini-3.1-pro',
@@ -119,7 +127,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Google Gemini 3.1 Pro - Professional-grade model with advanced capabilities for complex tasks',
+        description:
+          'Google Gemini 3.1 Pro - Professional-grade model with advanced capabilities for complex tasks',
       },
       {
         id: 'gemini-auto',
@@ -129,7 +138,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Google Gemini Auto - Automatically selects optimal model based on task complexity and requirements',
+        description:
+          'Google Gemini Auto - Automatically selects optimal model based on task complexity and requirements',
       },
       {
         id: 'gemini-flash-lite',
@@ -139,7 +149,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Google Gemini Flash Lite - Ultra-lightweight model for resource-constrained environments and high throughput',
+        description:
+          'Google Gemini Flash Lite - Ultra-lightweight model for resource-constrained environments and high throughput',
       },
     ],
     is_pausable: false,
@@ -221,7 +232,8 @@ export const providers = [
         is_search: true,
         is_image_upload: true,
         is_video_upload: true,
-        description: 'Qwen3.7-Plus is a high-performance large language model within the Qwen3.7 family, integrating state-of-the-art text and multimodal processing capabilities. It can autonomously invoke tools during everyday conversations and excels in web development, artifacts, complex reasoning, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
+        description:
+          'Qwen3.7-Plus is a high-performance large language model within the Qwen3.7 family, integrating state-of-the-art text and multimodal processing capabilities. It can autonomously invoke tools during everyday conversations and excels in web development, artifacts, complex reasoning, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
       },
       {
         id: 'qwen3.7-max',
@@ -231,7 +243,8 @@ export const providers = [
         is_search: true,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Qwen3.7-Max is the flagship model of the Qwen3.7 series, engineered to deliver state-of-the-art performance and our most advanced capabilities. It excels in expert-level knowledge, complex logical reasoning, advanced mathematics, and sophisticated coding tasks. Please note that it does not currently support vision capabilities.',
+        description:
+          'Qwen3.7-Max is the flagship model of the Qwen3.7 series, engineered to deliver state-of-the-art performance and our most advanced capabilities. It excels in expert-level knowledge, complex logical reasoning, advanced mathematics, and sophisticated coding tasks. Please note that it does not currently support vision capabilities.',
       },
       {
         id: 'qwen3.6-plus',
@@ -241,7 +254,8 @@ export const providers = [
         is_search: true,
         is_image_upload: true,
         is_video_upload: true,
-        description: 'Qwen3.6-Plus is the latest large model in the Qwen3.6 series, integrating state-of-the-art text and multimodal processing capabilities. It can autonomously invoke tools during everyday conversations and excels in web development, artifacts, complex reasoning, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
+        description:
+          'Qwen3.6-Plus is the latest large model in the Qwen3.6 series, integrating state-of-the-art text and multimodal processing capabilities. It can autonomously invoke tools during everyday conversations and excels in web development, artifacts, complex reasoning, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
       },
       {
         id: 'qwen3.6-max-preview',
@@ -251,7 +265,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Qwen3.6-Max-Preview is a preview version of the flagship model in the Qwen3.6 family, featuring our most advanced text capabilities. It excels in expert-level knowledge, complex reasoning, mathematics, and coding. Please note that this preview build does not currently support Search or Code Interpreter tools.',
+        description:
+          'Qwen3.6-Max-Preview is a preview version of the flagship model in the Qwen3.6 family, featuring our most advanced text capabilities. It excels in expert-level knowledge, complex reasoning, mathematics, and coding. Please note that this preview build does not currently support Search or Code Interpreter tools.',
       },
       {
         id: 'qwen3.5-plus',
@@ -261,7 +276,8 @@ export const providers = [
         is_search: true,
         is_image_upload: true,
         is_video_upload: true,
-        description: 'Qwen3.5-Plus is the latest large model in the Qwen3.5 series, integrating state-of-the-art text and multimodal processing capabilities. It can autonomously invoke tools during everyday conversations and excels in complex reasoning, instruction following, programming, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
+        description:
+          'Qwen3.5-Plus is the latest large model in the Qwen3.5 series, integrating state-of-the-art text and multimodal processing capabilities. It can autonomously invoke tools during everyday conversations and excels in complex reasoning, instruction following, programming, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
       },
       {
         id: 'qwen3.5-flash',
@@ -271,7 +287,8 @@ export const providers = [
         is_search: true,
         is_image_upload: true,
         is_video_upload: true,
-        description: 'The latest high-efficiency model in the Qwen3.5 series, supporting text and multimodal tasks. It excels in complex reasoning, instruction following, programming, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
+        description:
+          'The latest high-efficiency model in the Qwen3.5 series, supporting text and multimodal tasks. It excels in complex reasoning, instruction following, programming, role-playing, creative writing, visual reasoning, OCR, and spatial understanding.',
       },
       {
         id: 'qwen3-coder-plus',
@@ -281,7 +298,8 @@ export const providers = [
         is_search: false,
         is_image_upload: true,
         is_video_upload: true,
-        description: 'Qwen3-Coder is a powerful coding-specialized language model excelling in code generation, tool use, and agentic tasks.',
+        description:
+          'Qwen3-Coder is a powerful coding-specialized language model excelling in code generation, tool use, and agentic tasks.',
       },
       {
         id: 'qwen3-vl-plus',
@@ -291,7 +309,8 @@ export const providers = [
         is_search: false,
         is_image_upload: true,
         is_video_upload: true,
-        description: 'Qwen3-VL is the most advanced vision-language model in the Qwen series, seamlessly integrating text and vision with no performance trade-off. It excels in visual reasoning, OCR, spatial understanding, and GUI-based agent tasks.',
+        description:
+          'Qwen3-VL is the most advanced vision-language model in the Qwen series, seamlessly integrating text and vision with no performance trade-off. It excels in visual reasoning, OCR, spatial understanding, and GUI-based agent tasks.',
       },
     ],
   },
@@ -361,7 +380,8 @@ export const providers = [
         is_search: true,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Z.AI GLM-5.1 - Advanced language model with thinking mode and web search (browser-based)',
+        description:
+          'Z.AI GLM-5.1 - Advanced language model with thinking mode and web search (browser-based)',
       },
       {
         id: 'GLM-5',
@@ -371,7 +391,8 @@ export const providers = [
         is_search: true,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Z.AI GLM-5 - Fast and efficient model with thinking capabilities (browser-based)',
+        description:
+          'Z.AI GLM-5 - Fast and efficient model with thinking capabilities (browser-based)',
       },
     ],
   },
@@ -391,7 +412,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'Qwen Coder Model - Specialized for code generation, debugging, and programming assistance',
+        description:
+          'Qwen Coder Model - Specialized for code generation, debugging, and programming assistance',
       },
     ],
     is_pausable: false,
@@ -432,7 +454,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'OpenAI GPT-5.3 Codex - Advanced coding model with extensive programming knowledge and problem-solving',
+        description:
+          'OpenAI GPT-5.3 Codex - Advanced coding model with extensive programming knowledge and problem-solving',
       },
       {
         id: 'gpt-5.2-codex',
@@ -442,7 +465,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'OpenAI GPT-5.2 Codex - Powerful code generation model with strong reasoning for complex algorithms',
+        description:
+          'OpenAI GPT-5.2 Codex - Powerful code generation model with strong reasoning for complex algorithms',
       },
       {
         id: 'gpt-5.1-codex-max',
@@ -452,7 +476,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'OpenAI GPT-5.1 Codex Max - Maximum capacity coding model for large-scale software development',
+        description:
+          'OpenAI GPT-5.1 Codex Max - Maximum capacity coding model for large-scale software development',
       },
       {
         id: 'gpt-5.2',
@@ -462,7 +487,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'OpenAI GPT-5.2 - General purpose model with balanced capabilities for diverse tasks',
+        description:
+          'OpenAI GPT-5.2 - General purpose model with balanced capabilities for diverse tasks',
       },
       {
         id: 'gpt-5.1-codex-mini',
@@ -472,7 +498,8 @@ export const providers = [
         is_search: false,
         is_image_upload: false,
         is_video_upload: false,
-        description: 'OpenAI GPT-5.1 Codex Mini - Compact coding assistant for quick iterations and lightweight tasks',
+        description:
+          'OpenAI GPT-5.1 Codex Mini - Compact coding assistant for quick iterations and lightweight tasks',
       },
     ],
     is_pausable: false,

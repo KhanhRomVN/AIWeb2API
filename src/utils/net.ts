@@ -28,7 +28,7 @@ export const findAvailablePort = (preferredPort: number): Promise<number> => {
       }
     });
     
-    server.listen(preferredPort, '127.0.0.1');
+    server.listen(preferredPort);
   });
 };
 
@@ -53,6 +53,6 @@ export const isPortAvailable = (port: number): Promise<boolean> => {
       server.close(() => resolve(true));
     });
     
-    server.listen(port, '127.0.0.1');
+    server.listen(port);
   });
 };

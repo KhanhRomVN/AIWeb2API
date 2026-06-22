@@ -40,7 +40,6 @@ export const startServer = async (): Promise<{
         }
 
         server.listen(config.port, config.host, () => {
-          logger.info(`Listening on ${config.host}:${config.port}`);
           resolve({
             success: true,
             port: config.port,
@@ -50,30 +49,38 @@ export const startServer = async (): Promise<{
         server.on('error', async (e: any) => {
           if (e.code === 'EADDRINUSE') {
             logger.error(`Port ${config.port} already in use`);
-            
+
             // Check if we're in interactive mode
             const isTTY = process.stdin.isTTY;
             let shouldKill = false;
-            
+
             if (isTTY) {
-              const answer = await askYesNo(`Port ${config.port} is already in use. Do you want to kill the process using this port?`);
+              const answer = await askYesNo(
+                `Port ${config.port} is already in use. Do you want to kill the process using this port?`,
+              );
               shouldKill = answer === true;
             } else {
               logger.info('Non-interactive mode - skipping port kill prompt');
             }
-            
+
             if (shouldKill) {
-              logger.info(`Attempting to kill process on port ${config.port}...`);
+              logger.info(
+                `Attempting to kill process on port ${config.port}...`,
+              );
               const killed = await killProcessOnPort(config.port);
-              
+
               if (killed) {
-                logger.info(`Process on port ${config.port} killed. Retrying...`);
+                logger.info(
+                  `Process on port ${config.port} killed. Retrying...`,
+                );
                 // Retry: close current server and try listening again
                 server?.close(() => {
                   // Try listening again
                   const newServer = http.createServer(app);
                   newServer.listen(config.port, config.host, () => {
-                    logger.info(`Listening on ${config.host}:${config.port} (after killing port)`);
+                    logger.info(
+                      `Listening on ${config.host}:${config.port} (after killing port)`,
+                    );
                     server = newServer;
                     resolve({
                       success: true,
@@ -101,7 +108,7 @@ export const startServer = async (): Promise<{
                 return;
               }
             }
-            
+
             resolve({
               success: false,
               error: `Port ${config.port} is already in use`,

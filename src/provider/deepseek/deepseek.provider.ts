@@ -224,7 +224,9 @@ export class DeepSeekProvider implements Provider {
       onError,
       onRaw,
       onSessionCreated,
+      accountId,
     } = options;
+
     const baseHeaders = {
       Cookie: `DS-AUTH-TOKEN=${credential}`,
       Authorization: credential,

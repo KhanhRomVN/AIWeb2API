@@ -36,7 +36,6 @@ export class ExtensionWebSocketServer extends EventEmitter {
     }
 
     this.wss = new WebSocketServer({ port: this.port });
-    logger.info(`[WebSocketServer] Started on port ${this.port}`);
 
     this.wss.on('connection', (ws, req) => {
       const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -56,55 +55,57 @@ export class ExtensionWebSocketServer extends EventEmitter {
       const connection = this.connections.get(sessionId)!;
 
       if (client === 'background') {
-        logger.info(`[WebSocketServer] Background connected for session: ${sessionId}`);
         connection.backgroundWs = ws;
 
         ws.on('message', (data) => {
           try {
             const msg = JSON.parse(data.toString());
             if (msg.type === 'request_proxy_config') {
-              logger.info(`[WebSocketServer] Background requested proxy config for session ${sessionId}`);
               this.emit('proxy_config_request', sessionId);
             } else if (msg.type === 'session_ready') {
-              logger.info(`[WebSocketServer] Session ready notification from background: ${msg.sessionId}`);
               if (msg.sessionId && msg.sessionId !== sessionId) {
                 this.updateSessionId(sessionId, msg.sessionId);
                 sessionId = msg.sessionId;
               }
             }
           } catch (e) {
-            logger.error('[WebSocketServer] Failed to parse background message:', e);
+            logger.error(
+              '[WebSocketServer] Failed to parse background message:',
+              e,
+            );
           }
         });
 
         ws.on('close', () => {
-          logger.info(`[WebSocketServer] Background disconnected for session: ${sessionId}`);
           connection.backgroundWs = null;
           this.cleanupSession(sessionId);
         });
       } else {
-        logger.info(`[WebSocketServer] Content connected for session: ${sessionId}`);
         connection.contentWs = ws;
 
         // Send initial session info
-        ws.send(JSON.stringify({
-          action: 'session_info',
-          sessionId: sessionId,
-          message: 'Temporary session ID assigned'
-        }));
+        ws.send(
+          JSON.stringify({
+            action: 'session_info',
+            sessionId: sessionId,
+            message: 'Temporary session ID assigned',
+          }),
+        );
 
         ws.on('message', (data) => {
           this.handleMessage(sessionId, data.toString());
         });
 
         ws.on('close', () => {
-          logger.info(`[WebSocketServer] Content disconnected for session: ${sessionId}`);
           connection.contentWs = null;
           this.cleanupSession(sessionId);
         });
 
         ws.on('error', (err) => {
-          logger.error(`[WebSocketServer] WebSocket error for session ${sessionId}:`, err);
+          logger.error(
+            `[WebSocketServer] WebSocket error for session ${sessionId}:`,
+            err,
+          );
         });
 
         this.emit('connected', sessionId);
@@ -123,39 +124,41 @@ export class ExtensionWebSocketServer extends EventEmitter {
     // Only remove if both connections are gone
     if (!connection.contentWs && !connection.backgroundWs) {
       this.connections.delete(sessionId);
-      logger.info(`[WebSocketServer] Session ${sessionId} cleaned up`);
       this.emit('session_closed', sessionId);
     }
   }
 
   updateSessionId(oldSessionId: string, newSessionId: string): void {
     if (oldSessionId === newSessionId) return;
-    
+
     const connection = this.connections.get(oldSessionId);
     if (!connection) {
-      logger.warn(`[WebSocketServer] Cannot update session: ${oldSessionId} not found`);
+      logger.warn(
+        `[WebSocketServer] Cannot update session: ${oldSessionId} not found`,
+      );
       return;
     }
-    
+
     this.connections.delete(oldSessionId);
     this.connections.set(newSessionId, connection);
-    logger.info(`[WebSocketServer] Session ID updated: ${oldSessionId} -> ${newSessionId}`);
     this.emit('session_updated', { old: oldSessionId, new: newSessionId });
   }
 
   setAccountId(sessionId: string, accountId: string): void {
     const connection = this.connections.get(sessionId);
     if (!connection || !connection.contentWs) {
-      logger.warn(`[WebSocketServer] Cannot set accountId: session ${sessionId} not found`);
+      logger.warn(
+        `[WebSocketServer] Cannot set accountId: session ${sessionId} not found`,
+      );
       return;
     }
-    
-    connection.contentWs.send(JSON.stringify({
-      action: 'set_session_id',
-      sessionId: accountId
-    }));
-    
-    logger.info(`[WebSocketServer] Sent set_session_id to ${sessionId}: new ID = ${accountId}`);
+
+    connection.contentWs.send(
+      JSON.stringify({
+        action: 'set_session_id',
+        sessionId: accountId,
+      }),
+    );
   }
 
   private handleMessage(sessionId: string, rawStr: string): void {
@@ -190,10 +193,11 @@ export class ExtensionWebSocketServer extends EventEmitter {
             pending.onUsage(msg.usage);
           }
         } else if (msg.type === 'waf_block') {
-          logger.warn(`[WebSocketServer] WAF block detected for session ${sessionId}: status=${msg.status}`);
+          logger.warn(
+            `[WebSocketServer] WAF block detected for session ${sessionId}: status=${msg.status}`,
+          );
           this.emit('waf_block', sessionId, msg);
         } else if (msg.type === 'page_ready') {
-          logger.info(`[WebSocketServer] Page ready for session ${sessionId}: context=${msg.context}`);
           this.emit('page_ready', sessionId, msg);
         }
       } catch (e) {
@@ -234,10 +238,21 @@ export class ExtensionWebSocketServer extends EventEmitter {
     }
   }
 
-  async sendPrompt(sessionId: string, prompt: string, isNewChat: boolean, isSearch: boolean): Promise<string> {
+  async sendPrompt(
+    sessionId: string,
+    prompt: string,
+    isNewChat: boolean,
+    isSearch: boolean,
+  ): Promise<string> {
     const connection = this.connections.get(sessionId);
-    if (!connection || !connection.contentWs || connection.contentWs.readyState !== WebSocket.OPEN) {
-      throw new Error(`Extension not connected for session ${sessionId}. Please ensure browser is open and extension is loaded.`);
+    if (
+      !connection ||
+      !connection.contentWs ||
+      connection.contentWs.readyState !== WebSocket.OPEN
+    ) {
+      throw new Error(
+        `Extension not connected for session ${sessionId}. Please ensure browser is open and extension is loaded.`,
+      );
     }
 
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -252,12 +267,18 @@ export class ExtensionWebSocketServer extends EventEmitter {
     });
 
     connection.contentWs.send(message);
-    logger.debug(`[WebSocketServer] Sent prompt to session ${sessionId}: ${prompt.substring(0, 100)}...`);
+    logger.debug(
+      `[WebSocketServer] Sent prompt to session ${sessionId}: ${prompt.substring(0, 100)}...`,
+    );
 
     return requestId;
   }
 
-  registerRequestHandler(sessionId: string, requestId: string, handlers: PendingRequest): void {
+  registerRequestHandler(
+    sessionId: string,
+    requestId: string,
+    handlers: PendingRequest,
+  ): void {
     const connection = this.connections.get(sessionId);
     if (connection) {
       connection.pendingRequests.set(requestId, handlers);
@@ -266,16 +287,23 @@ export class ExtensionWebSocketServer extends EventEmitter {
 
   async resetPage(sessionId: string): Promise<void> {
     const connection = this.connections.get(sessionId);
-    if (!connection || !connection.contentWs || connection.contentWs.readyState !== WebSocket.OPEN) {
+    if (
+      !connection ||
+      !connection.contentWs ||
+      connection.contentWs.readyState !== WebSocket.OPEN
+    ) {
       return;
     }
     connection.contentWs.send(JSON.stringify({ action: 'reset_page' }));
-    logger.info(`[WebSocketServer] Sent reset_page to session ${sessionId}`);
   }
 
   isConnected(sessionId: string): boolean {
     const connection = this.connections.get(sessionId);
-    return !!connection && !!connection.contentWs && connection.contentWs.readyState === WebSocket.OPEN;
+    return (
+      !!connection &&
+      !!connection.contentWs &&
+      connection.contentWs.readyState === WebSocket.OPEN
+    );
   }
 
   getSessionIds(): string[] {
@@ -284,8 +312,13 @@ export class ExtensionWebSocketServer extends EventEmitter {
 
   getAnyConnectedContentSession(): string | null {
     for (const [sessionId, connection] of this.connections.entries()) {
-      if (connection.contentWs && connection.contentWs.readyState === WebSocket.OPEN) {
-        logger.debug(`[WebSocketServer] Found active content session: ${sessionId}`);
+      if (
+        connection.contentWs &&
+        connection.contentWs.readyState === WebSocket.OPEN
+      ) {
+        logger.debug(
+          `[WebSocketServer] Found active content session: ${sessionId}`,
+        );
         return sessionId;
       }
     }
@@ -298,7 +331,6 @@ export class ExtensionWebSocketServer extends EventEmitter {
       this.wss = null;
     }
     this.connections.clear();
-    logger.info('[WebSocketServer] Stopped');
   }
 }
 
@@ -307,7 +339,9 @@ let wsServerInstance: ExtensionWebSocketServer | null = null;
 
 export const getWebSocketServer = (port?: number): ExtensionWebSocketServer => {
   if (!wsServerInstance) {
-    const wsPort = process.env.WEBSOCKET_PORT ? parseInt(process.env.WEBSOCKET_PORT) : (port || 8899);
+    const wsPort = process.env.WEBSOCKET_PORT
+      ? parseInt(process.env.WEBSOCKET_PORT)
+      : port || 8899;
     wsServerInstance = new ExtensionWebSocketServer(wsPort);
   }
   return wsServerInstance;

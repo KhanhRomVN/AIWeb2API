@@ -128,9 +128,13 @@ export const getAllProviders = async (): Promise<Provider[]> => {
     }
 
     // Merge success_rate from DB into static config models
-    const dbModelsForProvider = modelsMap.get(p.provider_id.toLowerCase()) || [];
+    const dbModelsForProvider =
+      modelsMap.get(p.provider_id.toLowerCase()) || [];
     const dbModelSuccessRateMap = new Map<string, number | null>(
-      dbModelsForProvider.map((m: any) => [m.id.toLowerCase(), m.success_rate ?? null])
+      dbModelsForProvider.map((m: any) => [
+        m.id.toLowerCase(),
+        m.success_rate ?? null,
+      ]),
     );
 
     const dbProvider = providersMap.get(p.provider_id.toLowerCase());
@@ -143,22 +147,31 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       is_memory: dbProvider?.is_memory === 1 ? true : (p.is_memory ?? false),
       models: models?.map((m: any) => ({
         ...m,
-        is_search:
-          m.is_search !== undefined ? m.is_search : false,
+        is_search: m.is_search !== undefined ? m.is_search : false,
         is_image_upload:
-          m.is_image_upload !== undefined ? m.is_image_upload : (m.is_upload !== undefined ? m.is_upload : false),
+          m.is_image_upload !== undefined
+            ? m.is_image_upload
+            : m.is_upload !== undefined
+              ? m.is_upload
+              : false,
         is_video_upload:
           m.is_video_upload !== undefined ? m.is_video_upload : false,
         // Keep deprecated is_upload alias
         is_upload:
-          m.is_image_upload !== undefined ? m.is_image_upload : (m.is_upload !== undefined ? m.is_upload : false),
+          m.is_image_upload !== undefined
+            ? m.is_image_upload
+            : m.is_upload !== undefined
+              ? m.is_upload
+              : false,
         // Normalize context length field names
         max_context_length: m.max_context_length ?? m.context_length ?? null,
         context_length: m.max_context_length ?? m.context_length ?? null,
         // Prefer DB success_rate over static config (which never has it)
         success_rate: dbModelSuccessRateMap.has(m.id?.toLowerCase())
-          ? dbModelSuccessRateMap.get(m.id?.toLowerCase()) ?? null
-          : (m.success_rate !== undefined ? m.success_rate : null),
+          ? (dbModelSuccessRateMap.get(m.id?.toLowerCase()) ?? null)
+          : m.success_rate !== undefined
+            ? m.success_rate
+            : null,
       })),
     });
   }
@@ -172,7 +185,6 @@ export const getAllProviders = async (): Promise<Provider[]> => {
  */
 export const invalidateProviderCache = (): void => {
   cachedProviders = null;
-  logger.debug('Provider cache invalidated');
 };
 
 export const getProviderModels = async (
@@ -327,7 +339,8 @@ export const getAllModelsFromEnabledProviders = async (): Promise<
           model.is_upload !== undefined
             ? model.is_upload
             : (provider.is_upload ?? false),
-        success_rate: model.success_rate !== undefined ? model.success_rate : null,
+        success_rate:
+          model.success_rate !== undefined ? model.success_rate : null,
       });
     }
   }
