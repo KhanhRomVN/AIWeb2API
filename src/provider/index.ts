@@ -12,7 +12,6 @@ export { default as CodexCLIProvider } from './codex-cli';
 export { default as ZAIProvider } from './zai';
 export { default as CerebrasCloudProvider } from './cerebras-cloud';
 export { default as GeminiProvider } from './gemini';
-export { default as ZenMuxProvider } from './zenmux';
 
 // Registry & config
 export { providerRegistry } from './registry';

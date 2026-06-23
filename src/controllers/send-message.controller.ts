@@ -217,7 +217,7 @@ export const sendMessageController = async (
         {},
       );
       logger.info(
-        `[Request] provider=${account.provider_id} model=${model} msgs=${messages?.length} (${Object.entries(roleBreakdown || {}).map(([r, c]) => `${r}:${c}`).join(',')}) convId=${conversationId || 'none'} | "${lastMsgSnippet}"`,
+        `[Request] provider=${account.provider_id} email=${account.email} model=${model} msgs=${messages?.length} (${Object.entries(roleBreakdown || {}).map(([r, c]) => `${r}:${c}`).join(',')}) convId=${conversationId || 'none'} | "${lastMsgSnippet}"`,
       );
 
       let accumulatedResponse = '';

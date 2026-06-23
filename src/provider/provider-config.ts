@@ -166,15 +166,6 @@ export const providers = [
     is_memory: false,
   },
   {
-    provider_id: 'kimi',
-    provider_name: 'Kimi',
-    is_enabled: false,
-    website_url: 'https://www.kimi.com/',
-    auth_method: ['basic'],
-    is_pausable: false,
-    is_memory: false,
-  },
-  {
     provider_id: 'lmarena',
     provider_name: 'LMArena',
     is_enabled: false,
@@ -476,16 +467,5 @@ export const providers = [
       },
     ],
     is_pausable: false,
-    is_memory: false,
-  },
-  {
-    provider_id: 'zenmux',
-    provider_name: 'ZenMux AI',
-    is_enabled: true,
-    website_url: 'https://zenmux.ai/',
-    auth_method: ['basic'],
-    connection_type: 'https',
-    is_pausable: false,
-    is_memory: false,
   },
 ];
