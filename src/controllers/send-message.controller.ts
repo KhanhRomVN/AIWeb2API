@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { sendMessage } from '../services/chat';
 import { createLogger } from '../utils/logger';
-import { recordRequest } from '../services/metrics.service';
+import { recordRequest, recordError } from '../services/metrics.service';
 import { getAllProviders } from '../services/provider.service';
 import { providerRegistry } from '../provider/registry';
 import { countMessagesTokens, countTokens } from '../utils/tokenizer';
@@ -332,6 +332,8 @@ export const sendMessageController = async (
             `[Transaction Error] provider_id=${account.provider_id} model_id=${model} account_id=${account.id} conversation_id=${conversationId || 'none'} input_token=${inputToken} output_token=${outputToken} error=${error.message}`,
             { stack: error.stack, code: (error as any).code },
           );
+          // Record error metric so success_rate reflects failures
+          recordError(account.id, account.provider_id, model, error.message);
 
           if (stream !== false) {
             if (!res.writableEnded) {
