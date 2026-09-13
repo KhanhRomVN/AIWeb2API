@@ -43,7 +43,19 @@ import { createLogger } from '../../utils/logger';
 
 // ── ZAI Imports ──
 import { proxyHandler } from './zai.proxy-handler';
-import { BASE_URL, ZAI_EVENTS, DEFAULT_USER_AGENT } from './zai.constant';
+import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
+  BASE_URL,
+  ZAI_EVENTS,
+  DEFAULT_USER_AGENT,
+} from './zai.constant';
 import {
   getAuthDataFromCredential,
   generateSignatureAndParams,
@@ -60,6 +72,18 @@ const logger = createLogger('ZAIProvider');
 export class ZAIProvider implements Provider {
   name = 'Z.AI';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── User-Agent Rotation ───────────────────────────────────────────
 

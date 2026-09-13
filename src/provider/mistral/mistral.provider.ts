@@ -33,6 +33,14 @@ import { createLogger } from '../../utils/logger';
 // ── Mistral Imports ──
 import { proxyHandler } from './mistral.proxy-handler';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
   BASE_URL,
   CHAT_BASE_URL,
   AUTH_LOGIN_URL,
@@ -47,6 +55,18 @@ const logger = createLogger('MistralProvider');
 export class MistralProvider implements Provider {
   name = 'Mistral';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Login ──────────────────────────────────────────────────────────
 

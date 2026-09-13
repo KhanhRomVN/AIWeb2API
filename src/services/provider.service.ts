@@ -16,7 +16,6 @@
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── Providers ──
 import { providerRegistry } from '../provider/registry';
-import { providers as bundledProviders } from '../provider/provider-config';
 
 // ── Repositories ──
 import { findAllProviders as findAllProviderRows } from '../repositories/provider.repository';
@@ -62,7 +61,19 @@ export interface Provider {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-const fetchProviderConfig = async (): Promise<any[]> => bundledProviders;
+const fetchProviderConfig = async (): Promise<any[]> => {
+  const allProviders = providerRegistry.getAllProviders();
+  const configs: any[] = [];
+
+  for (const provider of allProviders) {
+    const ProviderClass = provider.constructor as any;
+    if (ProviderClass.config) {
+      configs.push(ProviderClass.config);
+    }
+  }
+
+  return configs;
+};
 
 const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
   const dynamicProvider = providerRegistry.getProvider(providerId);

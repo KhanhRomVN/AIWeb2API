@@ -55,6 +55,14 @@ import {
 import { proxyHandler } from './qwen.proxy-handler';
 import type { QwenCredential } from './qwen.types';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
   BASE_URL,
   QWEN_EVENTS,
   API_VERSION,
@@ -94,6 +102,18 @@ const lastParentIdCache = new Map<string, string>();
 export class QwenProvider implements Provider {
   name = 'Qwen';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Token Helpers ─────────────────────────────────────────────────
 

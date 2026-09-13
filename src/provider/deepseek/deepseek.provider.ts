@@ -44,6 +44,15 @@ import { proxyHandler } from './deepseek.proxy-handler';
 import { parseSSEStream } from './deepseek.sse-parser';
 import { deepseekUploadFile } from './deepseek.upload';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  MODELS,
+  IS_PAUSABLE,
+  IS_MEMORY,
   BASE_URL,
   DEEPSEEK_EVENTS,
   MAX_CONTINUATIONS,
@@ -60,6 +69,19 @@ export class DeepSeekProvider implements Provider {
   proxyHandler = proxyHandler;
   private wasmPath: string = '';
   private dsHash: DeepSeekHash | null = null;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    models: MODELS,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Profile ─────────────────────────────────────────────────────────
 

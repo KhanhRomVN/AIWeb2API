@@ -38,6 +38,14 @@ import { createLogger } from '../../utils/logger';
 // ── Codex Imports ──
 import { proxyHandler } from './codex-cli.proxy-handler';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  MODELS,
+  IS_PAUSABLE,
   CODEX_CLI_EVENTS,
   CHATGPT_USAGE_URL,
   CODEX_RESPONSES_URL,
@@ -62,6 +70,18 @@ try {
 export class CodexCLIProvider implements Provider {
   name = 'codex-cli';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    models: MODELS,
+    is_pausable: IS_PAUSABLE,
+  };
 
   // ─── Get Profile ────────────────────────────────────────────────────
 

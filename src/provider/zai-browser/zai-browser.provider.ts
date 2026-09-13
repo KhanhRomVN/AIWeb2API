@@ -42,6 +42,19 @@ import { createLogger } from '../../utils/logger';
 // ── ZaiBrowser Imports ──
 import { proxyHandler } from './zai-browser.proxy-handler';
 import { parseZaiBrowserCredential } from './zai-browser.helpers';
+import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
+  PLATFORM,
+  BROWSER_EXTENSION_FOLDER,
+  MODELS,
+} from './zai-browser.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ZaiBrowserProvider');
@@ -51,6 +64,21 @@ const logger = createLogger('ZaiBrowserProvider');
 export class ZaiBrowserProvider implements Provider {
   name = 'Z.AI Browser';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+    platform: PLATFORM,
+    browser_extension_folder: BROWSER_EXTENSION_FOLDER,
+    models: MODELS,
+  };
 
   // ─── WebSocket Connection ──────────────────────────────────────────
 

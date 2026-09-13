@@ -58,6 +58,15 @@ import {
   KimiChatRequest,
 } from './kimi.types';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  MODELS,
+  IS_PAUSABLE,
+  IS_MEMORY,
   KIMI_EVENTS,
   USER_AGENT,
   MSH_HEADERS,
@@ -77,6 +86,19 @@ const logger = createLogger('KimiProvider');
 export class KimiProvider implements Provider {
   name = 'Kimi';
   proxyHandler = kimiProxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    models: MODELS,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Credential Parser ─────────────────────────────────────────────
 

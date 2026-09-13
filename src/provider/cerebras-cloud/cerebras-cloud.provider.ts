@@ -40,7 +40,18 @@ import {
   CerebrasCompletionPayload,
   CerebrasUserInfo,
 } from './cerebras-cloud.types';
-import { CEREBRAS_EVENTS, USER_AGENT } from './cerebras-cloud.constant';
+import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
+  CEREBRAS_EVENTS,
+  USER_AGENT,
+} from './cerebras-cloud.constant';
 import { proxyHandler } from './cerebras-cloud.proxy-handler';
 import { parseSSEStream } from './cerebras-cloud.sse-parser';
 import { usageTracker } from './cerebras-cloud.rate-limiter';
@@ -53,6 +64,18 @@ const logger = createLogger('CerebrasCloudProvider');
 export class CerebrasCloudProvider implements Provider {
   name = 'cerebras-cloud';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Login ──────────────────────────────────────────────────────────
 

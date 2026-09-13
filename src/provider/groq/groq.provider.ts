@@ -34,6 +34,14 @@ import { createLogger } from '../../utils/logger';
 // ── Groq Imports ──
 import { proxyHandler } from './groq.proxy-handler';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
   BASE_URL,
   API_CHAT_COMPLETIONS_URL,
   API_MODELS_URL,
@@ -49,6 +57,18 @@ const logger = createLogger('GroqProvider');
 export class GroqProvider implements Provider {
   name = 'Groq';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Login ──────────────────────────────────────────────────────────
 

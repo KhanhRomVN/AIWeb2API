@@ -5,6 +5,15 @@
  * Tập trung tất cả constant dùng chung cho Kimi provider.
  *
  * Main exports:
+ * - PROVIDER_ID            : ID định danh provider
+ * - PROVIDER_NAME          : Tên hiển thị
+ * - IS_ENABLED             : Bật/tắt provider
+ * - WEBSITE_URL            : URL website
+ * - AUTH_METHOD            : Phương thức xác thực
+ * - CONNECTION_TYPE        : Loại kết nối (https/browser)
+ * - MODELS                 : Danh sách models hỗ trợ
+ * - IS_PAUSABLE            : Hỗ trợ tạm dừng session
+ * - IS_MEMORY              : Hỗ trợ bộ nhớ dài hạn
  * - KIMI_BASE_URL          : Base URL của Kimi AI
  * - KIMI_MODELS            : Model constants
  * - KIMI_EVENTS            : Các event name dùng trong proxy handler
@@ -16,6 +25,99 @@
  * - LIST_THIRD_ACCOUNTS_URL: URL lấy third-party accounts
  * ------------------------------------------------------------------
  */
+
+// ─── Provider Configuration ──────────────────────────────────────────
+
+export const PROVIDER_ID = 'kimi';
+export const PROVIDER_NAME = 'Kimi';
+export const IS_ENABLED = true;
+export const WEBSITE_URL = 'https://www.kimi.ai/';
+export const AUTH_METHOD = ['basic', 'google'] as const;
+export const CONNECTION_TYPE = 'https';
+export const IS_PAUSABLE = false;
+export const IS_MEMORY = false;
+
+export const MODELS = [
+  {
+    id: 'k3',
+    name: 'Kimi K3 (Flagship)',
+    is_thinking: true,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi K3 Flagship All-Rounder - Chat & Agent with state-of-the-art reasoning and problem solving.',
+  },
+  {
+    id: 'k3-swarm',
+    name: 'Kimi K3 Swarm',
+    is_thinking: true,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi K3 Swarm - Massive search, batch processing, and multi-agent workflow in one go.',
+  },
+  {
+    id: 'instant',
+    name: 'Kimi Instant',
+    is_thinking: false,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi Instant - Ultra-fast responses for everyday chat queries.',
+  },
+  {
+    id: 'k2d6-thinking',
+    name: 'Kimi K2.6 Thinking',
+    is_thinking: true,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi K2.6 Thinking delivers deep reasoning, step-by-step logic deduction, and advanced mathematical problem solving.',
+  },
+  {
+    id: 'k2d6',
+    name: 'Kimi K2.6 Instant',
+    is_thinking: false,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi K2.6 Instant provides fast text generation for conversational tasks.',
+  },
+  {
+    id: 'k2d6-agent',
+    name: 'Kimi K2.6 Agent',
+    is_thinking: true,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi K2.6 Agent autonomously performs comprehensive research, slides generation, and document processing.',
+  },
+  {
+    id: 'k2d6-agent-ultra',
+    name: 'Kimi K2.6 Agent Swarm',
+    is_thinking: true,
+    max_context_length: 262144,
+    is_search: true,
+    is_image_upload: true,
+    is_video_upload: false,
+    description:
+      'Kimi K2.6 Agent Swarm coordinates multi-agent workers for large-scale information retrieval.',
+  },
+] as const;
+
+// ─── API Configuration ───────────────────────────────────────────────
 
 export const KIMI_BASE_URL = 'https://www.kimi.ai';
 

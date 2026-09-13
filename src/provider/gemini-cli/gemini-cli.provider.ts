@@ -39,6 +39,14 @@ import { createLogger } from '../../utils/logger';
 // ── Gemini CLI Imports ──
 import { proxyHandler } from './gemini-cli.proxy-handler';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
   GEMINI_CLI_EVENTS,
   CLOUDCODE_LOAD_CODE_ASSIST_URL,
   CLOUDCODE_STREAM_GENERATE_URL,
@@ -69,6 +77,18 @@ export const GEMINI_CONFIG = {
 export class GeminiCLIProvider implements Provider {
   name = 'gemini-cli';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Login ──────────────────────────────────────────────────────────
 

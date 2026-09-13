@@ -39,6 +39,15 @@ import { createLogger } from '../../utils/logger';
 // ── Qwen CLI Imports ──
 import { proxyHandler } from './qwen-cli.proxy-handler';
 import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  MODELS,
+  IS_PAUSABLE,
+  IS_MEMORY,
   QWEN_CLI_EVENTS,
   USER_INFO_URL,
   CHAT_COMPLETIONS_URL,
@@ -60,6 +69,19 @@ export const QWEN_CONFIG = {
 export class QwenCoderCLIProvider implements Provider {
   name = 'qwen-cli';
   proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    models: MODELS,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+  };
 
   // ─── Login ──────────────────────────────────────────────────────────
 
