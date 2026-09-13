@@ -47,7 +47,6 @@ const logger = createLogger('MistralProvider');
 export class MistralProvider implements Provider {
   name = 'Mistral';
   proxyHandler = proxyHandler;
-  defaultModel = 'mistral-large-latest';
 
   // ─── Login ──────────────────────────────────────────────────────────
 

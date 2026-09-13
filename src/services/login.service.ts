@@ -142,11 +142,9 @@ export class LoginService extends EventEmitter {
     const cleanup = () => {
       if (cookieEvent) {
         proxyEvents.off(cookieEvent, cookieEventListener);
-        logger.debug(`[LoginService] Removed listener for ${cookieEvent}`);
       }
       if (infoEvent) {
         proxyEvents.off(infoEvent, infoEventListener);
-        logger.debug(`[LoginService] Removed listener for ${infoEvent}`);
       }
     };
 
@@ -154,29 +152,6 @@ export class LoginService extends EventEmitter {
       // Store mimeType for later use
       if (response.id && response.mimeType) {
         responseMimeTypes.set(response.id, response.mimeType);
-      }
-
-      // Log response details for debugging
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        logger.debug(
-          `[LoginService] Response ${response.id} - status: ${response.statusCode}, mimeType: ${response.mimeType}`,
-        );
-
-        if (response.headers) {
-          // Log all header keys
-          const headerKeys = Object.keys(response.headers);
-          logger.debug(
-            `[LoginService] Response headers: ${headerKeys.join(', ')}`,
-          );
-
-          // Check for various cookie-related headers
-          const cookieHeaders = [
-            'set-cookie',
-            'Set-Cookie',
-            'cookie',
-            'Cookie',
-          ];
-        }
       }
 
       if (response.headers?.['set-cookie']) {
@@ -197,28 +172,12 @@ export class LoginService extends EventEmitter {
         return; // Skip non-JSON responses silently
       }
 
-      logger.debug(
-        `[LoginService] Processing JSON response body (id: ${data.id})`,
-      );
-
       try {
         const body = data.isBinary
           ? Buffer.from(data.body, 'base64').toString()
           : data.body;
 
-        // Log first 500 chars of JSON body for debugging
-        logger.debug(
-          `[LoginService] JSON body preview: ${body.substring(0, 500)}`,
-        );
-
         const json = JSON.parse(body);
-
-        // Log JSON keys for debugging
-        if (typeof json === 'object' && json !== null) {
-          logger.debug(
-            `[LoginService] JSON keys: ${Object.keys(json).join(', ')}`,
-          );
-        }
 
         // Extract email from various JSON structures
         if (json.email) {
@@ -276,14 +235,10 @@ export class LoginService extends EventEmitter {
             if (resolvePromise) {
               if (timeoutId) {
                 clearTimeout(timeoutId);
-                logger.debug(`[LoginService] Cleared timeout`);
               }
 
-              logger.debug(`[LoginService] Closing CDP service...`);
               await cdpService.close();
-
               this.activeSessions.delete(sessionId);
-              logger.debug(`[LoginService] Removed active session`);
 
               // Cleanup proxy event listeners
               cleanup();
@@ -303,10 +258,6 @@ export class LoginService extends EventEmitter {
                 `[LoginService] Validation passed but resolvePromise is null!`,
               );
             }
-          } else {
-            logger.debug(
-              `[LoginService] Validation failed, waiting for more data...`,
-            );
           }
         } catch (validationError: any) {
           logger.error(
@@ -315,15 +266,6 @@ export class LoginService extends EventEmitter {
           logger.error(
             `[LoginService] Validation stack: ${validationError.stack}`,
           );
-        }
-      } else {
-        if (!validate) {
-          logger.debug(
-            `[LoginService] No validate function provided, skipping validation`,
-          );
-        }
-        if (!capturedCookies && !capturedEmail) {
-          logger.debug(`[LoginService] No cookies or email captured yet`);
         }
       }
     });
@@ -403,7 +345,12 @@ export class LoginService extends EventEmitter {
     }
 
     const tempSessionId = uuidv4();
-    const tempDir = path.join(os.homedir(), '.aiweb2api', 'temp', tempSessionId);
+    const tempDir = path.join(
+      os.homedir(),
+      '.aiweb2api',
+      'temp',
+      tempSessionId,
+    );
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
@@ -416,9 +363,7 @@ export class LoginService extends EventEmitter {
         try {
           const json = JSON.parse(response.body);
           const email =
-            json.email ||
-            json.user?.email ||
-            json.data?.biz_data?.user?.email;
+            json.email || json.user?.email || json.data?.biz_data?.user?.email;
           if (email) capturedEmail = email;
         } catch {
           // ignore non-JSON body

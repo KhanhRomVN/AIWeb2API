@@ -69,7 +69,6 @@ export const GEMINI_CONFIG = {
 export class GeminiCLIProvider implements Provider {
   name = 'gemini-cli';
   proxyHandler = proxyHandler;
-  defaultModel = 'gemini-1.5-pro';
 
   // ─── Login ──────────────────────────────────────────────────────────
 
@@ -321,7 +320,7 @@ export class GeminiCLIProvider implements Provider {
       const sessionId = Math.random().toString(36).substring(2, 15);
       const userPromptId = `${sessionId}########1`;
       const body: any = {
-        model: model || this.defaultModel,
+        model: model,
         project: projectId || DEFAULT_PROJECT_ID,
         user_prompt_id: userPromptId,
         request: {

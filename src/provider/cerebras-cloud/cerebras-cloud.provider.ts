@@ -53,7 +53,6 @@ const logger = createLogger('CerebrasCloudProvider');
 export class CerebrasCloudProvider implements Provider {
   name = 'cerebras-cloud';
   proxyHandler = proxyHandler;
-  defaultModel = 'llama-3.3-70b';
 
   // ─── Login ──────────────────────────────────────────────────────────
 
@@ -159,7 +158,7 @@ export class CerebrasCloudProvider implements Provider {
         logger.error(
           `Cerebras Models API returned ${response.status}: ${errorText}`,
         );
-        return this.getFallbackModels(`API Error ${response.status}`);
+        return [];
       }
 
       const json = (await response.json()) as any;
@@ -167,7 +166,7 @@ export class CerebrasCloudProvider implements Provider {
 
       if (!Array.isArray(modelsData)) {
         logger.warn('[CerebrasCloud] Models API returned invalid format');
-        return this.getFallbackModels('Invalid API Format');
+        return [];
       }
 
       return modelsData.map((model: any) => ({
@@ -179,53 +178,8 @@ export class CerebrasCloudProvider implements Provider {
       }));
     } catch (e: any) {
       logger.error('Error fetching Cerebras Cloud models:', e);
-      return this.getFallbackModels('Exception: ' + e.message);
+      return [];
     }
-  }
-
-  private getFallbackModels(debugError?: string) {
-    const models: any[] = [
-      {
-        id: 'llama-3.3-70b',
-        name: 'Llama 3.3 70B',
-        max_context_length: 128000,
-        is_thinking: false,
-      },
-      {
-        id: 'llama3.1-8b',
-        name: 'Llama 3.1 8B',
-        max_context_length: 128000,
-        is_thinking: false,
-      },
-      {
-        id: 'qwen-3-32b',
-        name: 'Qwen 3 32B',
-        max_context_length: 32768,
-        is_thinking: false,
-      },
-      {
-        id: 'gpt-oss-120b',
-        name: 'OpenAI GPT OSS 120B',
-        max_context_length: 65536,
-        is_thinking: false,
-      },
-      {
-        id: 'zai-glm-4.7',
-        name: 'Z.ai GLM 4.7',
-        max_context_length: 65536,
-        is_thinking: true,
-      },
-    ];
-
-    if (debugError) {
-      models.unshift({
-        id: 'debug-error',
-        name: `⚠️ ${debugError}`,
-        max_context_length: 0,
-        is_thinking: false,
-      });
-    }
-    return models;
   }
 
   // ─── Handle Message ─────────────────────────────────────────────────
@@ -244,7 +198,7 @@ export class CerebrasCloudProvider implements Provider {
       onRaw,
     } = options;
 
-    const selectedModel = model || this.defaultModel;
+    const selectedModel = model;
     const apiKey = this.extractApiKey(credential);
     const accountId = (options as any).accountId || credential.slice(0, 32);
 

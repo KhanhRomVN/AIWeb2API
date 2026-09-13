@@ -64,7 +64,6 @@ const logger = createLogger('GeminiProvider');
 export class GeminiProvider implements Provider {
   name = 'gemini';
   proxyHandler = proxyHandler;
-  defaultModel = 'gemini-3.5-flash';
 
   // ─── Profile ─────────────────────────────────────────────────────────
 

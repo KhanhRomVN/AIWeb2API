@@ -49,8 +49,6 @@ const logger = createLogger('ClaudeProvider');
 export class ClaudeProvider implements Provider {
   name = 'Claude';
   proxyHandler = proxyHandler;
-  defaultModel = 'claude-sonnet-4-5-20250929';
-
   // ─── Get Profile ────────────────────────────────────────────────────
 
   async getProfile(

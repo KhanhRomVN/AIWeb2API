@@ -60,7 +60,6 @@ const logger = createLogger('ZAIProvider');
 export class ZAIProvider implements Provider {
   name = 'Z.AI';
   proxyHandler = proxyHandler;
-  defaultModel = 'GLM-5.1';
 
   // ─── User-Agent Rotation ───────────────────────────────────────────
 

@@ -58,7 +58,6 @@ const logger = createLogger('DeepSeekProvider');
 export class DeepSeekProvider implements Provider {
   name = 'DeepSeek';
   proxyHandler = proxyHandler;
-  defaultModel = 'deepseek-instant';
   private wasmPath: string = '';
   private dsHash: DeepSeekHash | null = null;
 

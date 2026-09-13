@@ -50,7 +50,6 @@ const logger = createLogger('ZaiBrowserProvider');
 
 export class ZaiBrowserProvider implements Provider {
   name = 'Z.AI Browser';
-  defaultModel = 'GLM-5.1';
   proxyHandler = proxyHandler;
 
   // ─── WebSocket Connection ──────────────────────────────────────────

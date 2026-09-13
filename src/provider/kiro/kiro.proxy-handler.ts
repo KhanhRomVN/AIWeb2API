@@ -46,25 +46,27 @@ export const proxyHandler: ProxyHandler = {
     const url = ctx.clientToProxyRequest.url;
 
     // Capture responses từ Kiro và AWS OIDC endpoints
-    if (host && (host.includes('kiro.dev') || host.includes('oidc') || host.includes('amazonaws.com'))) {
+    if (
+      host &&
+      (host.includes('kiro.dev') ||
+        host.includes('oidc') ||
+        host.includes('amazonaws.com'))
+    ) {
       try {
         const json = JSON.parse(body);
 
         // Capture device code response
         if (json.device_code && json.user_code) {
-          logger.info(`[Kiro] 🎯 Device code obtained: ${json.user_code}`);
           proxyEvents.emit(KIRO_EVENTS.DEVICE_CODE, json);
         }
 
         // Capture access tokens từ OAuth response
         if (json.accessToken || json.access_token) {
           const token = json.accessToken || json.access_token;
-          logger.info(`[Kiro] 🎯 Captured access token`);
           proxyEvents.emit(KIRO_EVENTS.ACCESS_TOKEN, token);
 
           const refreshToken = json.refreshToken || json.refresh_token;
           if (refreshToken) {
-            logger.info('[Kiro] 🎯 Captured refresh token');
             proxyEvents.emit(KIRO_EVENTS.REFRESH_TOKEN, refreshToken);
           }
         }
@@ -72,7 +74,6 @@ export const proxyHandler: ProxyHandler = {
         // Capture email
         if (json.email || json.user?.email || json.userEmail) {
           const email = json.email || json.user?.email || json.userEmail;
-          logger.info(`[Kiro] 📧 Captured email: ${email}`);
           proxyEvents.emit(KIRO_EVENTS.LOGIN_EMAIL, email);
         }
       } catch (e) {

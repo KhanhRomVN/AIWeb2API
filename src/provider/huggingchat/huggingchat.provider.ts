@@ -52,8 +52,6 @@ const logger = createLogger('HuggingChatProvider');
 export class HuggingChatProvider implements Provider {
   name = 'HuggingChat';
   proxyHandler = proxyHandler;
-  defaultModel = 'omni';
-
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login() {
@@ -176,7 +174,7 @@ export class HuggingChatProvider implements Provider {
       let conversationId = options.conversationId;
       if (!conversationId) {
         const createRes = await client.post('/chat/conversation', {
-          model: model || this.defaultModel,
+          model: model,
           preprompt: '',
         });
         const createData = await createRes.json();

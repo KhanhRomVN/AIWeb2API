@@ -94,7 +94,6 @@ const lastParentIdCache = new Map<string, string>();
 export class QwenProvider implements Provider {
   name = 'Qwen';
   proxyHandler = proxyHandler;
-  defaultModel = 'qwen3.8-max';
 
   // ─── Token Helpers ─────────────────────────────────────────────────
 
@@ -109,10 +108,11 @@ export class QwenProvider implements Provider {
     if (credential.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(credential);
-        
+
         // New format: {accessToken, ...} or old format: {token, bxUa, ...}
-        const token = parsed.accessToken || parsed.access_token || parsed.token || null;
-        
+        const token =
+          parsed.accessToken || parsed.access_token || parsed.token || null;
+
         return {
           token,
           cookieValue: token ? `token=${token}` : '',
@@ -121,7 +121,9 @@ export class QwenProvider implements Provider {
           userAgent: parsed.userAgent || USER_AGENT,
         };
       } catch {
-        logger.warn('[Qwen] Credential is not valid JSON, treating as raw token');
+        logger.warn(
+          '[Qwen] Credential is not valid JSON, treating as raw token',
+        );
       }
     }
 
@@ -165,7 +167,9 @@ export class QwenProvider implements Provider {
 
   // JWT helpers are now in shared utils/jwt-helper.ts
 
-  private async performTokenRefresh(credential: string): Promise<string | null> {
+  private async performTokenRefresh(
+    credential: string,
+  ): Promise<string | null> {
     const accessToken = this.extractToken(credential);
     if (!accessToken) return null;
 
@@ -247,15 +251,15 @@ export class QwenProvider implements Provider {
     if (!isJwtExpiringSoon(accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
       return credential;
     }
-    
-    logger.info('[Qwen] Token is expiring soon (< 5 min), attempting refresh...');
+
     const newAccessToken = await this.refreshToken(credential);
     if (!newAccessToken) {
-      logger.error('[Qwen] Token refresh failed - token may be expired. Please login again.');
+      logger.error(
+        '[Qwen] Token refresh failed - token may be expired. Please login again.',
+      );
       throw new Error('Token refresh failed. Please login again to Qwen.');
     }
-    
-    logger.info('[Qwen] Token refreshed successfully');
+
     return newAccessToken;
   }
 
@@ -301,7 +305,10 @@ export class QwenProvider implements Provider {
           // Try fetching profile to get email
           if (!email) {
             try {
-              const profile = await this.getProfile(accessToken, capturedHeaders);
+              const profile = await this.getProfile(
+                accessToken,
+                capturedHeaders,
+              );
               if (profile.email) {
                 email = profile.email;
               }
@@ -413,7 +420,7 @@ export class QwenProvider implements Provider {
 
   private async createChat(
     credential: string,
-    model: string = this.defaultModel,
+    model: string,
   ): Promise<string> {
     const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
       this.parseCredential(credential);
@@ -474,7 +481,7 @@ export class QwenProvider implements Provider {
     }
 
     const json = await response.json();
-    
+
     // Check if response indicates error (even with 200 status)
     if (json.success === false) {
       const errorCode = json.data?.code || 'unknown';
@@ -556,7 +563,7 @@ export class QwenProvider implements Provider {
     const onSessionCreated = options.onSessionCreated;
     let { conversationId } = options;
 
-    let modelToUse = options.model || this.defaultModel;
+    let modelToUse = options.model;
     if (modelToUse.includes('/')) {
       modelToUse = modelToUse.split('/').pop() || modelToUse;
     }
@@ -682,33 +689,19 @@ export class QwenProvider implements Provider {
         ? `${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`
         : `${BASE_URL}/api/v2/chat/completions`;
 
-      // Log request details for debugging
-      logger.debug(`[Qwen] Sending request to: ${url}`);
-      logger.debug(`[Qwen] Request payload:`, {
-        model: modelToUse,
-        conversationId: conversationId || 'new',
-        parentId: parentId || 'none',
-        messageContent: lastMsg.content.slice(0, 100),
-      });
-
       const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
       });
 
-      // Log response status and headers for debugging
-      logger.debug(`[Qwen] Response status: ${response.status}, ok: ${response.ok}`);
-      logger.debug(`[Qwen] Response headers:`, {
-        'content-type': response.headers.get('content-type'),
-        'x-actual-status-code': response.headers.get('x-actual-status-code'),
-        'content-length': response.headers.get('content-length'),
-      });
-
       const actualStatusCode = response.headers.get('x-actual-status-code');
       if (actualStatusCode && actualStatusCode !== '200') {
         const errText = await response.text();
-        logger.error(`[Qwen] API returned error via x-actual-status-code=${actualStatusCode}:`, errText.slice(0, 500));
+        logger.error(
+          `[Qwen] API returned error via x-actual-status-code=${actualStatusCode}:`,
+          errText.slice(0, 500),
+        );
         throw new Error(
           `Qwen API Error ${actualStatusCode}: ${errText.slice(0, 500)}`,
         );
@@ -716,7 +709,10 @@ export class QwenProvider implements Provider {
 
       if (!response.ok) {
         const errText = await response.text();
-        logger.error(`[Qwen] API returned HTTP error ${response.status}:`, errText.slice(0, 500));
+        logger.error(
+          `[Qwen] API returned HTTP error ${response.status}:`,
+          errText.slice(0, 500),
+        );
         throw new Error(
           `Qwen API Error ${response.status}: ${errText.slice(0, 500)}`,
         );
@@ -727,9 +723,6 @@ export class QwenProvider implements Provider {
         throw new Error('No response body');
       }
 
-      // Log that we're about to start streaming
-      logger.debug(`[Qwen] Starting to read response stream...`);
-
       let buffer = '';
       let conversationIdCaptured = false;
       let parentIdCaptured = false;
@@ -739,7 +732,6 @@ export class QwenProvider implements Provider {
       let totalChunksProcessed = 0;
 
       for await (const chunk of response.body as any) {
-        logger.debug(`[Qwen] Received chunk of size: ${chunk.length} bytes`);
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -765,11 +757,6 @@ export class QwenProvider implements Provider {
           try {
             const json = JSON.parse(jsonStr);
             totalChunksProcessed++;
-
-            // Log raw JSON structure for debugging
-            if (totalChunksProcessed <= 3) {
-              logger.debug(`[Qwen] SSE chunk #${totalChunksProcessed}:`, JSON.stringify(json).slice(0, 500));
-            }
 
             let responseCreated = null;
             if (json['response.created']) {
@@ -810,11 +797,9 @@ export class QwenProvider implements Provider {
 
             if (delta?.content) {
               totalContentReceived += delta.content.length;
-              logger.debug(`[Qwen] Feeding content to parser: ${delta.content.slice(0, 100)}`);
               thinkingParser.feed(delta.content);
             } else if (delta && totalChunksProcessed <= 10) {
               // Log when delta exists but has no content
-              logger.debug(`[Qwen] Delta without content:`, JSON.stringify(delta));
             }
           } catch (e) {
             logger.warn('[Qwen] Failed to parse SSE line:', e);
@@ -822,28 +807,36 @@ export class QwenProvider implements Provider {
         }
       }
 
-      logger.debug(`[Qwen] Stream loop ended, buffer remaining: ${buffer.length} chars`);
-
       // If we have remaining buffer content and no chunks were processed, it might be an error response
       if (buffer.length > 0 && totalChunksProcessed === 0) {
-        logger.error(`[Qwen] Received non-streaming response (possible error):`, buffer);
+        logger.error(
+          `[Qwen] Received non-streaming response (possible error):`,
+          buffer,
+        );
         try {
           const errorJson = JSON.parse(buffer);
-          const errorMessage = errorJson.message || errorJson.error || errorJson.data?.message || JSON.stringify(errorJson);
+          const errorMessage =
+            errorJson.message ||
+            errorJson.error ||
+            errorJson.data?.message ||
+            JSON.stringify(errorJson);
           throw new Error(`Qwen API returned error: ${errorMessage}`);
         } catch (parseErr) {
           // If not JSON, log raw content
           logger.error(`[Qwen] Raw response content:`, buffer.slice(0, 1000));
-          throw new Error(`Qwen API returned non-streaming response: ${buffer.slice(0, 200)}`);
+          throw new Error(
+            `Qwen API returned non-streaming response: ${buffer.slice(0, 200)}`,
+          );
         }
       }
 
       thinkingParser.flush();
 
       // Log summary before completing
-      logger.info(`[Qwen] Stream completed: ${totalChunksProcessed} chunks processed, ${totalContentReceived} chars received`);
       if (totalContentReceived === 0) {
-        logger.warn(`[Qwen] No content received from API for model=${modelToUse}, conversationId=${conversationId}`);
+        logger.warn(
+          `[Qwen] No content received from API for model=${modelToUse}, conversationId=${conversationId}`,
+        );
       }
 
       if (capturedParentId && onMetadata) {
@@ -908,12 +901,9 @@ export class QwenProvider implements Provider {
 
         // Parse structure: {"success": true, "data": {"data": [...]}}
         const modelList =
-          json?.data?.data ||
-          json?.data ||
-          (Array.isArray(json) ? json : null);
+          json?.data?.data || json?.data || (Array.isArray(json) ? json : null);
 
         if (modelList && Array.isArray(modelList) && modelList.length > 0) {
-          logger.info(`[Qwen] Fetched ${modelList.length} models from API`);
           return modelList
             .filter((model: any) => {
               // Filter active models only
@@ -946,64 +936,9 @@ export class QwenProvider implements Provider {
       logger.warn('[Qwen] Failed to fetch models from API:', e);
     }
 
-    // Fallback models if API fetch fails
-    logger.info('[Qwen] Using fallback models');
-    return [
-      {
-        id: 'qwen3.8-max',
-        name: 'Qwen3.8-Max',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: false,
-        description: 'Flagship Qwen3.8 Max with advanced reasoning',
-      },
-      {
-        id: 'qwen3.7-plus',
-        name: 'Qwen3.7-Plus',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: true,
-        description: 'High-performance Qwen3.7 with multimodal tasks',
-      },
-      {
-        id: 'qwen3.7-max',
-        name: 'Qwen3.7-Max',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: false,
-        is_image_upload: false,
-        description: 'Flagship Qwen3.7 series reasoning model (text-only)',
-      },
-      {
-        id: 'qwen3.6-plus',
-        name: 'Qwen3.6-Plus',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Qwen3.6 multimodal model with tool support',
-      },
-      {
-        id: 'qwen3.5-plus',
-        name: 'Qwen3.5-Plus',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Qwen3.5 with multimodal processing',
-      },
-      {
-        id: 'qwen3.5-omni-plus',
-        name: 'Qwen3.5-Omni-Plus',
-        is_thinking: false,
-        max_context_length: 262144,
-        is_search: false,
-        is_image_upload: true,
-        description: 'Most powerful native multimodal model (audio/video)',
-      },
-    ];
+    // Return empty array if API fetch fails - no hardcoded fallback
+    logger.warn('[Qwen] No models available from API');
+    return [];
   }
 
   // ─── Model Support ──────────────────────────────────────────────────

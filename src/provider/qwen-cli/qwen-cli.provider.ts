@@ -60,7 +60,6 @@ export const QWEN_CONFIG = {
 export class QwenCoderCLIProvider implements Provider {
   name = 'qwen-cli';
   proxyHandler = proxyHandler;
-  defaultModel = 'coder-model';
 
   // ─── Login ──────────────────────────────────────────────────────────
 
@@ -289,7 +288,7 @@ export class QwenCoderCLIProvider implements Provider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: model || this.defaultModel,
+          model: model,
           messages: messages.map((m: any) => ({
             role: m.role,
             content: [{ type: 'text', text: m.content }],

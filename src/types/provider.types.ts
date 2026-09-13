@@ -30,10 +30,13 @@ export interface Provider {
   uploadFile?(credential: string, file: any): Promise<any>;
   getModels?(credential: string, accountId?: string): Promise<any[]>;
   isModelSupported?(model: string): boolean;
-  defaultModel?: string;
   login?(options?: any): Promise<any>;
-  getProfile?(credential: string): Promise<{ email: string | null; name?: string; id?: string }>;
+  getProfile?(
+    credential: string,
+  ): Promise<{ email: string | null; name?: string; id?: string }>;
   refreshToken?(refreshToken: string): Promise<any>;
-  getUsage?(credential: string): Promise<{ usage: string; resetPeriod: 'day' | 'month' | string }>;
+  getUsage?(
+    credential: string,
+  ): Promise<{ usage: string; resetPeriod: 'day' | 'month' | string }>;
   proxyHandler?: any;
 }

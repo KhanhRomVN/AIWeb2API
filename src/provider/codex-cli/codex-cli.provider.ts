@@ -62,7 +62,6 @@ try {
 export class CodexCLIProvider implements Provider {
   name = 'codex-cli';
   proxyHandler = proxyHandler;
-  defaultModel = 'gpt-5.3-codex';
 
   // ─── Get Profile ────────────────────────────────────────────────────
 
@@ -299,7 +298,7 @@ export class CodexCLIProvider implements Provider {
       }
 
       const bodyObj: any = {
-        model: model || this.defaultModel,
+        model: model,
         instructions: DEFAULT_INSTRUCTIONS,
         input: messages.map((m: any) => ({
           type: 'message',

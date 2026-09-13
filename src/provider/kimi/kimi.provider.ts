@@ -76,7 +76,6 @@ const logger = createLogger('KimiProvider');
 
 export class KimiProvider implements Provider {
   name = 'Kimi';
-  defaultModel = KIMI_MODELS.K3;
   proxyHandler = kimiProxyHandler;
 
   // ─── Credential Parser ─────────────────────────────────────────────
@@ -87,11 +86,13 @@ export class KimiProvider implements Provider {
     if (credential.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(credential);
-        const accessToken = parsed.accessToken || parsed.access_token || parsed.token || '';
+        const accessToken =
+          parsed.accessToken || parsed.access_token || parsed.token || '';
         return {
           accessToken,
           refreshToken: parsed.refreshToken || parsed.refresh_token || '',
-          cookies: parsed.cookies || (accessToken ? `kimi-auth=${accessToken}` : ''),
+          cookies:
+            parsed.cookies || (accessToken ? `kimi-auth=${accessToken}` : ''),
           deviceId:
             parsed.deviceId ||
             parsed.device_id ||
@@ -233,7 +234,8 @@ export class KimiProvider implements Provider {
       if (token.startsWith('{')) {
         try {
           const parsed = JSON.parse(token);
-          rawToken = parsed.accessToken || parsed.access_token || parsed.token || token;
+          rawToken =
+            parsed.accessToken || parsed.access_token || parsed.token || token;
         } catch {
           // ignore
         }
@@ -339,7 +341,11 @@ export class KimiProvider implements Provider {
           if (token.startsWith('{')) {
             try {
               const parsed = JSON.parse(token);
-              token = parsed.accessToken || parsed.access_token || parsed.token || token;
+              token =
+                parsed.accessToken ||
+                parsed.access_token ||
+                parsed.token ||
+                token;
             } catch {
               // ignore
             }
@@ -420,7 +426,7 @@ export class KimiProvider implements Provider {
     const {
       credential,
       messages,
-      model = this.defaultModel,
+      model,
       conversationId,
       thinking = false,
       search = false,
@@ -511,16 +517,16 @@ export class KimiProvider implements Provider {
     const bodyWithEnvelope = Buffer.concat([envelopeHeader, jsonBuf]);
 
     let activeToken = cred.accessToken;
-    
+
     // Check if token is expiring soon (within 5 minutes by default)
     if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
-      logger.info('[Kimi] Token is expiring soon (< 5 min), attempting refresh...');
       const refreshed = await this.refreshAccessToken(cred, options.accountId);
       if (refreshed) {
         activeToken = refreshed;
-        logger.info('[Kimi] Token refreshed successfully');
       } else {
-        logger.warn('[Kimi] Token refresh failed, proceeding with current token');
+        logger.warn(
+          '[Kimi] Token refresh failed, proceeding with current token',
+        );
       }
     }
 

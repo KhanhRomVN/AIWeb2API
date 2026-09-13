@@ -248,20 +248,6 @@ export const sendMessage = async (
             return str.slice(0, MAX_PREVIEW_LENGTH) + '...';
           };
 
-          const outputPreview = finalOutputMessage
-            ? truncate(finalOutputMessage)
-            : '';
-
-          // Calculate tokens
-          // const inputToken = messages ? countMessagesTokens(messages) : 0;
-          // const outputToken = finalOutputMessage
-          //   ? countTokens(finalOutputMessage)
-          //   : 0;
-
-          // logger.info(
-          //   `[Transaction Complete] provider_id=${account.provider_id} model_id=${model} account_id=${account.id} conversation_id=${conversationId || 'none'} input_token=${inputToken} output_token=${outputToken}`,
-          // );
-
           if (stream !== false) {
             if (!accumulatedResponse || accumulatedResponse.trim() === '') {
               logger.warn(

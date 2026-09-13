@@ -49,7 +49,6 @@ const logger = createLogger('GroqProvider');
 export class GroqProvider implements Provider {
   name = 'Groq';
   proxyHandler = proxyHandler;
-  defaultModel = 'llama-3.3-70b-versatile';
 
   // ─── Login ──────────────────────────────────────────────────────────
 
@@ -165,7 +164,7 @@ export class GroqProvider implements Provider {
     } = options;
 
     const payload: any = {
-      model: model || this.defaultModel,
+      model: model,
       messages: messages.map((m) => ({
         role: m.role.toLowerCase(),
         content: m.content,
@@ -254,7 +253,7 @@ export class GroqProvider implements Provider {
 
       if (!token) {
         logger.warn('No session token found in credentials for Groq');
-        return this.getFallbackModels('No Token Found');
+        return [];
       }
 
       let organization = '';
@@ -296,7 +295,7 @@ export class GroqProvider implements Provider {
         logger.error(
           `Groq Models API returned ${response.status}: ${errorText}`,
         );
-        return this.getFallbackModels(`API Error ${response.status}`);
+        return [];
       }
 
       const json = await response.json();
@@ -304,7 +303,7 @@ export class GroqProvider implements Provider {
 
       if (!Array.isArray(modelsData)) {
         logger.warn('[Groq] Models API returned invalid format');
-        return this.getFallbackModels('Invalid API Format');
+        return [];
       }
 
       return modelsData
@@ -318,21 +317,8 @@ export class GroqProvider implements Provider {
         }));
     } catch (e: any) {
       logger.error('Error fetching Groq models:', e);
-      return this.getFallbackModels('Exception: ' + e.message);
+      return [];
     }
-  }
-
-  private getFallbackModels(debugError?: string) {
-    const models: any[] = [];
-    if (debugError) {
-      models.unshift({
-        id: 'debug-error',
-        name: `⚠️ ${debugError}`,
-        max_context_length: 0,
-        is_thinking: false,
-      });
-    }
-    return models;
   }
 
   // ─── Routes ─────────────────────────────────────────────────────────
