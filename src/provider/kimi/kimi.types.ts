@@ -8,21 +8,18 @@
  * - KIMI_BASE_URL      : Base URL
  * - KimiCredential     : Credential structure
  * - KimiChatRequest    : Chat request payload
- * - KimiEvent          : Stream event structure
  * - KIMI_MODELS        : Model constants
- * - KimiModel          : Model type
  * ------------------------------------------------------------------
  */
 
 // ─── Constants (re-export) ─────────────────────────────────────────────
 
 export { KIMI_BASE_URL, KIMI_MODELS } from './kimi.constant';
-export type { KimiModel } from './kimi.constant';
 
 // ─── Types ──────────────────────────────────────────���───────────────────
 
 export interface KimiCredential {
-  token: string;
+  accessToken: string;
   refreshToken?: string;
   cookies?: string;
   deviceId?: string;
@@ -48,15 +45,4 @@ export interface KimiChatRequest {
       [key: string]: any;
     }>;
   };
-}
-
-export interface KimiEvent {
-  op?: 'set' | 'append' | 'remove';
-  mask?: string;
-  eventOffset?: number;
-  heartbeat?: any;
-  done?: any;
-  chat?: any;
-  message?: any;
-  block?: any;
 }

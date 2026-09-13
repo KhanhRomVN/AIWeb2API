@@ -12,7 +12,7 @@
 // ─── Types ──────────────────────────────────────────────────────────────
 
 export interface GeminiCredential {
-  cookie: string;
+  cookies: string;
   sapisid?: string;
   authUser?: string;
   xsrfToken?: string;

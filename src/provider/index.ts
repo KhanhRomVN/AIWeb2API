@@ -29,6 +29,7 @@ export { default as ZAIProvider } from './zai';
 export { default as CerebrasCloudProvider } from './cerebras-cloud';
 export { default as GeminiProvider } from './gemini';
 export { default as KimiProvider } from './kimi';
+export { default as KiroProvider } from './kiro';
 
 // ── Registry & Config ──
 export { providerRegistry } from './registry';

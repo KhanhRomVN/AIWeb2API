@@ -141,33 +141,3 @@ export const startServer = async (): Promise<{
     return { success: false, error: error.message };
   }
 };
-
-// ─── Stop ──────────────────────────────────────────────────────────────
-
-export const stopServer = (): Promise<{
-  success: boolean;
-  message?: string;
-}> => {
-  if (!server) {
-    return Promise.resolve({ success: false, message: 'Server not running' });
-  }
-
-  return new Promise((resolve) => {
-    server?.close(() => {
-      server = null;
-      resolve({ success: true });
-    });
-  });
-};
-
-// ─── Info ──────────────────────────────────────────────────────────────
-
-export const getServerInfo = () => {
-  const config = getServerConfig();
-  return {
-    running: server !== null,
-    port: config.port,
-    host: config.host,
-    https: config.tls.enable,
-  };
-};

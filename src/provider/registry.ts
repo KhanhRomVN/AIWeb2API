@@ -114,6 +114,7 @@ class ProviderRegistry {
       const { default: CerebrasCloudProvider } = require('./cerebras-cloud');
       const { default: GeminiProvider } = require('./gemini');
       const { default: KimiProvider } = require('./kimi');
+      const { default: KiroProvider } = require('./kiro');
 
       const providers = [
         ClaudeProvider,
@@ -130,6 +131,7 @@ class ProviderRegistry {
         CerebrasCloudProvider,
         GeminiProvider,
         KimiProvider,
+        KiroProvider,
       ];
       for (const p of providers) {
         if (p && p.name) {

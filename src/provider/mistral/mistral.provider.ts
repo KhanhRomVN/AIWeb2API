@@ -9,6 +9,9 @@
  * - login()          : Đăng nhập qua browser
  * - handleMessage()  : Gửi tin nhắn với streaming response
  * - getProfile()     : Lấy thông tin user profile
+ *
+ * Credential format:
+ * - cookies          : Cookie string (chứa session cookies)
  * ------------------------------------------------------------------
  */
 

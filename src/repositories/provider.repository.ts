@@ -9,9 +9,7 @@
  * - findAllProviders()      : Lấy tất cả providers
  * - findProviderById()      : Tìm provider theo id
  * - ensureProviderExists()  : Đảm bảo provider tồn tại trong DB
- * - upsertProvider()        : Thêm mới hoặc cập nhật provider
- * - updateProviderTitle()   : Cập nhật title
- * - deleteProvider()        : Xóa provider
+ * - upsertProvidr()        : Thêm mới hoặc cập nhật provider
  * ------------------------------------------------------------------
  */
 
@@ -53,52 +51,4 @@ export const ensureProviderExists = (id: string, title: string): void => {
   db.prepare(
     'INSERT OR IGNORE INTO providers (id, title) VALUES (?, ?)',
   ).run(id.toLowerCase(), title);
-};
-
-export const upsertProvider = (
-  id: string,
-  title: string,
-  websiteUrl?: string,
-  isEnabled?: boolean,
-  authMethod?: string[],
-  isPausable?: boolean,
-  isMemory?: boolean,
-  browserExtensionFolder?: string,
-): void => {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO providers (id, title, website_url, is_enabled, auth_method, is_pausable, is_memory, browser_extension_folder)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       title = excluded.title,
-       website_url = excluded.website_url,
-       is_enabled = excluded.is_enabled,
-       auth_method = excluded.auth_method,
-       is_pausable = excluded.is_pausable,
-       is_memory = excluded.is_memory,
-       browser_extension_folder = excluded.browser_extension_folder`,
-  ).run(
-    id.toLowerCase(),
-    title,
-    websiteUrl ?? null,
-    isEnabled !== false ? 1 : 0,
-    authMethod ? JSON.stringify(authMethod) : null,
-    isPausable ? 1 : 0,
-    isMemory ? 1 : 0,
-    browserExtensionFolder ?? null,
-  );
-};
-
-// ─── Updates ────────────────────────────────────────────────────────────
-
-export const updateProviderTitle = (id: string, title: string): void => {
-  const db = getDb();
-  db.prepare('UPDATE providers SET title = ? WHERE id = ?').run(title, id.toLowerCase());
-};
-
-// ─── Deletes ────────────────────────────────────────────────────────────
-
-export const deleteProvider = (id: string): void => {
-  const db = getDb();
-  db.prepare('DELETE FROM providers WHERE id = ?').run(id.toLowerCase());
 };

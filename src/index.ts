@@ -27,6 +27,9 @@ import { initDatabase } from './database';
 // ── WebSocket ──
 import { startWebSocketServer } from './websocket-server';
 
+// ── Services ──
+import { accountRefreshService } from './services/account.service';
+
 // ── Utils ──
 import { createLogger } from './utils/logger';
 
@@ -48,7 +51,6 @@ const main = async (options?: { dbPath?: string }) => {
 
   if (result.success) {
     startWebSocketServer();
-    const { accountRefreshService } = require('./services/account.service');
     accountRefreshService.start();
   } else {
     logger.error(`Failed to start server: ${result.error}`);

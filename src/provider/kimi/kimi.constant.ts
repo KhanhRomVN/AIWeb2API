@@ -30,8 +30,6 @@ export const KIMI_MODELS = {
   KIMI_LATEST: 'kimi-latest',
 } as const;
 
-export type KimiModel = (typeof KIMI_MODELS)[keyof typeof KIMI_MODELS];
-
 export const KIMI_EVENTS = {
   HEADERS: 'kimi-headers',
   LOGIN_TOKEN: 'kimi-login-token',

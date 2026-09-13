@@ -10,7 +10,6 @@
  * - getProviderModels()            : Lấy models của một provider
  * - isProviderEnabled()            : Kiểm tra provider có enabled
  * - getAllModelsFromEnabledProviders() : Lấy models từ enabled providers
- * - invalidateProviderCache()      : Xóa cache providers
  * ------------------------------------------------------------------
  */
 
@@ -100,6 +99,10 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
 };
 
 // ─── Main Functions ────────────────────────────────────────────────────
+
+export const invalidateProviderCache = (): void => {
+  cachedProviders = null;
+};
 
 export const getAllProviders = async (): Promise<Provider[]> => {
   if (cachedProviders !== null) {
@@ -193,10 +196,6 @@ export const getAllProviders = async (): Promise<Provider[]> => {
 
   cachedProviders = providersWithModels;
   return providersWithModels;
-};
-
-export const invalidateProviderCache = (): void => {
-  cachedProviders = null;
 };
 
 export const getProviderModels = async (

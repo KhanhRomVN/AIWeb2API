@@ -12,6 +12,10 @@
  * - getModels()      : Lấy danh sách models
  * - WebSocket        : Kết nối với extension bridge
  * - Session remapping: Tự động remap session ID
+ *
+ * Credential format:
+ * - cookies          : Cookie string
+ * - sessionId        : Browser session ID
  * ------------------------------------------------------------------
  */
 
@@ -138,12 +142,12 @@ export class ZaiBrowserProvider implements Provider {
       return { email: null };
     }
 
-    const emailMatch = parsed.cookie.match(/email=([^;]+)/);
+    const emailMatch = parsed.cookies.match(/email=([^;]+)/);
     if (emailMatch) {
       return { email: decodeURIComponent(emailMatch[1]) };
     }
 
-    logger.warn('[ZaiBrowser] Get Profile: no email found in cookie');
+    logger.warn('[ZaiBrowser] Get Profile: no email found in cookies');
     return { email: null };
   }
 

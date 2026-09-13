@@ -13,6 +13,15 @@
  * - getModels()            : Lấy danh sách models
  * - getProfile()           : Lấy thông tin user profile
  * - Fallback handling      : Tự động fallback khi K3 overload
+ *
+ * Credential format (JSON string):
+ * - accessToken         : JWT access token
+ * - refreshToken        : Refresh token
+ * - cookies             : Cookie string (kimi-auth=${token})
+ * - deviceId            : Device ID
+ * - sessionId           : Session ID
+ * - trafficId (optional): Traffic ID
+ * - userAgent (optional): User agent string
  * ------------------------------------------------------------------
  */
 
@@ -33,6 +42,13 @@ import { updateAccountCredential } from '../../repositories/account.repository';
 
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
+import {
+  getJwtExpiry,
+  isJwtExpired,
+  isJwtExpiringSoon,
+  coordinateTokenRefresh,
+  DEFAULT_REFRESH_THRESHOLD_SEC,
+} from '../../utils/jwt-helper';
 
 // ── Kimi Imports ──
 import {
@@ -66,16 +82,16 @@ export class KimiProvider implements Provider {
   // ─── Credential Parser ─────────────────────────────────────────────
 
   private parseCredential(credential: string): KimiCredential {
-    if (!credential) return { token: '' };
+    if (!credential) return { accessToken: '' };
 
     if (credential.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(credential);
-        const token = parsed.token || parsed.access_token || '';
+        const accessToken = parsed.accessToken || parsed.access_token || parsed.token || '';
         return {
-          token,
+          accessToken,
           refreshToken: parsed.refreshToken || parsed.refresh_token || '',
-          cookies: parsed.cookies || (token ? `kimi-auth=${token}` : ''),
+          cookies: parsed.cookies || (accessToken ? `kimi-auth=${accessToken}` : ''),
           deviceId:
             parsed.deviceId ||
             parsed.device_id ||
@@ -96,7 +112,7 @@ export class KimiProvider implements Provider {
 
     if (credential.startsWith('eyJ')) {
       return {
-        token: credential,
+        accessToken: credential,
         cookies: `kimi-auth=${credential}`,
         deviceId: `dev_${crypto.randomBytes(8).toString('hex')}`,
         sessionId: `sess_${crypto.randomBytes(8).toString('hex')}`,
@@ -107,7 +123,7 @@ export class KimiProvider implements Provider {
       credential.match(/kimi-auth=([^;]+)/) ||
       credential.match(/access_token=([^;]+)/) ||
       credential.match(/token=([^;]+)/);
-    const token = match ? match[1] : credential;
+    const accessToken = match ? match[1] : credential;
 
     const refreshMatch =
       credential.match(/kimi-refresh=([^;]+)/) ||
@@ -115,7 +131,7 @@ export class KimiProvider implements Provider {
     const refreshToken = refreshMatch ? refreshMatch[1] : '';
 
     return {
-      token,
+      accessToken,
       refreshToken,
       cookies: credential,
       deviceId: `dev_${crypto.randomBytes(8).toString('hex')}`,
@@ -123,28 +139,15 @@ export class KimiProvider implements Provider {
     };
   }
 
-  // ─── Token Helpers ──────────────────────────────────────────────────
-
-  private getTokenExpiry(jwt: string): number | null {
-    try {
-      const parts = jwt.split('.');
-      if (parts.length < 2) return null;
-      const payload = JSON.parse(
-        Buffer.from(parts[1], 'base64url').toString('utf8'),
-      );
-      return typeof payload.exp === 'number' ? payload.exp : null;
-    } catch {
-      return null;
-    }
-  }
+  // JWT helpers are now in shared utils/jwt-helper.ts
 
   // ─── Refresh Token ──────────────────────────────────────────────────
 
-  async refreshAccessToken(
+  private async performTokenRefresh(
     cred: KimiCredential,
     accountId?: string,
   ): Promise<string | null> {
-    const tokenToUse = cred.refreshToken || cred.token;
+    const tokenToUse = cred.refreshToken || cred.accessToken;
     if (!tokenToUse) return null;
 
     try {
@@ -181,7 +184,7 @@ export class KimiProvider implements Provider {
           cred.refreshToken;
 
         if (newAccessToken && typeof newAccessToken === 'string') {
-          cred.token = newAccessToken;
+          cred.accessToken = newAccessToken;
           if (newRefreshToken) cred.refreshToken = newRefreshToken;
           cred.cookies = `kimi-auth=${newAccessToken}${cred.refreshToken ? `; refresh_token=${cred.refreshToken}` : ''}`;
 
@@ -206,6 +209,19 @@ export class KimiProvider implements Provider {
     return null;
   }
 
+  async refreshAccessToken(
+    cred: KimiCredential,
+    accountId?: string,
+  ): Promise<string | null> {
+    const tokenToUse = cred.refreshToken || cred.accessToken;
+    if (!tokenToUse) return null;
+
+    // Use coordinated refresh to prevent duplicate refresh operations
+    return coordinateTokenRefresh('kimi', tokenToUse, () =>
+      this.performTokenRefresh(cred, accountId),
+    );
+  }
+
   // ─── Profile ────────────────────────────────────────────────────────
 
   async getProfile(
@@ -217,7 +233,7 @@ export class KimiProvider implements Provider {
       if (token.startsWith('{')) {
         try {
           const parsed = JSON.parse(token);
-          rawToken = parsed.token || parsed.access_token || token;
+          rawToken = parsed.accessToken || parsed.access_token || parsed.token || token;
         } catch {
           // ignore
         }
@@ -323,7 +339,7 @@ export class KimiProvider implements Provider {
           if (token.startsWith('{')) {
             try {
               const parsed = JSON.parse(token);
-              token = parsed.token || parsed.access_token || token;
+              token = parsed.accessToken || parsed.access_token || parsed.token || token;
             } catch {
               // ignore
             }
@@ -366,7 +382,7 @@ export class KimiProvider implements Provider {
 
           const cookieString = `kimi-auth=${token}${refreshToken ? `; refresh_token=${refreshToken}` : ''}`;
           const credObj: KimiCredential = {
-            token,
+            accessToken: token,
             refreshToken,
             cookies: cookieString,
             deviceId:
@@ -418,7 +434,7 @@ export class KimiProvider implements Provider {
     } = options;
 
     const cred = this.parseCredential(credential);
-    if (!cred.token) {
+    if (!cred.accessToken) {
       onError(new Error('Kimi token missing. Please login first.'));
       return;
     }
@@ -494,13 +510,17 @@ export class KimiProvider implements Provider {
     envelopeHeader.writeUInt32BE(jsonBuf.length, 1);
     const bodyWithEnvelope = Buffer.concat([envelopeHeader, jsonBuf]);
 
-    let activeToken = cred.token;
-    const exp = this.getTokenExpiry(cred.token);
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (exp && exp <= nowSec + 30) {
+    let activeToken = cred.accessToken;
+    
+    // Check if token is expiring soon (within 5 minutes by default)
+    if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
+      logger.info('[Kimi] Token is expiring soon (< 5 min), attempting refresh...');
       const refreshed = await this.refreshAccessToken(cred, options.accountId);
       if (refreshed) {
         activeToken = refreshed;
+        logger.info('[Kimi] Token refreshed successfully');
+      } else {
+        logger.warn('[Kimi] Token refresh failed, proceeding with current token');
       }
     }
 

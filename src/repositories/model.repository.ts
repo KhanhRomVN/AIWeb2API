@@ -7,10 +7,8 @@
  *
  * Main functions:
  * - findAllModels()          : Lấy tất cả models
- * - findModelsByProvider()   : Lấy models theo provider
  * - upsertModel()            : Thêm mới hoặc cập nhật model
  * - updateModelSuccessRate() : Cập nhật success rate
- * - deleteModelsByProvider() : Xóa models theo provider
  * ------------------------------------------------------------------
  */
 
@@ -39,13 +37,6 @@ export interface ModelRow {
 export const findAllModels = (): ModelRow[] => {
   const db = getDb();
   return db.prepare('SELECT * FROM models').all() as ModelRow[];
-};
-
-export const findModelsByProvider = (providerId: string): ModelRow[] => {
-  const db = getDb();
-  return db
-    .prepare('SELECT * FROM models WHERE provider_id = ?')
-    .all(providerId) as ModelRow[];
 };
 
 // ─── Upserts ────────────────────────────────────────────────────────────
@@ -100,11 +91,4 @@ export const updateModelSuccessRate = (
   db.prepare(
     `UPDATE models SET success_rate = ? WHERE provider_id = ? AND model_id = ?`,
   ).run(successRate, providerId, modelId);
-};
-
-// ─── Deletes ──���─────────────────────────────────────────────────────────
-
-export const deleteModelsByProvider = (providerId: string): void => {
-  const db = getDb();
-  db.prepare('DELETE FROM models WHERE provider_id = ?').run(providerId);
 };

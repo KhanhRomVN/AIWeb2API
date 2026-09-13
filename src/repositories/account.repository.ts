@@ -264,11 +264,6 @@ export const updateAccountUsage = (
   );
 };
 
-export const findAllAccounts = (): AccountRow[] => {
-  const db = getDb();
-  return db.prepare('SELECT * FROM accounts').all() as AccountRow[];
-};
-
 export const findAccountsNeedingRefresh = (threshold: number): AccountRow[] => {
   const db = getDb();
   const cutoff = Date.now() - threshold;

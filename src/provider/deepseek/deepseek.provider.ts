@@ -13,13 +13,15 @@
  * - continueIncompleteResponse() : Tiếp tục response bị truncate
  * - uploadFile()           : Upload file lên DeepSeek
  * - getProfile()           : Lấy thông tin user profile
+ *
+ * Credential format:
+ * - token               : Bearer access token (JWT)
  * ------------------------------------------------------------------
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
 import { Router } from 'express';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
@@ -47,7 +49,6 @@ import {
   MAX_CONTINUATIONS,
   GOOGLE_OAUTH_LOGIN_URL,
 } from './deepseek.constant';
-import { preparePromptAndAttachments } from '../../utils/prompt-uploader';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DeepSeekProvider');
@@ -334,31 +335,50 @@ export class DeepSeekProvider implements Provider {
         parentMessageId = await this.getLastMessageId(client, sessionId);
       }
 
-      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const randomPart = crypto.randomBytes(8).toString('hex');
-      const clientStreamId = `${date}-${randomPart}`;
+      // ── PoW Challenge ──────────────────────────────────────────────────
+      const challengeClient = new HttpClient({
+        baseURL: BASE_URL,
+        headers: {
+          ...baseHeaders,
+          Referer: `${BASE_URL}/a/chat/s/${sessionId}`,
+        },
+      });
 
-      // Run Chat PoW challenge solving and large payload auto-upload in parallel to eliminate sequential lag
-      const [powResponseBase64, { promptText, refFileIds }] = await Promise.all([
-        this.solveChatPoW(baseHeaders, sessionId),
-        preparePromptAndAttachments({
-          providerId: 'deepseek',
-          messages,
-          refFileIds: options.ref_file_ids,
-          uploadFn: (file) => this.uploadFile(credential, file),
-        }),
-      ]);
+      const challengeRes = await challengeClient.post(
+        '/api/v0/chat/create_pow_challenge',
+        { target_path: '/api/v0/chat/completion' },
+      );
+      let powResponseBase64 = '';
+      if (challengeRes.ok) {
+        try {
+          const rawText = await challengeRes.text();
+          const challengeJson = JSON.parse(rawText);
+          const challengeData: PoWChallenge =
+            challengeJson?.data?.biz_data?.challenge;
+          if (challengeData) {
+            const dsHash = await this.getDsHash();
+            const powAnswer = await solvePoW(dsHash, challengeData);
+            powResponseBase64 = Buffer.from(JSON.stringify(powAnswer)).toString(
+              'base64',
+            );
+          }
+        } catch (e) {
+          logger.warn(
+            `[DeepSeek] Failed to parse PoW challenge response | session=${sessionId}`,
+          );
+        }
+      }
 
       const requestPayload: ChatPayload = {
         chat_session_id: sessionId,
         parent_message_id: parentMessageId || null || undefined,
-        prompt: promptText,
-        messages: [],
-        ref_file_ids: refFileIds,
+        model_type: model === 'deepseek-expert' ? 'expert' : 'default',
+        prompt: messages[messages.length - 1].content,
+        ref_file_ids: options.ref_file_ids || [],
         thinking_enabled: options.thinking ?? model === 'deepseek-reasoner',
         search_enabled: options.search || false,
-        client_stream_id: clientStreamId,
-        model_type: model === 'deepseek-expert' ? 'expert' : 'default',
+        action: null,
+        preempt: false,
       };
 
       const completionClient = new HttpClient({
@@ -419,9 +439,6 @@ export class DeepSeekProvider implements Provider {
         continuationCount < MAX_CONTINUATIONS
       ) {
         continuationCount++;
-        logger.info(
-          `[DeepSeek] Auto-continue attempt ${continuationCount}/${MAX_CONTINUATIONS} | session=${sessionId} | msgId=${responseMessageId}`,
-        );
 
         if (onMetadata) {
           onMetadata({
@@ -445,9 +462,7 @@ export class DeepSeekProvider implements Provider {
         }
 
         if (!continueResponse.body) {
-          logger.warn(
-            '[DeepSeek] /chat/continue returned no body, stopping continuation',
-          );
+          logger.warn('[DeepSeek] /chat/continue returned no body, stopping');
           break;
         }
 
@@ -471,14 +486,11 @@ export class DeepSeekProvider implements Provider {
         if (continueResult.responseMessageId !== null) {
           responseMessageId = continueResult.responseMessageId;
         }
-        logger.info(
-          `[DeepSeek] Auto-continue attempt ${continuationCount} result | incomplete=${continueResult.incomplete} | newMsgId=${continueResult.responseMessageId ?? 'unchanged'} | session=${sessionId}`,
-        );
       }
 
       if (continuationCount >= MAX_CONTINUATIONS && incomplete) {
         logger.warn(
-          `[DeepSeek] Max continuations reached | session=${sessionId} | totalAttempts=${continuationCount}`,
+          `[DeepSeek] Max continuations reached | session=${sessionId}`,
         );
       }
 
@@ -497,57 +509,11 @@ export class DeepSeekProvider implements Provider {
         stack: err.stack,
         code: err.code,
         status: err.status,
-        response: err.response,
         sessionId: sessionId || 'unknown',
         model: currentModel || 'unknown',
       });
       onError(err);
     }
-  }
-
-  // ─── PoW Solver ──────────────────────────────────────────────────────
-
-  private async solveChatPoW(baseHeaders: any, sessionId: string): Promise<string> {
-    try {
-      const challengeClient = new HttpClient({
-        baseURL: BASE_URL,
-        headers: {
-          ...baseHeaders,
-          Referer: `${BASE_URL}/a/chat/s/${sessionId}`,
-        },
-      });
-
-      const challengeRes = await challengeClient.post(
-        '/api/v0/chat/create_pow_challenge',
-        { target_path: '/api/v0/chat/completion' },
-      );
-
-      if (challengeRes.ok) {
-        const rawText = await challengeRes.text();
-        const challengeJson = JSON.parse(rawText);
-        const challengeData: PoWChallenge =
-          challengeJson?.data?.biz_data?.challenge;
-        if (challengeData) {
-          const dsHash = await this.getDsHash();
-          const powAnswer = await solvePoW(dsHash, challengeData);
-          return Buffer.from(JSON.stringify(powAnswer)).toString('base64');
-        } else {
-          logger.warn(
-            `[DeepSeek] PoW challenge data missing from response | session=${sessionId} | body=${rawText.slice(0, 200)}`,
-          );
-        }
-      } else {
-        const errText = await challengeRes.text().catch(() => '<unreadable>');
-        logger.warn(
-          `[DeepSeek] PoW challenge request failed | status=${challengeRes.status} | session=${sessionId} | body=${errText.slice(0, 200)}`,
-        );
-      }
-    } catch (e) {
-      logger.warn(
-        `[DeepSeek] Failed to parse PoW challenge response | session=${sessionId} | error=${e}`,
-      );
-    }
-    return '';
   }
 
   // ─── History ─────────────────────────────────────────────────────────
@@ -569,10 +535,10 @@ export class DeepSeekProvider implements Provider {
         return lastAssistant?.message_id || null;
       }
       logger.warn(
-        `[DeepSeek] Failed to fetch history messages: HTTP ${res.status} | session=${sessionId}`,
+        `[DeepSeek] Failed to fetch history messages: HTTP ${res.status}`,
       );
     } catch (e) {
-      logger.warn(`[DeepSeek] Failed to fetch last message ID | session=${sessionId}:`, e);
+      logger.warn('[DeepSeek] Failed to fetch last message ID:', e);
     }
     return null;
   }
@@ -626,7 +592,8 @@ export class DeepSeekProvider implements Provider {
       m.includes('deepseek-chat') ||
       m.includes('deepseek-reasoner') ||
       m.includes('deepseek-instant') ||
-      m.includes('deepseek-expert')
+      m.includes('deepseek-vision')
+      // m.includes('deepseek-expert')
     );
   }
 }

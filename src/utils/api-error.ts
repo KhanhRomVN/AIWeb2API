@@ -31,11 +31,3 @@ export class AppError extends Error implements ApiError {
 }
 
 // ─── Factory ────────────────────────────────────────────────────────────
-
-export const createError = (
-  message: string,
-  statusCode = 500,
-  code?: string,
-): AppError => {
-  return new AppError(message, statusCode, code);
-};

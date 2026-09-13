@@ -12,6 +12,13 @@
  * - getProfile()     : Lấy thông tin user profile từ HTML
  * - XSRF retry       : Tự động retry với XSRF token từ error response
  * - Model mapping    : Hỗ trợ các mode: FAST, THINKING, PRO, AUTO
+ *
+ * Credential format (JSON string):
+ * - cookies          : Cookie string (chứa SID, __Secure-1PSID)
+ * - sapisid          : SAPISID token
+ * - xsrfToken        : XSRF token
+ * - authUser         : Auth user ID
+ * - email (optional) : Email address
  * ------------------------------------------------------------------
  */
 
@@ -71,8 +78,8 @@ export class GeminiProvider implements Provider {
       const headers: Record<string, string> = {
         'User-Agent': USER_AGENT,
       };
-      if (cred.cookie) {
-        headers['Cookie'] = cred.cookie;
+      if (cred.cookies) {
+        headers['Cookie'] = cred.cookies;
       }
       if (cred.sapisid) {
         headers['Authorization'] = makeSapisidHash(cred.sapisid);
@@ -155,7 +162,7 @@ export class GeminiProvider implements Provider {
 
             if (!email) {
               try {
-                const credStr = JSON.stringify({ cookie, sapisid });
+                const credStr = JSON.stringify({ cookies: cookie, sapisid });
                 const profile = await this.getProfile(credStr);
                 email = profile.email || undefined;
               } catch (e) {
@@ -174,7 +181,7 @@ export class GeminiProvider implements Provider {
               cookie.includes('SID=') && cookie.includes('__Secure-1PSID=');
             if (hasSID) {
               const credential = JSON.stringify({
-                cookie,
+                cookies: cookie,
                 sapisid,
                 xsrfToken: captured.xsrfToken,
                 authUser: captured.authUser,
@@ -257,7 +264,7 @@ export class GeminiProvider implements Provider {
           'User-Agent': USER_AGENT,
         };
         if (c.authUser) h['X-Goog-AuthUser'] = c.authUser;
-        if (c.cookie) h['Cookie'] = c.cookie;
+        if (c.cookies) h['Cookie'] = c.cookies;
         if (c.sapisid) h['Authorization'] = makeSapisidHash(c.sapisid);
         return h;
       };
@@ -366,7 +373,7 @@ export class GeminiProvider implements Provider {
     try {
       const parsed = JSON.parse(credential);
       return {
-        cookie: parsed.cookie || parsed.cookies || credential,
+        cookies: parsed.cookies || parsed.cookie || credential,
         sapisid: parsed.sapisid || '',
         authUser: parsed.authUser || parsed.auth_user || '',
         xsrfToken: parsed.xsrfToken || parsed.xsrf_token || '',
@@ -378,7 +385,7 @@ export class GeminiProvider implements Provider {
       );
       const sapisidMatch = credential.match(/SAPISID=([^;]+)/);
       return {
-        cookie: credential,
+        cookies: credential,
         sapisid: sapisidMatch ? sapisidMatch[1] : '',
       };
     }

@@ -5,9 +5,7 @@
  * Helper functions cho Z.AI Browser provider.
  *
  * Main functions:
- * - parseZaiBrowserCredential() : Parse credential thành cookie + userAgent
- * - extractEmailFromCookie()    : Extract email từ cookie
- * - sanitizeCookieForExtension(): Sanitize cookie cho extension
+ * - parseZaiBrowserCredential() : Parse credential thành cookies + userAgent
  * ------------------------------------------------------------------
  */
 
@@ -23,23 +21,11 @@ const logger = createLogger('ZaiBrowserHelpers');
 export const parseZaiBrowserCredential = (credential: string): ParsedZaiCredential | null => {
   const parts = credential.split('|||');
   if (parts.length < 2) {
-    logger.warn(`[ZaiBrowser] Invalid credential format, expected "cookie|||user_agent"`);
+    logger.warn(`[ZaiBrowser] Invalid credential format, expected "cookies|||user_agent"`);
     return null;
   }
   return {
-    cookie: parts[0],
+    cookies: parts[0],
     userAgent: parts[1],
   };
-};
-
-export const extractEmailFromCookie = (cookie: string): string | null => {
-  const match = cookie.match(/email=([^;]+)/);
-  if (match) {
-    return decodeURIComponent(match[1]);
-  }
-  return null;
-};
-
-export const sanitizeCookieForExtension = (cookie: string): string => {
-  return cookie.replace(/\n/g, '').replace(/\r/g, '').trim();
 };

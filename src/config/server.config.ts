@@ -7,7 +7,6 @@
  *
  * Main exports:
  * - getServerConfig()   : Lấy cấu hình server hiện tại
- * - updateServerConfig(): Cập nhật cấu hình server
  * ------------------------------------------------------------------
  */
 
@@ -52,8 +51,4 @@ let currentConfig: ServerConfig = { ...defaultConfig };
 
 export const getServerConfig = (): ServerConfig => {
   return currentConfig;
-};
-
-export const updateServerConfig = (config: Partial<ServerConfig>) => {
-  currentConfig = { ...currentConfig, ...config };
 };

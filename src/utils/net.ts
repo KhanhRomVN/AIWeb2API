@@ -6,7 +6,6 @@
  *
  * Main functions:
  * - findAvailablePort() : Tìm port khả dụng từ preferred port
- * - isPortAvailable()   : Kiểm tra port có khả dụng không
  * ------------------------------------------------------------------
  */
 
@@ -39,25 +38,5 @@ export const findAvailablePort = (preferredPort: number): Promise<number> => {
     });
 
     server.listen(preferredPort);
-  });
-};
-
-export const isPortAvailable = (port: number): Promise<boolean> => {
-  return new Promise((resolve) => {
-    const server = createServer();
-
-    server.once('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        resolve(false);
-      } else {
-        resolve(false);
-      }
-    });
-
-    server.once('listening', () => {
-      server.close(() => resolve(true));
-    });
-
-    server.listen(port);
   });
 };

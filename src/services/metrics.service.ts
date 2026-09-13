@@ -28,6 +28,10 @@ import {
 } from '../repositories/metrics.repository';
 import { upsertModel, updateModelSuccessRate } from '../repositories/model.repository';
 
+// ── Services ──
+import { invalidateProviderCache } from './provider.service';
+import { accountRefreshService } from './account.service';
+
 // ── Utils ──
 import { createLogger } from '../utils/logger';
 import { countMessagesTokens, countTokens } from '../utils/tokenizer';
@@ -95,7 +99,6 @@ function updateModelSuccessRateAsync(providerId: string, modelId: string): void 
       const successRate = calculateModelSuccessRate(providerId, modelId);
       updateModelSuccessRate(providerId, modelId, successRate);
 
-      const { invalidateProviderCache } = require('./provider.service');
       invalidateProviderCache();
     } catch (error) {
       logger.error(`Error updating success rate for model ${providerId}/${modelId}:`, error);
@@ -122,7 +125,6 @@ export function recordChatMetrics(
   );
 
   if (accountId) {
-    const { accountRefreshService } = require('./account.service');
     accountRefreshService.refreshUsage(accountId).catch((err: any) => {
       logger.warn(`Failed to refresh usage for account ${accountId}: ${err.message}`);
     });

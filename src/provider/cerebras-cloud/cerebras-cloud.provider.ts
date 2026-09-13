@@ -12,6 +12,10 @@
  * - getModels()      : Lấy danh sách models từ API
  * - getProfile()     : Lấy thông tin user profile
  * - rate limiting    : Tự động giới hạn request/token theo account
+ *
+ * Credential format:
+ * - cookies          : Cookie string (chứa authjs.session-token)
+ * - OR API key       : Plain string bắt đầu bằng 'csk-'
  * ------------------------------------------------------------------
  */
 

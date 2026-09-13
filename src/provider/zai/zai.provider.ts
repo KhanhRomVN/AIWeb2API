@@ -13,6 +13,13 @@
  * - getProfile()     : Lấy thông tin user profile từ JWT
  * - Rate limiting    : Tự động giới hạn request (8 req/min)
  * - Signature auth   : Tạo signature cho mỗi request
+ *
+ * Credential format (string format: token|||cookies|||userId|||email|||userAgent):
+ * - token               : JWT access token
+ * - cookies (optional)  : Cookie string
+ * - userId              : User ID
+ * - email (optional)    : Email address
+ * - userAgent (optional): User agent string
  * ------------------------------------------------------------------
  */
 

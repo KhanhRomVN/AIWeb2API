@@ -7,7 +7,6 @@
  *
  * Main functions:
  * - killProcessOnPort() : Kill process trên port
- * - isPortInUse()       : Kiểm tra port đang được sử dụng
  * ------------------------------------------------------------------
  */
 
@@ -53,27 +52,6 @@ export const killProcessOnPort = async (port: number): Promise<boolean> => {
     }
   } catch (error) {
     logger.error(`Failed to kill process on port ${port}:`, error);
-    return false;
-  }
-};
-
-export const isPortInUse = async (port: number): Promise<boolean> => {
-  try {
-    try {
-      await execAsync(`fuser ${port}/tcp 2>/dev/null`);
-      return true;
-    } catch (e) {
-      // fuser returns non-zero if no process found
-    }
-
-    try {
-      const { stdout } = await execAsync(`lsof -ti :${port} 2>/dev/null`);
-      return !!(stdout && stdout.trim().length > 0);
-    } catch (e) {
-      return false;
-    }
-    return false;
-  } catch (error) {
     return false;
   }
 };

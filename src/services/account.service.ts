@@ -21,7 +21,6 @@
  * - refreshAccountToken()                      : Refresh token qua provider
  * - getAccountUsageFromProvider()              : Lấy usage từ provider
  * - AccountRefreshService                      : Background service tự động refresh tokens
- * - accountRefreshService                      : Singleton instance
  * ------------------------------------------------------------------
  */
 
@@ -463,7 +462,5 @@ export class AccountRefreshService {
   }
 }
 
-/**
- * Singleton instance của AccountRefreshService
- */
+// ─── Singleton Instance ─────────────────────────────────────────────────
 export const accountRefreshService = new AccountRefreshService();

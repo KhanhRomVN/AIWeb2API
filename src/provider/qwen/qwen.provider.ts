@@ -14,6 +14,13 @@
  * - getProfile()           : Lấy thông tin user profile
  * - Session locking        : Ngăn concurrent requests trên cùng session
  * - Parent ID caching      : Cache parent_id để tránh lỗi sibling
+ *
+ * Credential format (JSON string hoặc raw JWT):
+ * - accessToken         : JWT access token (tự động refresh qua API)
+ *
+ * Note: Qwen CHỈ dùng accessToken qua Authorization header.
+ *       KHÔNG dùng Cookie hay User-Agent.
+ *       Token được refresh bằng cách gửi accessToken hiện tại lên /api/v1/auths/
  * ------------------------------------------------------------------
  */
 
@@ -36,11 +43,24 @@ import { updateAccountCredential } from '../../repositories/account.repository';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 import { StreamingThinkingParser } from '../../utils/thinking-parser';
+import {
+  getJwtExpiry,
+  isJwtExpired,
+  isJwtExpiringSoon,
+  coordinateTokenRefresh,
+  DEFAULT_REFRESH_THRESHOLD_SEC,
+} from '../../utils/jwt-helper';
 
 // ── Qwen Imports ──
 import { proxyHandler } from './qwen.proxy-handler';
 import type { QwenCredential } from './qwen.types';
-import { BASE_URL, QWEN_EVENTS, USER_AGENT } from './qwen.constant';
+import {
+  BASE_URL,
+  QWEN_EVENTS,
+  API_VERSION,
+  BX_VERSION,
+  USER_AGENT,
+} from './qwen.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenProvider');
@@ -74,15 +94,25 @@ const lastParentIdCache = new Map<string, string>();
 export class QwenProvider implements Provider {
   name = 'Qwen';
   proxyHandler = proxyHandler;
-  defaultModel = 'qwen-3.8-max';
+  defaultModel = 'qwen3.8-max';
 
   // ─── Token Helpers ─────────────────────────────────────────────────
 
-  private parseCredential(credential: string): QwenCredential {
+  private parseCredential(credential: string): {
+    token: string | null;
+    cookieValue: string;
+    bxUa: string;
+    bxUmidToken: string;
+    userAgent: string;
+  } {
+    // Try parsing as JSON first
     if (credential.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(credential);
-        const token = parsed.token || null;
+        
+        // New format: {accessToken, ...} or old format: {token, bxUa, ...}
+        const token = parsed.accessToken || parsed.access_token || parsed.token || null;
+        
         return {
           token,
           cookieValue: token ? `token=${token}` : '',
@@ -91,25 +121,38 @@ export class QwenProvider implements Provider {
           userAgent: parsed.userAgent || USER_AGENT,
         };
       } catch {
-        logger.warn(
-          '[Qwen] Credential is not valid JSON, falling through to raw token parsing',
-        );
+        logger.warn('[Qwen] Credential is not valid JSON, treating as raw token');
       }
     }
 
-    let token: string | null = null;
-    let cookieValue = credential;
+    // Check if raw JWT token
     if (credential.trim().startsWith('eyJ')) {
-      token = credential.trim();
-      cookieValue = `token=${token}`;
-    } else {
-      const m = credential.match(/(?:^|;\s*)token=(eyJ[^;]+)/);
-      token = m ? m[1] : null;
+      const token = credential.trim();
+      return {
+        token,
+        cookieValue: `token=${token}`,
+        bxUa: '',
+        bxUmidToken: '',
+        userAgent: USER_AGENT,
+      };
     }
 
+    // Try extracting from cookie format: token=eyJ...
+    const m = credential.match(/(?:^|;\s*)token=(eyJ[^;]+)/);
+    if (m && m[1]) {
+      return {
+        token: m[1],
+        cookieValue: credential,
+        bxUa: '',
+        bxUmidToken: '',
+        userAgent: USER_AGENT,
+      };
+    }
+
+    // Fallback: treat as raw token
     return {
-      token,
-      cookieValue,
+      token: credential,
+      cookieValue: `token=${credential}`,
       bxUa: '',
       bxUmidToken: '',
       userAgent: USER_AGENT,
@@ -120,47 +163,21 @@ export class QwenProvider implements Provider {
     return this.parseCredential(credential).token;
   }
 
-  private getTokenExpiry(jwt: string): number | null {
-    try {
-      const parts = jwt.split('.');
-      if (parts.length < 2) return null;
-      const payload = JSON.parse(
-        Buffer.from(parts[1], 'base64url').toString('utf8'),
-      );
-      return typeof payload.exp === 'number' ? payload.exp : null;
-    } catch {
-      return null;
-    }
-  }
+  // JWT helpers are now in shared utils/jwt-helper.ts
 
-  private isTokenExpiringSoon(
-    jwt: string,
-    thresholdSecs = 7 * 24 * 3600,
-  ): boolean {
-    const exp = this.getTokenExpiry(jwt);
-    if (exp === null) return false;
-    return Date.now() / 1000 >= exp - thresholdSecs;
-  }
-
-  async refreshToken(credential: string): Promise<string | null> {
-    const token = this.extractToken(credential);
-    if (!token) return null;
-
-    const cookieValue = credential.includes('token=')
-      ? credential
-      : `token=${token}`;
+  private async performTokenRefresh(credential: string): Promise<string | null> {
+    const accessToken = this.extractToken(credential);
+    if (!accessToken) return null;
 
     try {
       const response = await fetch(`${BASE_URL}/api/v1/auths/`, {
         method: 'GET',
         headers: {
-          Cookie: cookieValue,
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
           accept: 'application/json',
           'accept-language': 'en-US,en;q=0.9',
           source: 'web',
-          version: '0.2.64',
-          'User-Agent': USER_AGENT,
+          version: API_VERSION,
         },
       });
 
@@ -171,15 +188,15 @@ export class QwenProvider implements Provider {
 
       const json: any = await response.json();
       const userData = json.data ?? json;
-      const newToken: string | undefined = userData?.token;
+      const newAccessToken: string | undefined = userData?.token;
 
-      if (!newToken) {
+      if (!newAccessToken) {
         logger.warn('[Qwen] Token refresh response had no token field');
         return null;
       }
 
-      if (newToken === token) {
-        return newToken;
+      if (newAccessToken === accessToken) {
+        return newAccessToken;
       }
 
       const email: string | undefined = userData?.email;
@@ -192,31 +209,54 @@ export class QwenProvider implements Provider {
             )
             .all(email.toLowerCase()) as any[];
           for (const acc of accounts) {
-            updateAccountCredential(acc.id, newToken);
+            updateAccountCredential(acc.id, newAccessToken);
           }
         } catch (e) {
           logger.error('[Qwen] Failed to persist refreshed token to DB:', e);
         }
       }
 
-      return newToken;
+      return newAccessToken;
     } catch (e) {
       logger.error('[Qwen] Token refresh error:', e);
       return null;
     }
   }
 
-  private async getFreshCredential(credential: string): Promise<string> {
-    const token = this.extractToken(credential);
-    if (!token) return credential;
+  async refreshToken(credential: string): Promise<string | null> {
+    const accessToken = this.extractToken(credential);
+    if (!accessToken) return null;
 
-    if (!this.isTokenExpiringSoon(token)) return credential;
-    const newToken = await this.refreshToken(credential);
-    if (!newToken) {
-      logger.warn('[Qwen] Refresh failed, proceeding with existing credential');
+    // Use coordinated refresh to prevent duplicate refresh operations
+    return coordinateTokenRefresh('qwen', accessToken, () =>
+      this.performTokenRefresh(credential),
+    );
+  }
+
+  private async getFreshCredential(credential: string): Promise<string> {
+    const accessToken = this.extractToken(credential);
+    if (!accessToken) return credential;
+
+    // Check if token is already expired
+    if (isJwtExpired(accessToken)) {
+      logger.error('[Qwen] Token has already expired. Please login again.');
+      throw new Error('Token has expired. Please login again to Qwen.');
+    }
+
+    // Check if token is expiring soon (within 5 minutes by default)
+    if (!isJwtExpiringSoon(accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
       return credential;
     }
-    return newToken;
+    
+    logger.info('[Qwen] Token is expiring soon (< 5 min), attempting refresh...');
+    const newAccessToken = await this.refreshToken(credential);
+    if (!newAccessToken) {
+      logger.error('[Qwen] Token refresh failed - token may be expired. Please login again.');
+      throw new Error('Token refresh failed. Please login again to Qwen.');
+    }
+    
+    logger.info('[Qwen] Token refreshed successfully');
+    return newAccessToken;
   }
 
   // ─── Login ──────────────────────────────────────────────────────────
@@ -246,56 +286,22 @@ export class QwenProvider implements Provider {
         }) => {
           if (!data.cookies) return { isValid: false };
 
-          const isRawToken = data.cookies.trim().startsWith('eyJ');
+          // Extract access token
+          const accessToken = data.cookies.trim().startsWith('eyJ')
+            ? data.cookies.trim()
+            : (data.cookies.match(/token=(eyJ[^;]+)/) || [])[1] || data.cookies;
 
-          if (!isRawToken) {
-            const hasBxUa = capturedHeaders['bx-ua'];
-            if (!hasBxUa) {
-              logger.warn(
-                '[Qwen] Login validation failed: missing bx-ua header',
-              );
-              return { isValid: false };
-            }
-
-            if (!capturedHeaders['x-csrf-token']) {
-              const csrfMatch = data.cookies.match(/csrfToken=([^;]+)/);
-              if (csrfMatch) {
-                capturedHeaders['x-csrf-token'] = csrfMatch[1];
-              }
-            }
+          if (!accessToken || !accessToken.startsWith('eyJ')) {
+            logger.warn('[Qwen] Login validation failed: invalid token format');
+            return { isValid: false };
           }
 
           let email = data.email || null;
 
-          const bxUa = capturedHeaders['bx-ua'];
-          const isFallback =
-            bxUa &&
-            typeof bxUa === 'string' &&
-            (bxUa.includes('default') ||
-              bxUa.includes('_load_failed') ||
-              bxUa.includes('not_initialized') ||
-              bxUa.includes('not_fun'));
-          const isRealBxUa =
-            bxUa &&
-            typeof bxUa === 'string' &&
-            /^\d+!/.test(bxUa) &&
-            bxUa.length > 100 &&
-            !isFallback;
-
-          if (isFallback || !isRealBxUa) {
-            try {
-              await self.fetchListChats(data.cookies, capturedHeaders);
-            } catch (e) {
-              logger.warn('[Qwen] Failed to fetch list chats:', e);
-            }
-          }
-
+          // Try fetching profile to get email
           if (!email) {
             try {
-              const profile = await this.getProfile(
-                data.cookies,
-                capturedHeaders,
-              );
+              const profile = await this.getProfile(accessToken, capturedHeaders);
               if (profile.email) {
                 email = profile.email;
               }
@@ -306,15 +312,7 @@ export class QwenProvider implements Provider {
 
           return {
             isValid: true,
-            cookies: JSON.stringify({
-              token: data.cookies.trim().startsWith('eyJ')
-                ? data.cookies.trim()
-                : (data.cookies.match(/token=(eyJ[^;]+)/) || [])[1] ||
-                  data.cookies,
-              bxUa: capturedHeaders['bx-ua'] || '',
-              bxUmidToken: capturedHeaders['bx-umidtoken'] || '',
-              userAgent: capturedHeaders['User-Agent'] || '',
-            }),
+            cookies: accessToken, // Return raw JWT token
             email,
             headers: capturedHeaders,
           };
@@ -327,41 +325,28 @@ export class QwenProvider implements Provider {
 
   // ─── List Chats ─────────────────────────────────────────────────────
 
-  private async fetchListChats(
-    credential: string,
-    headersRef: Record<string, string>,
-  ): Promise<void> {
+  private async fetchListChats(credential: string): Promise<void> {
     try {
-      let token: string | null = null;
-      let cookieValue = credential;
+      const accessToken = this.extractToken(credential);
 
-      if (credential.trim().startsWith('eyJ')) {
-        token = credential.trim();
-        if (!credential.includes('token=')) cookieValue = `token=${token}`;
-      } else {
-        const tokenMatch = credential.match(/token=([^;]+)/);
-        token = tokenMatch ? tokenMatch[1] : null;
-      }
-
-      if (!token) {
+      if (!accessToken) {
         logger.warn('[Qwen] Cannot fetch list chats: no token found');
         return;
       }
 
       const headers: Record<string, string> = {
-        Cookie: cookieValue,
-        'User-Agent': headersRef['User-Agent'] || USER_AGENT,
+        Authorization: `Bearer ${accessToken}`,
         accept: 'application/json, text/plain, */*',
         'accept-language': 'en-US,en;q=0.9',
         source: 'web',
-        version: '0.2.64',
-        'bx-v': '2.5.36',
+        version: API_VERSION,
+        'bx-v': BX_VERSION,
         'x-request-id': crypto.randomUUID(),
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-ch-ua':
+          '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+        'sec-ch-ua-mobile': '?0',
       };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      if (headersRef['bx-ua']) headers['bx-ua'] = headersRef['bx-ua'];
-      if (headersRef['bx-umidtoken'])
-        headers['bx-umidtoken'] = headersRef['bx-umidtoken'];
 
       const response = await fetch(
         `${BASE_URL}/api/v2/chats/?page=1&exclude_project=true`,
@@ -385,31 +370,20 @@ export class QwenProvider implements Provider {
     extraHeaders?: any,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
-      let token: string | null = null;
-      let cookieValue = credential;
+      const accessToken = this.extractToken(credential);
 
-      if (credential.trim().startsWith('eyJ')) {
-        token = credential.trim();
-        if (!credential.includes('token=')) cookieValue = `token=${token}`;
-      } else {
-        const tokenMatch = credential.match(/token=([^;]+)/);
-        token = tokenMatch ? tokenMatch[1] : null;
+      if (!accessToken) {
+        logger.warn('[Qwen] Cannot get profile: no token found');
+        return { email: null };
       }
 
       const headers: Record<string, string> = {
-        Cookie: cookieValue,
-        'User-Agent':
-          extraHeaders?.['User-Agent'] ||
-          'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+        Authorization: `Bearer ${accessToken}`,
         accept: 'application/json',
         'accept-language': 'en-US,en;q=0.9',
         source: 'web',
-        version: '0.2.64',
+        version: API_VERSION,
       };
-      if (extraHeaders?.['bx-ua']) headers['bx-ua'] = extraHeaders['bx-ua'];
-      if (extraHeaders?.['x-csrf-token'])
-        headers['x-csrf-token'] = extraHeaders['x-csrf-token'];
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const response = await fetch(`${BASE_URL}/api/v1/auths/`, {
         headers,
@@ -439,20 +413,22 @@ export class QwenProvider implements Provider {
 
   private async createChat(
     credential: string,
-    token: string | null,
-    cookieValue: string,
-    bxUa: string,
-    bxUmidToken: string,
-    userAgent: string,
     model: string = this.defaultModel,
   ): Promise<string> {
+    const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
+      this.parseCredential(credential);
+
+    if (!token) {
+      throw new Error('[Qwen] Cannot create chat: no token found');
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      accept: 'application/json',
-      'User-Agent': userAgent,
-      Cookie: cookieValue,
+      accept: 'application/json, text/plain, */*',
+      'User-Agent': userAgent || USER_AGENT,
+      Cookie: cookieValue || `token=${token}`,
       source: 'web',
-      version: '0.2.64',
+      version: API_VERSION,
       Referer: `${BASE_URL}/c/new-chat`,
       Origin: BASE_URL,
       'X-Request-Id': crypto.randomUUID(),
@@ -466,8 +442,9 @@ export class QwenProvider implements Provider {
         ' ' +
         new Date().toTimeString().split(' ')[0] +
         ' GMT+0700',
-      'bx-v': '2.5.36',
+      'bx-v': BX_VERSION,
     };
+
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (bxUa) headers['bx-ua'] = bxUa;
     if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
@@ -476,8 +453,12 @@ export class QwenProvider implements Provider {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        chatId: '',
         models: [model],
-        title: 'New Chat',
+        project_id: '',
+        timestamp: Date.now(),
+        chat_type: 't2t',
+        chat_mode: 'normal',
       }),
     });
 
@@ -493,6 +474,14 @@ export class QwenProvider implements Provider {
     }
 
     const json = await response.json();
+    
+    // Check if response indicates error (even with 200 status)
+    if (json.success === false) {
+      const errorCode = json.data?.code || 'unknown';
+      const errorDetails = json.data?.details || JSON.stringify(json);
+      throw new Error(`Create chat failed: ${errorCode} - ${errorDetails}`);
+    }
+
     const chatId = json.data?.id || json.id;
 
     if (!chatId) {
@@ -506,19 +495,33 @@ export class QwenProvider implements Provider {
 
   private async getLastMessageId(
     conversationId: string,
-    cookieValue: string,
-    token: string | null,
-    bxUa: string,
-    bxUmidToken: string,
-    userAgent: string,
+    credential: string,
   ): Promise<string | null> {
+    const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
+      this.parseCredential(credential);
+
     const headers: Record<string, string> = {
-      Cookie: cookieValue,
-      'User-Agent': userAgent,
+      Cookie: cookieValue || `token=${token}`,
+      'User-Agent': userAgent || USER_AGENT,
       accept: 'application/json',
       source: 'web',
-      version: '0.2.64',
+      version: API_VERSION,
+      'x-request-id': crypto.randomUUID(),
+      'X-Request-Id': crypto.randomUUID(),
+      'sec-ch-ua-platform': '"Linux"',
+      'bx-v': BX_VERSION,
+      Referer: `${BASE_URL}/c/${conversationId}`,
+      'Accept-Language': 'en-US,en;q=0.9',
+      Timezone:
+        new Date().toDateString() +
+        ' ' +
+        new Date().toTimeString().split(' ')[0] +
+        ' GMT+0700',
+      'sec-ch-ua':
+        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+      'sec-ch-ua-mobile': '?0',
     };
+
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (bxUa) headers['bx-ua'] = bxUa;
     if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
@@ -573,18 +576,14 @@ export class QwenProvider implements Provider {
       const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
         this.parseCredential(credential);
 
+      if (!token) {
+        throw new Error('[Qwen] No access token found');
+      }
+
       const isNewChat = !conversationId;
 
       if (isNewChat) {
-        conversationId = await this.createChat(
-          credential,
-          token,
-          cookieValue,
-          bxUa,
-          bxUmidToken,
-          userAgent,
-          modelToUse,
-        );
+        conversationId = await this.createChat(credential, modelToUse);
         if (onSessionCreated) onSessionCreated(conversationId);
         if (onMetadata) onMetadata({ conversation_id: conversationId });
       }
@@ -604,14 +603,7 @@ export class QwenProvider implements Provider {
           parentId = cached;
         } else {
           try {
-            parentId = await this.getLastMessageId(
-              conversationId,
-              cookieValue,
-              token,
-              bxUa,
-              bxUmidToken,
-              userAgent,
-            );
+            parentId = await this.getLastMessageId(conversationId, credential);
           } catch (e) {
             logger.warn('[Qwen] Failed to fetch last message ID');
           }
@@ -622,12 +614,15 @@ export class QwenProvider implements Provider {
         stream: true,
         version: '2.1',
         incremental_output: true,
+        chatId: conversationId || '',
+        parentId: parentId || '',
         ...(conversationId && { chat_id: conversationId }),
         chat_mode: 'normal',
         model: modelToUse,
         parent_id: parentId as string | null,
         messages: [
           {
+            id: null,
             fid: msgFid,
             parentId: parentId as string | null,
             childrenIds: [] as string[],
@@ -637,6 +632,7 @@ export class QwenProvider implements Provider {
             files: [],
             timestamp: nowSec,
             models: [modelToUse],
+            model: '',
             chat_type: 't2t',
             feature_config: {
               thinking_enabled: false,
@@ -648,6 +644,7 @@ export class QwenProvider implements Provider {
             },
             extra: { meta: { subChatType: 't2t' } },
             sub_chat_type: 't2t',
+            parent_id: parentId as string | null,
           },
         ],
         timestamp: nowSec,
@@ -656,18 +653,27 @@ export class QwenProvider implements Provider {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         accept: 'application/json',
-        'User-Agent': userAgent,
+        'User-Agent': userAgent || USER_AGENT,
+        Cookie: cookieValue || `token=${token}`,
         Origin: BASE_URL,
         Referer: conversationId ? `${BASE_URL}/c/${conversationId}` : BASE_URL,
         'x-accel-buffering': 'no',
+        'X-Accel-Buffering': 'no',
         'x-request-id': requestId,
-        Cookie: cookieValue,
+        'X-Request-Id': requestId,
         source: 'web',
-        version: '0.2.64',
-        'bx-v': '2.5.36',
+        version: API_VERSION,
+        'bx-v': BX_VERSION,
         timezone,
+        Timezone: timezone,
         'accept-language': 'en-US,en;q=0.9',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'sec-ch-ua':
+          '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
       };
+
       if (token) headers['Authorization'] = `Bearer ${token}`;
       if (bxUa) headers['bx-ua'] = bxUa;
       if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
@@ -676,15 +682,33 @@ export class QwenProvider implements Provider {
         ? `${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`
         : `${BASE_URL}/api/v2/chat/completions`;
 
+      // Log request details for debugging
+      logger.debug(`[Qwen] Sending request to: ${url}`);
+      logger.debug(`[Qwen] Request payload:`, {
+        model: modelToUse,
+        conversationId: conversationId || 'new',
+        parentId: parentId || 'none',
+        messageContent: lastMsg.content.slice(0, 100),
+      });
+
       const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
       });
 
+      // Log response status and headers for debugging
+      logger.debug(`[Qwen] Response status: ${response.status}, ok: ${response.ok}`);
+      logger.debug(`[Qwen] Response headers:`, {
+        'content-type': response.headers.get('content-type'),
+        'x-actual-status-code': response.headers.get('x-actual-status-code'),
+        'content-length': response.headers.get('content-length'),
+      });
+
       const actualStatusCode = response.headers.get('x-actual-status-code');
       if (actualStatusCode && actualStatusCode !== '200') {
         const errText = await response.text();
+        logger.error(`[Qwen] API returned error via x-actual-status-code=${actualStatusCode}:`, errText.slice(0, 500));
         throw new Error(
           `Qwen API Error ${actualStatusCode}: ${errText.slice(0, 500)}`,
         );
@@ -692,20 +716,30 @@ export class QwenProvider implements Provider {
 
       if (!response.ok) {
         const errText = await response.text();
+        logger.error(`[Qwen] API returned HTTP error ${response.status}:`, errText.slice(0, 500));
         throw new Error(
           `Qwen API Error ${response.status}: ${errText.slice(0, 500)}`,
         );
       }
 
-      if (!response.body) throw new Error('No response body');
+      if (!response.body) {
+        logger.error('[Qwen] Response body is null/undefined');
+        throw new Error('No response body');
+      }
+
+      // Log that we're about to start streaming
+      logger.debug(`[Qwen] Starting to read response stream...`);
 
       let buffer = '';
       let conversationIdCaptured = false;
       let parentIdCaptured = false;
       let capturedParentId: string | null = null;
       const thinkingParser = new StreamingThinkingParser(onContent, onThinking);
+      let totalContentReceived = 0;
+      let totalChunksProcessed = 0;
 
       for await (const chunk of response.body as any) {
+        logger.debug(`[Qwen] Received chunk of size: ${chunk.length} bytes`);
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -730,6 +764,12 @@ export class QwenProvider implements Provider {
 
           try {
             const json = JSON.parse(jsonStr);
+            totalChunksProcessed++;
+
+            // Log raw JSON structure for debugging
+            if (totalChunksProcessed <= 3) {
+              logger.debug(`[Qwen] SSE chunk #${totalChunksProcessed}:`, JSON.stringify(json).slice(0, 500));
+            }
 
             let responseCreated = null;
             if (json['response.created']) {
@@ -769,7 +809,12 @@ export class QwenProvider implements Provider {
             }
 
             if (delta?.content) {
+              totalContentReceived += delta.content.length;
+              logger.debug(`[Qwen] Feeding content to parser: ${delta.content.slice(0, 100)}`);
               thinkingParser.feed(delta.content);
+            } else if (delta && totalChunksProcessed <= 10) {
+              // Log when delta exists but has no content
+              logger.debug(`[Qwen] Delta without content:`, JSON.stringify(delta));
             }
           } catch (e) {
             logger.warn('[Qwen] Failed to parse SSE line:', e);
@@ -777,7 +822,29 @@ export class QwenProvider implements Provider {
         }
       }
 
+      logger.debug(`[Qwen] Stream loop ended, buffer remaining: ${buffer.length} chars`);
+
+      // If we have remaining buffer content and no chunks were processed, it might be an error response
+      if (buffer.length > 0 && totalChunksProcessed === 0) {
+        logger.error(`[Qwen] Received non-streaming response (possible error):`, buffer);
+        try {
+          const errorJson = JSON.parse(buffer);
+          const errorMessage = errorJson.message || errorJson.error || errorJson.data?.message || JSON.stringify(errorJson);
+          throw new Error(`Qwen API returned error: ${errorMessage}`);
+        } catch (parseErr) {
+          // If not JSON, log raw content
+          logger.error(`[Qwen] Raw response content:`, buffer.slice(0, 1000));
+          throw new Error(`Qwen API returned non-streaming response: ${buffer.slice(0, 200)}`);
+        }
+      }
+
       thinkingParser.flush();
+
+      // Log summary before completing
+      logger.info(`[Qwen] Stream completed: ${totalChunksProcessed} chunks processed, ${totalContentReceived} chars received`);
+      if (totalContentReceived === 0) {
+        logger.warn(`[Qwen] No content received from API for model=${modelToUse}, conversationId=${conversationId}`);
+      }
 
       if (capturedParentId && onMetadata) {
         onMetadata({ last_parent_id: capturedParentId });
@@ -802,63 +869,88 @@ export class QwenProvider implements Provider {
   async getModels(credential: string): Promise<any[]> {
     const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
       this.parseCredential(credential);
+
     const headers: Record<string, string> = {
       accept: 'application/json, text/plain, */*',
       'content-type': 'application/json',
-      cookie: cookieValue,
+      cookie: cookieValue || (token ? `token=${token}` : ''),
       origin: BASE_URL,
       referer: `${BASE_URL}/`,
-      'user-agent':
-        userAgent ||
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+      'user-agent': userAgent || USER_AGENT,
       'x-request-id': crypto.randomUUID(),
+      'sec-ch-ua-platform': '"Linux"',
+      'sec-ch-ua':
+        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+      'sec-ch-ua-mobile': '?0',
+      source: 'web',
+      version: API_VERSION,
+      'bx-v': BX_VERSION,
+      timezone:
+        new Date().toDateString() +
+        ' ' +
+        new Date().toTimeString().split(' ')[0] +
+        ' GMT+0700',
+      'accept-language': 'en-US',
     };
+
     if (token) headers['authorization'] = `Bearer ${token}`;
     if (bxUa) headers['bx-ua'] = bxUa;
     if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
 
-    const endpoints = [
-      `${BASE_URL}/api/models`,
-      `${BASE_URL}/api/v2/models`,
-      `${BASE_URL}/api/v1/models`,
-    ];
+    try {
+      const response = await fetch(`${BASE_URL}/api/v2/models/`, {
+        headers,
+        timeout: 10000,
+      } as any);
 
-    for (const ep of endpoints) {
-      try {
-        const response = await fetch(ep, { headers, timeout: 5000 } as any);
-        if (response.ok) {
-          const json: any = await response.json();
-          const items =
-            json?.data || json?.models || (Array.isArray(json) ? json : null);
-          if (items && Array.isArray(items) && items.length > 0) {
-            return items.map((model: any) => ({
-              id: model.id || model.model_id,
-              name: model.name || model.label || model.id,
-              is_thinking:
-                model.info?.meta?.capabilities?.thinking ??
-                model.capabilities?.thinking ??
-                true,
-              max_context_length:
-                model.info?.meta?.max_context_length ||
-                model.max_context_length ||
-                1000000,
-              is_search: true,
-              is_image_upload:
-                model.info?.meta?.capabilities?.multimodal ||
-                model.capabilities?.multimodal ||
-                false,
-            }));
-          }
+      if (response.ok) {
+        const json: any = await response.json();
+
+        // Parse structure: {"success": true, "data": {"data": [...]}}
+        const modelList =
+          json?.data?.data ||
+          json?.data ||
+          (Array.isArray(json) ? json : null);
+
+        if (modelList && Array.isArray(modelList) && modelList.length > 0) {
+          logger.info(`[Qwen] Fetched ${modelList.length} models from API`);
+          return modelList
+            .filter((model: any) => {
+              // Filter active models only
+              const info = model.info || {};
+              return info.is_active === true;
+            })
+            .map((model: any) => {
+              const info = model.info || {};
+              const meta = info.meta || {};
+              const capabilities = meta.capabilities || {};
+
+              return {
+                id: model.id || info.id,
+                name: model.name || info.name || model.id,
+                is_thinking: capabilities.thinking === true,
+                max_context_length: meta.max_context_length || 1000000,
+                is_search: capabilities.search === true,
+                is_image_upload: capabilities.vision === true,
+                description:
+                  meta.short_description || meta.description || undefined,
+              };
+            });
         }
-      } catch (e) {
-        logger.warn(`[Qwen] Failed to fetch models from ${ep}:`, e);
+      } else {
+        logger.warn(
+          `[Qwen] Failed to fetch models from API: HTTP ${response.status}`,
+        );
       }
+    } catch (e) {
+      logger.warn('[Qwen] Failed to fetch models from API:', e);
     }
 
-    // Fallback models
+    // Fallback models if API fetch fails
+    logger.info('[Qwen] Using fallback models');
     return [
       {
-        id: 'qwen-3.8-max',
+        id: 'qwen3.8-max',
         name: 'Qwen3.8-Max',
         is_thinking: true,
         max_context_length: 1000000,
@@ -867,76 +959,49 @@ export class QwenProvider implements Provider {
         description: 'Flagship Qwen3.8 Max with advanced reasoning',
       },
       {
-        id: 'qwen-3.8-plus',
-        name: 'Qwen3.8-Plus',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: true,
-        description: 'High-performance Qwen3.8 with multimodal reasoning',
-      },
-      {
-        id: 'qwen-3.7-max',
-        name: 'Qwen3.7-Max',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: false,
-        description: 'Flagship Qwen3.7 series reasoning model',
-      },
-      {
-        id: 'qwen-3.7-plus',
+        id: 'qwen3.7-plus',
         name: 'Qwen3.7-Plus',
         is_thinking: true,
         max_context_length: 1000000,
         is_search: true,
         is_image_upload: true,
-        description: 'Qwen3.7 with text and multimodal processing',
+        description: 'High-performance Qwen3.7 with multimodal tasks',
       },
       {
-        id: 'qwen-3.6-plus',
+        id: 'qwen3.7-max',
+        name: 'Qwen3.7-Max',
+        is_thinking: true,
+        max_context_length: 1000000,
+        is_search: false,
+        is_image_upload: false,
+        description: 'Flagship Qwen3.7 series reasoning model (text-only)',
+      },
+      {
+        id: 'qwen3.6-plus',
         name: 'Qwen3.6-Plus',
         is_thinking: true,
         max_context_length: 1000000,
         is_search: true,
         is_image_upload: true,
-        description: 'Qwen3.6 series multimodal model',
+        description: 'Qwen3.6 multimodal model with tool support',
       },
       {
-        id: 'qwen-3.5-plus',
+        id: 'qwen3.5-plus',
         name: 'Qwen3.5-Plus',
         is_thinking: true,
         max_context_length: 1000000,
         is_search: true,
         is_image_upload: true,
-        description: 'Qwen3.5 high-efficiency model',
+        description: 'Qwen3.5 with multimodal processing',
       },
       {
-        id: 'qwen-3.5-flash',
-        name: 'Qwen3.5-Flash',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
+        id: 'qwen3.5-omni-plus',
+        name: 'Qwen3.5-Omni-Plus',
+        is_thinking: false,
+        max_context_length: 262144,
+        is_search: false,
         is_image_upload: true,
-        description: 'Qwen3.5 flash high-efficiency model',
-      },
-      {
-        id: 'qwen-max',
-        name: 'Qwen-Max',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: false,
-        description: 'Qwen Max flagship reasoning model',
-      },
-      {
-        id: 'qwen-plus',
-        name: 'Qwen-Plus',
-        is_thinking: true,
-        max_context_length: 1000000,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Qwen Plus versatile model',
+        description: 'Most powerful native multimodal model (audio/video)',
       },
     ];
   }

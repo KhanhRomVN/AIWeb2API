@@ -59,13 +59,6 @@ export interface LoginOptions {
   }>;
 }
 
-export interface LoginResult {
-  success: boolean;
-  cookies?: string;
-  email?: string;
-  error?: string;
-}
-
 export interface ProviderLoginOptions {
   method?: 'basic' | 'google';
 }
@@ -410,12 +403,28 @@ export class LoginService extends EventEmitter {
     }
 
     const tempSessionId = uuidv4();
-    const tempDir = path.join(os.homedir(), '.elara', 'temp', tempSessionId);
+    const tempDir = path.join(os.homedir(), '.aiweb2api', 'temp', tempSessionId);
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
     const cdpService = createCDPService(`${providerId}-${tempSessionId}`);
+
+    let capturedEmail = '';
+    cdpService.on('response', (response: any) => {
+      if (!capturedEmail && response?.body) {
+        try {
+          const json = JSON.parse(response.body);
+          const email =
+            json.email ||
+            json.user?.email ||
+            json.data?.biz_data?.user?.email;
+          if (email) capturedEmail = email;
+        } catch {
+          // ignore non-JSON body
+        }
+      }
+    });
 
     const launched = await cdpService.launchBrowser(
       loginUrl,
@@ -444,7 +453,7 @@ export class LoginService extends EventEmitter {
       cdpService.on('browser-exit', () => {
         clearTimeout(timeout);
 
-        const finalProfileName = `profile_${Date.now()}`;
+        const finalProfileName = capturedEmail || `profile_${Date.now()}`;
         const finalUserDataDir = browserInstanceManager.getProfilePath(
           providerId,
           finalProfileName,

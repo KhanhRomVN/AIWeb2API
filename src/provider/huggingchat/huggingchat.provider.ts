@@ -12,6 +12,9 @@
  * - getModels()      : Lấy danh sách models từ API
  * - getProfile()     : Lấy thông tin user profile
  * - Thinking mode    : Hỗ trợ <think> tags trong response
+ *
+ * Credential format:
+ * - cookies          : Cookie string (chứa session cookies)
  * ------------------------------------------------------------------
  */
 

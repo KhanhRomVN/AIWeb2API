@@ -11,6 +11,9 @@
  * - handleMessage()  : Gửi tin nhắn với streaming response
  * - getModels()      : Lấy danh sách models từ API
  * - getProfile()     : Lấy email từ JWT trong cookie
+ *
+ * Credential format:
+ * - cookies          : Cookie string (chứa stytch_session_jwt)
  * ------------------------------------------------------------------
  */
 

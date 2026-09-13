@@ -37,15 +37,3 @@ export interface Provider {
   getUsage?(credential: string): Promise<{ usage: string; resetPeriod: 'day' | 'month' | string }>;
   proxyHandler?: any;
 }
-
-export interface ProxyConfig {
-  host: string;
-  port: number;
-  enabled: boolean;
-}
-
-export interface ProxyHandler {
-  onRequest?: (ctx: any, callback: () => void) => void;
-  onRequestData?: (ctx: any, chunk: Buffer, callback: (err: Error | null, data?: Buffer) => void) => void;
-  onResponseBody?: (ctx: any, body: string) => void;
-}

@@ -32,9 +32,9 @@ const runningBrowsers = new Map<string, ChildProcess>();
 
 const getUserDataPath = () => {
   try {
-    return path.join(os.homedir(), '.elara');
+    return path.join(os.homedir(), '.aiweb2api');
   } catch (e) {
-    return path.join(os.tmpdir(), 'elara-browser');
+    return path.join(os.tmpdir(), 'aiweb2api-browser');
   }
 };
 
@@ -206,12 +206,7 @@ export const startBrowserForAccount = async (
 export const browserInstanceManager = {
   getProfilePath: (providerId: string, profileName: string): string => {
     const basePath = getUserDataPath();
-    const profilePath = path.join(
-      basePath,
-      'profiles',
-      providerId,
-      profileName,
-    );
+    const profilePath = path.join(basePath, providerId, profileName);
     return profilePath;
   },
 

@@ -42,6 +42,7 @@ import {
   getProviderConfig,
   type AccountInput,
 } from '../services/account.service';
+import { queryAccountStatsByPeriod } from '../repositories/metrics.repository';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -328,8 +329,30 @@ export const getAccounts = async (
       order: order as 'ASC' | 'DESC',
     });
 
+    const now = new Date();
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    ).getTime();
+    const endOfDay = startOfDay + 24 * 60 * 60 * 1000 - 1;
+    const periodStats = queryAccountStatsByPeriod(startOfDay, endOfDay);
+    const statsMap = new Map(
+      periodStats.map((s: any) => [
+        s.id,
+        {
+          period_requests: s.total_requests ?? 0,
+          period_tokens: s.total_tokens ?? 0,
+        },
+      ]),
+    );
+
     const accountsWithStatus = rows.map((row) => {
-      return { ...row };
+      const stats = statsMap.get(row.id) ?? {
+        period_requests: 0,
+        period_tokens: 0,
+      };
+      return { ...row, ...stats };
     });
 
     res.status(200).json({

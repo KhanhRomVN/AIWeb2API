@@ -11,6 +11,9 @@
  * - handleMessage()   : Gửi tin nhắn với streaming response
  * - getProfile()      : Lấy thông tin user profile
  * - isModelSupported(): Kiểm tra model có hỗ trợ không
+ *
+ * Credential format:
+ * - cookies          : Cookie string (chứa session token)
  * ------------------------------------------------------------------
  */
 

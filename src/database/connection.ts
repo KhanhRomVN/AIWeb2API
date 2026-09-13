@@ -8,7 +8,6 @@
  * Main functions:
  * - initDatabase() : Khởi tạo kết nối database, tạo thư mục, chạy migrations
  * - getDb()        : Lấy instance database đã khởi tạo
- * - closeDatabase(): Đóng kết nối database
  * ------------------------------------------------------------------
  */
 
@@ -117,11 +116,4 @@ export const getDb = (): Database.Database => {
     throw new Error('Database not initialized');
   }
   return db;
-};
-
-export const closeDatabase = (): void => {
-  if (db) {
-    db.close();
-    db = null;
-  }
 };

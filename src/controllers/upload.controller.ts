@@ -35,34 +35,48 @@ export const uploadFile = async (
     const { accountId } = req.params;
     const file = req.file;
 
+    logger.info(`[Upload] Request received | accountId=${accountId}`);
+
     if (!file) {
+      logger.warn(`[Upload] No file provided | accountId=${accountId}`);
       res.status(400).json({ error: 'No file uploaded' });
       return;
     }
 
+    logger.info(`[Upload] File info | accountId=${accountId} | filename=${file.originalname} | size=${file.size} | mimetype=${file.mimetype}`);
+
     const account = getAccountById(accountId);
     if (!account) {
+      logger.warn(`[Upload] Account not found | accountId=${accountId}`);
       res.status(404).json({ error: 'Account not found' });
       return;
     }
 
     const providerId = account.provider_id;
+    logger.info(`[Upload] Provider identified | accountId=${accountId} | providerId=${providerId}`);
+
     if (!(await isProviderEnabled(providerId))) {
+      logger.warn(`[Upload] Provider disabled | accountId=${accountId} | providerId=${providerId}`);
       res.status(403).json({ error: `Provider ${providerId} is disabled` });
       return;
     }
 
     try {
       if (account.credential === null) {
+        logger.warn(`[Upload] No credential configured | accountId=${accountId} | providerId=${providerId}`);
         res.status(400).json({ error: 'Account has no credential configured' });
         return;
       }
+      
+      logger.info(`[Upload] Starting upload to provider | accountId=${accountId} | providerId=${providerId} | filename=${file.originalname}`);
       
       const result = await uploadFileToProvider(
         providerId,
         account.credential,
         file,
       );
+
+      logger.info(`[Upload] Upload successful | accountId=${accountId} | providerId=${providerId} | result=${JSON.stringify(result)}`);
 
       const responseData: any = { 
         filename: file.originalname,
@@ -71,11 +85,18 @@ export const uploadFile = async (
 
       res.status(200).json({ success: true, data: responseData });
     } catch (err: any) {
-      logger.error(`Error uploading to ${providerId}`, err);
+      logger.error(`[Upload] Error uploading to ${providerId} | accountId=${accountId} | filename=${file?.originalname}`, {
+        error: err.message,
+        stack: err.stack,
+        code: err.code,
+      });
       res.status(500).json({ error: `Upload failed: ${err.message}` });
     }
   } catch (error: any) {
-    logger.error('Error in uploadFile', error);
+    logger.error(`[Upload] Unexpected error in uploadFile | accountId=${req.params.accountId}`, {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ error: error.message });
   }
 };

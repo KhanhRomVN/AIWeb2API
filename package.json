@@ -32,7 +32,8 @@
     "build": "tsc && tsc-alias && mkdir -p dist/provider && cp src/provider/*.wasm dist/provider/ && npm run obfuscate || true",
     "build:min": "tsup",
     "build:bin": "node scripts/build-bin.js",
-    "commit": "commit"
+    "commit": "commit",
+    "find-unused": "node ts-reap/dist/cli.js check --scope \"src\""
   },
   "keywords": [],
   "author": "",
