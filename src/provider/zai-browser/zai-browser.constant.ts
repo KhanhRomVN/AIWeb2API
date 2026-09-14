@@ -5,17 +5,23 @@
  * Tập trung tất cả constant dùng chung cho Z.AI Browser provider.
  *
  * Main exports:
- * - PROVIDER_ID         : ID định danh provider
- * - PROVIDER_NAME       : Tên hiển thị
- * - IS_ENABLED          : Bật/tắt provider
- * - WEBSITE_URL         : URL website
- * - AUTH_METHOD         : Phương thức xác thực
- * - CONNECTION_TYPE     : Loại kết nối (browser)
- * - IS_PAUSABLE         : Hỗ trợ tạm dừng session
- * - IS_MEMORY           : Hỗ trợ bộ nhớ dài hạn
- * - PLATFORM            : Platform type
- * - BROWSER_EXTENSION_FOLDER: Folder chứa extension
- * - MODELS              : Danh sách models hỗ trợ
+ * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
+ * - AUTH_METHOD              : Danh sách auth method
+ * - ZAI_BROWSER_AUTH_METHODS : Google / Basic auth literals
+ * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - PLATFORM                 : Platform type (web)
+ * - BROWSER_EXTENSION_FOLDER : Folder chứa browser extension
+ * - MODELS                   : Danh sách models hỗ trợ
+ * - BASE_URL                 : Base URL của Z.AI chat
+ * - ZAI_BROWSER_EVENTS       : Event names dùng trong proxy handler
+ * - MAX_CONTINUATIONS        : Số lần auto-continue tối đa
+ * - HISTORY_MESSAGES_COUNT   : Số lượng message history
+ * - SUCCESS_CODE             : Success code cho API response
+ * - HOSTS                    : Host names
+ * - REFERER_PATHS            : Referer path patterns
+ * - REGEX_PATTERNS           : Regex patterns cho parsing
+ * - WEBSOCKET_CONFIG         : WebSocket connection config
+ * - CONTENT_TAG_PATTERN      : Pattern cho zen-user-content tag
  * ------------------------------------------------------------------
  */
 
@@ -41,6 +47,7 @@ export const MODELS = [
     is_search: true,
     is_image_upload: false,
     is_video_upload: false,
+    is_larger_content_paste_upload: false,
     description:
       'Z.AI GLM-5.1 - Advanced language model with thinking mode and web search (browser-based)',
   },
@@ -52,7 +59,70 @@ export const MODELS = [
     is_search: true,
     is_image_upload: false,
     is_video_upload: false,
+    is_larger_content_paste_upload: false,
     description:
       'Z.AI GLM-5 - Fast and efficient model with thinking capabilities (browser-based)',
   },
 ] as const;
+
+// ─── API Configuration ───────────────────────────────────────────────
+
+export const BASE_URL = 'https://chat.z.ai';
+
+export const ZAI_BROWSER_EVENTS = {
+  TOKEN: 'zai-browser-token',
+  LOGIN_EMAIL: 'zai-browser-login-email',
+} as const;
+
+export const MAX_CONTINUATIONS = 10;
+export const HISTORY_MESSAGES_COUNT = 20;
+export const SUCCESS_CODE = 0;
+
+// ─── Auth Methods ────────────────────────────────────────────────────
+
+export const ZAI_BROWSER_AUTH_METHODS = {
+  GOOGLE: 'google',
+  BASIC: 'basic',
+} as const;
+
+// ─── Hosts ───────────────────────────────────────────────────────────
+
+export const HOSTS = {
+  CHAT_Z: 'chat.z.ai',
+} as const;
+
+// ─── Referer Paths ───────────────────────────────────────────────────
+
+export const REFERER_PATHS = {
+  ROOT: '/',
+} as const;
+
+// ─── Regex Patterns ──────────────────────────────────────────────────
+
+export const REGEX_PATTERNS = {
+  EMAIL_IN_COOKIES: /email=([^;]+)/,
+  USER_CONTENT_TAG: /<zen-user-content>([\s\S]*?)<\/zen-user-content>/,
+  EMAIL_IN_BODY: /\\?"email\\?":\s*\\?"([^"\\*]+)@([^"\\*]+)\\?"/,
+} as const;
+
+// ─── Content Tags ────────────────────────────────────────────────────
+
+export const CONTENT_TAGS = {
+  USER_CONTENT_OPEN: '<zen-user-content>',
+  USER_CONTENT_CLOSE: '</zen-user-content>',
+} as const;
+
+// ─── WebSocket Config ────────────────────────────────────────────────
+
+export const WEBSOCKET_CONFIG = {
+  CONNECTION_TIMEOUT_MS: 30000,
+  SESSION_SWITCH_DELAY_MS: 500,
+  ACCOUNT_SET_DELAY_MS: 1000,
+  PAGE_RESET_DELAY_MS: 1500,
+} as const;
+
+// ─── Cookie Keys ─────────────────────────────────────────────────────
+
+export const COOKIE_KEYS = {
+  EMAIL: 'email',
+} as const;

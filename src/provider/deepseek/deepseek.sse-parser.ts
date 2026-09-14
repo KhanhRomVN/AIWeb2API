@@ -7,7 +7,6 @@
  *
  * Main features:
  * - parseSSEStream()     : Parse stream và emit content/thinking/metadata
- * - detectPartialToolcall(): Phát hiện tool call bị cắt ngang
  * - Auto-continue support : Hỗ trợ deduplicate content từ /chat/continue
  * ------------------------------------------------------------------
  */
@@ -17,43 +16,31 @@
 import { countTokens } from '../../utils/tokenizer';
 import { createLogger } from '../../utils/logger';
 
+// ── Types ──
+import {
+  SSEMetadata,
+  SSEEventPayload,
+  SSEFragment,
+  SSEResponseSnapshot,
+} from './deepseek.types';
+
+// ── Constants ──
+import {
+  SSE_PROTOCOL,
+  SSE_EVENT_TYPES,
+  SSE_FRAGMENT_TYPES,
+  SSE_FIELDS,
+} from './deepseek.constant';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DeepSeekSSE');
-
-// ─── Functions ──────────────────────────────────────────────────────────
-
-export function detectPartialToolcall(content: string): {
-  hasPartial: boolean;
-  toolType: string | null;
-} {
-  const TOOL_NAMES = [
-    'write_to_file',
-    'replace_in_file',
-    'read_file',
-    'run_command',
-    'list_files',
-    'search_files',
-    'delete_file',
-    'delete_folder',
-    'execute_agent_action',
-  ];
-
-  for (const tool of TOOL_NAMES) {
-    const openTagRegex = new RegExp(`<${tool}(?:\\s[^>]*)?>`, 'i');
-    const closeTagRegex = new RegExp(`</${tool}>`, 'i');
-    if (openTagRegex.test(content) && !closeTagRegex.test(content)) {
-      return { hasPartial: true, toolType: tool };
-    }
-  }
-  return { hasPartial: false, toolType: null };
-}
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
 export interface ParseSSEOptions {
   onContent: (chunk: string) => void;
   onThinking?: (chunk: string) => void;
-  onMetadata?: (meta: any) => void;
+  onMetadata?: (meta: SSEMetadata) => void;
   onRaw?: (data: string) => void;
   sessionId: string;
   promptTokens: number;
@@ -105,28 +92,28 @@ export async function parseSSEStream(
     buffer = lines.pop() || '';
 
     for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEventType = line.substring(7).trim();
+      if (line.startsWith(SSE_PROTOCOL.EVENT_PREFIX)) {
+        currentEventType = line.substring(SSE_PROTOCOL.EVENT_PREFIX.length).trim();
         continue;
       }
 
-      if (!line.startsWith('data: ')) continue;
+      if (!line.startsWith(SSE_PROTOCOL.DATA_PREFIX)) continue;
 
-      const jsonStr = line.substring(6).trim();
-      if (jsonStr === '[DONE]') {
+      const jsonStr = line.substring(SSE_PROTOCOL.DATA_PREFIX.length).trim();
+      if (jsonStr === SSE_PROTOCOL.DONE) {
         return { incomplete: false, responseMessageId, accumulatedContent };
       }
 
       try {
-        const json = JSON.parse(jsonStr);
+        const json = JSON.parse(jsonStr) as SSEEventPayload;
 
-        if (currentEventType === 'ready') {
+        if (currentEventType === SSE_EVENT_TYPES.READY) {
           if (json.response_message_id !== undefined) {
             responseMessageId = json.response_message_id;
             if (onMetadata) {
               onMetadata({
                 response_message_id: json.response_message_id,
-                chat_session_id: sessionId,
+                conversation_id: sessionId,
               });
             }
           }
@@ -134,27 +121,19 @@ export async function parseSSEStream(
           continue;
         }
 
-        if (currentEventType === 'title') {
-          if (json.content && onMetadata) {
-            onMetadata({ conversation_title: json.content });
-          }
+        if (currentEventType === SSE_EVENT_TYPES.CLOSE) {
           currentEventType = '';
           continue;
         }
 
-        if (currentEventType === 'close') {
-          currentEventType = '';
-          continue;
-        }
-
-        if (currentEventType === 'hint') {
-          if (json.type === 'error') {
+        if (currentEventType === SSE_EVENT_TYPES.HINT) {
+          if (json.type === SSE_EVENT_TYPES.HINT_ERROR) {
             const hintMsg =
               json.content || 'Unknown DeepSeek server hint error';
             logger.error(
               `[DeepSeek] Server hint error | session=${sessionId} | message=${hintMsg}`,
             );
-            const err: any = new Error(hintMsg);
+            const err: Error = new Error(hintMsg);
             throw err;
           }
           currentEventType = '';
@@ -163,45 +142,38 @@ export async function parseSSEStream(
 
         currentEventType = '';
 
-        if (json.p === 'response/status' && json.v === 'INCOMPLETE') {
+        if (
+          json.p === SSE_FIELDS.RESPONSE_STATUS &&
+          json.v === SSE_FIELDS.INCOMPLETE
+        ) {
           isIncomplete = true;
-          const { hasPartial, toolType } =
-            detectPartialToolcall(accumulatedContent);
-          if (onMetadata) {
-            onMetadata({
-              incomplete_has_partial_tool: hasPartial,
-              incomplete_partial_tool_type: toolType,
-            });
-          }
           continue;
         }
 
         if (
-          json.p === 'response' &&
-          json.o === 'BATCH' &&
+          json.p === SSE_FIELDS.RESPONSE &&
+          json.o === SSE_FIELDS.BATCH &&
           Array.isArray(json.v)
         ) {
-          for (const item of json.v) {
-            if (item.p === 'quasi_status' && item.v === 'INCOMPLETE') {
+          for (const item of json.v as SSEEventPayload[]) {
+            if (
+              item.p === SSE_FIELDS.QUASI_STATUS &&
+              item.v === SSE_FIELDS.INCOMPLETE
+            ) {
               isIncomplete = true;
-              const { hasPartial, toolType } =
-                detectPartialToolcall(accumulatedContent);
-              if (onMetadata) {
-                onMetadata({
-                  incomplete_has_partial_tool: hasPartial,
-                  incomplete_partial_tool_type: toolType,
-                });
-              }
             }
-            if (item.p === 'accumulated_token_usage' && onMetadata) {
-              onMetadata({ total_token: item.v });
+            if (
+              item.p === SSE_FIELDS.ACCUMULATED_TOKEN_USAGE &&
+              onMetadata
+            ) {
+              onMetadata({ total_token: item.v as number });
             }
           }
           continue;
         }
 
         if (json.choices?.[0]?.delta?.content) {
-          const deltaText = json.choices[0].delta.content;
+          const deltaText = json.choices[0].delta.content as string;
           completionTokensRef.value += countTokens(deltaText);
           accumulatedContent += deltaText;
           onContent(deltaText);
@@ -243,19 +215,20 @@ export async function parseSSEStream(
           value &&
           typeof value === 'object' &&
           !Array.isArray(value) &&
-          value.response?.fragments
+          (value as SSEResponseSnapshot).response?.fragments
         ) {
-          if (value.response?.message_id != null) {
-            responseMessageId = value.response.message_id;
+          const snapshot = value as SSEResponseSnapshot;
+          if (snapshot.response?.message_id != null) {
+            responseMessageId = snapshot.response.message_id;
           }
           snapshotMode = true;
           if (snapshotSeenLength === 0) {
             snapshotSeenLength = 0;
           }
 
-          for (const fragment of value.response.fragments) {
-            if (fragment.type === 'THINK') {
-              currentModeRef.value = 'THINK';
+          for (const fragment of snapshot.response!.fragments!) {
+            if (fragment.type === SSE_FRAGMENT_TYPES.THINK) {
+              currentModeRef.value = SSE_FRAGMENT_TYPES.THINK;
               if (fragment.content) {
                 if (onThinking) onThinking(fragment.content);
                 else {
@@ -263,24 +236,24 @@ export async function parseSSEStream(
                   contentChunkCount++;
                 }
               }
-            } else if (fragment.type === 'RESPONSE') {
-              currentModeRef.value = 'RESPONSE';
+            } else if (fragment.type === SSE_FRAGMENT_TYPES.RESPONSE) {
+              currentModeRef.value = SSE_FRAGMENT_TYPES.RESPONSE;
               if (fragment.content) {
                 emitContentChunk(fragment.content, true);
               }
             }
           }
-          if (value.response?.status === 'INCOMPLETE') {
+          if (snapshot.response?.status === SSE_FIELDS.INCOMPLETE) {
             isIncomplete = true;
           }
           continue;
         }
 
         if (Array.isArray(value)) {
-          const fragment = value[0];
+          const fragment = value[0] as SSEFragment | undefined;
           if (fragment) {
-            if (fragment.type === 'THINK') {
-              currentModeRef.value = 'THINK';
+            if (fragment.type === SSE_FRAGMENT_TYPES.THINK) {
+              currentModeRef.value = SSE_FRAGMENT_TYPES.THINK;
               if (fragment.content) {
                 if (onThinking) onThinking(fragment.content);
                 else {
@@ -288,8 +261,8 @@ export async function parseSSEStream(
                   contentChunkCount++;
                 }
               }
-            } else if (fragment.type === 'RESPONSE') {
-              currentModeRef.value = 'RESPONSE';
+            } else if (fragment.type === SSE_FRAGMENT_TYPES.RESPONSE) {
+              currentModeRef.value = SSE_FRAGMENT_TYPES.RESPONSE;
               if (fragment.content) {
                 emitContentChunk(fragment.content, snapshotMode);
               }
@@ -299,8 +272,8 @@ export async function parseSSEStream(
         }
 
         if (typeof value === 'string') {
-          if (path?.includes('thinking_content')) {
-            currentModeRef.value = 'THINK';
+          if (path?.includes(SSE_FIELDS.THINKING_CONTENT)) {
+            currentModeRef.value = SSE_FRAGMENT_TYPES.THINK;
             completionTokensRef.value += countTokens(value);
             if (onThinking) onThinking(value);
             else {
@@ -313,13 +286,13 @@ export async function parseSSEStream(
               });
             }
           } else if (
-            path === 'response/content' ||
-            path?.endsWith('/content')
+            path === SSE_FIELDS.RESPONSE_CONTENT ||
+            path?.endsWith(SSE_FIELDS.CONTENT_SUFFIX)
           ) {
-            if (path === 'response/content') {
-              currentModeRef.value = 'RESPONSE';
+            if (path === SSE_FIELDS.RESPONSE_CONTENT) {
+              currentModeRef.value = SSE_FRAGMENT_TYPES.RESPONSE;
             }
-            if (currentModeRef.value === 'THINK') {
+            if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
               completionTokensRef.value += countTokens(value);
               if (onThinking) onThinking(value);
               else {
@@ -335,7 +308,7 @@ export async function parseSSEStream(
               emitContentChunk(value, snapshotMode);
             }
           } else if (!path) {
-            if (currentModeRef.value === 'THINK') {
+            if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
               completionTokensRef.value += countTokens(value);
               if (onThinking) onThinking(value);
               else {
@@ -352,15 +325,15 @@ export async function parseSSEStream(
             }
           }
         } else if (
-          path?.endsWith('/elapsed_secs') ||
-          path?.endsWith('thinking_elapsed_secs')
+          path?.endsWith(`/${SSE_FIELDS.ELAPSED_SECS}`) ||
+          path?.endsWith(SSE_FIELDS.THINKING_ELAPSED_SECS)
         ) {
           if (onMetadata) {
-            onMetadata({ thinking_elapsed: value });
+            onMetadata({ thinking_elapsed: value as number });
           }
         }
       } catch (e) {
-        const err = e as any;
+        const err = e as Error;
         logger.error(
           `[DeepSeek] SSE parse error | session=${sessionId} | line="${line.slice(0, 200)}"`,
           {

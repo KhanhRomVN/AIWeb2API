@@ -10,9 +10,7 @@
  * - register()            : Đăng ký một provider và các alias
  * - getProvider()         : Lấy provider theo tên
  * - getAllProviders()     : Lấy danh sách tất cả provider
- * - getProviderForModel() : Tìm provider hỗ trợ một model
  * - loadProviders()       : Load tất cả provider từ các module
- * - registerAllRoutes()   : Đăng ký routes cho tất cả provider
  * ------------------------------------------------------------------
  */
 
@@ -87,15 +85,6 @@ class ProviderRegistry {
     return Array.from(this.providers.values());
   }
 
-  getProviderForModel(model: string): Provider | undefined {
-    for (const provider of this.providers.values()) {
-      if (provider.isModelSupported && provider.isModelSupported(model)) {
-        return provider;
-      }
-    }
-    return undefined;
-  }
-
   // ─── Load Providers ────────────────────────────────────────────────
   async loadProviders() {
     try {
@@ -150,17 +139,6 @@ class ProviderRegistry {
     } catch (error) {
       logger.error('Failed to load providers', error);
     }
-  }
-
-  // ─── Register Routes ────────────────────────────────────────────────
-  registerAllRoutes(router: Router) {
-    this.providers.forEach((provider) => {
-      if (provider.registerRoutes) {
-        const providerRouter = Router();
-        provider.registerRoutes(providerRouter);
-        router.use(`/${provider.name.toLowerCase()}`, providerRouter);
-      }
-    });
   }
 }
 

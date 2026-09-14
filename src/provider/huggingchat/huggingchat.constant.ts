@@ -5,17 +5,15 @@
  * Tập trung tất cả constant dùng chung cho HuggingChat provider.
  *
  * Main exports:
- * - PROVIDER_ID        : ID định danh provider
- * - PROVIDER_NAME      : Tên hiển thị
- * - IS_ENABLED         : Bật/tắt provider
- * - WEBSITE_URL        : URL website
- * - AUTH_METHOD        : Phương thức xác thực
- * - CONNECTION_TYPE    : Loại kết nối (https/browser)
- * - IS_PAUSABLE        : Hỗ trợ tạm dừng session
- * - IS_MEMORY          : Hỗ trợ bộ nhớ dài hạn
- * - BASE_URL           : Base URL của Hugging Face
- * - HUGGINGCHAT_EVENTS : Các event name dùng trong proxy handler
- * - USER_AGENT         : User-Agent string dùng chung
+ * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
+ * - AUTH_METHOD / CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - BASE_URL / HOSTS / API_PATHS
+ * - COOKIE_NAMES / LOGIN_CONFIG
+ * - HUGGINGCHAT_EVENTS
+ * - USER_AGENT / HTTP_HEADERS / HTTP_HEADER_NAMES / CONTENT_TYPES
+ * - FORM_CONFIG / API_FIELDS / PAYLOAD_DEFAULTS
+ * - STREAM_TYPES / THINK_TAGS / ESCAPE_SEQUENCES
+ * - REGEX_PATTERNS
  * ------------------------------------------------------------------
  */
 
@@ -34,10 +32,113 @@ export const IS_MEMORY = false;
 
 export const BASE_URL = 'https://huggingface.co';
 
+export const HOSTS = {
+  HUGGINGFACE: 'huggingface.co',
+} as const;
+
+export const API_PATHS = {
+  CHAT_LOGIN: '/chat/login',
+  CHAT_USER: '/chat/api/v2/user',
+  CHAT_MODELS: '/chat/api/v2/models',
+  CHAT_CONVERSATIONS: '/chat/api/v2/conversations',
+  CHAT_CONVERSATION: '/chat/conversation',
+} as const;
+
+// ─── Auth / Cookies ──────────────────────────────────────────────────
+
+export const COOKIE_NAMES = {
+  TOKEN: 'token',
+} as const;
+
+export const LOGIN_CONFIG = {
+  PARTITION_PREFIX: 'huggingchat-',
+  EMAIL_SUFFIX: '@hf.co',
+} as const;
+
+// ─── Proxy Events ────────────────────────────────────────────────────
+
 export const HUGGINGCHAT_EVENTS = {
   COOKIES: 'hugging-chat-cookies',
   LOGIN_DATA: 'hugging-chat-login-data',
 } as const;
 
+// ─── HTTP Headers ────────────────────────────────────────────────────
+
 export const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+
+export const HTTP_HEADERS = {
+  ACCEPT_JSON: 'application/json',
+  USER_AGENT_SHORT: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+} as const;
+
+export const HTTP_HEADER_NAMES = {
+  COOKIE: 'Cookie',
+  CONTENT_TYPE: 'Content-Type',
+  USER_AGENT: 'User-Agent',
+  ACCEPT: 'Accept',
+  ORIGIN: 'Origin',
+  REFERER: 'Referer',
+} as const;
+
+export const CONTENT_TYPES = {
+  JSON: 'application/json',
+  MULTIPART_PREFIX: 'multipart/form-data; boundary=',
+} as const;
+
+// ─── Multipart Form ──────────────────────────────────────────────────
+
+export const FORM_CONFIG = {
+  BOUNDARY_PREFIX: '----WebKitFormBoundary',
+  BOUNDARY_RANDOM_BYTES: 16,
+  CRLF: '\r\n',
+  FIELD_NAME: 'data',
+} as const;
+
+// ─── API Field Names ─────────────────────────────────────────────────
+
+export const API_FIELDS = {
+  EMAIL: 'email',
+  USERNAME: 'username',
+  CONVERSATION_ID: 'conversationId',
+  JSON: 'json',
+  MODELS: 'models',
+  MESSAGES: 'messages',
+  ROOT_MESSAGE_ID: 'rootMessageId',
+  ID: 'id',
+  TYPE: 'type',
+  TOKEN: 'token',
+  DISPLAY_NAME: 'displayName',
+  NAME: 'name',
+  PROVIDERS: 'providers',
+  CONTEXT_LENGTH: 'context_length',
+} as const;
+
+// ─── Stream / SSE ────────────────────────────────────────────────────
+
+export const STREAM_TYPES = {
+  STREAM: 'stream',
+} as const;
+
+export const THINK_TAGS = {
+  OPEN: '<think>',
+  CLOSE: '</think>',
+} as const;
+
+export const ESCAPE_SEQUENCES = {
+  NUL: '\\u0000',
+} as const;
+
+// ─── Payload Defaults ────────────────────────────────────────────────
+
+export const PAYLOAD_DEFAULTS = {
+  PREPROMPT: '',
+  IS_RETRY: false,
+  IS_CONTINUE: false,
+} as const;
+
+// ─── Regex Patterns ──────────────────────────────────────────────────
+
+export const REGEX_PATTERNS = {
+  EMAIL_IN_BODY: /"email":"([^"]+)"/,
+} as const;

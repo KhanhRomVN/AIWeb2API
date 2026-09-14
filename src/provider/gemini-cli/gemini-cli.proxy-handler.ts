@@ -21,7 +21,20 @@ import { proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
 
 // ── Constants ──
-import { GEMINI_CLI_EVENTS } from './gemini-cli.constant';
+import {
+  API_FIELDS,
+  API_PATHS,
+  COOKIE_NAMES,
+  GEMINI_CLI_EVENTS,
+  HOSTS,
+} from './gemini-cli.constant';
+
+// ── Types ──
+import {
+  GeminiLoadCodeAssistResponse,
+  GeminiTokenResponse,
+  GeminiUserInfoResponse,
+} from './gemini-cli.types';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('GeminiCLIProvider');
@@ -35,14 +48,13 @@ export const proxyHandler: ProxyHandler = {
 
     if (
       host &&
-      (host.includes('accounts.google.com') ||
-        host.includes('cloudcode-pa.googleapis.com'))
+      (host.includes(HOSTS.GOOGLE_ACCOUNTS) || host.includes(HOSTS.CLOUDCODE_PA))
     ) {
       const reqCookies = ctx.clientToProxyRequest.headers.cookie;
       if (
         reqCookies &&
-        (reqCookies.includes('ACCESS_TOKEN') ||
-          reqCookies.includes('REFRESH_TOKEN'))
+        (reqCookies.includes(COOKIE_NAMES.ACCESS_TOKEN) ||
+          reqCookies.includes(COOKIE_NAMES.REFRESH_TOKEN))
       ) {
         proxyEvents.emit(GEMINI_CLI_EVENTS.TOKENS, reqCookies);
       }
@@ -56,11 +68,11 @@ export const proxyHandler: ProxyHandler = {
 
     if (
       host &&
-      host.includes('oauth2.googleapis.com') &&
-      url.includes('/token')
+      host.includes(HOSTS.OAUTH2) &&
+      url.includes(API_PATHS.OAUTH_TOKEN)
     ) {
       try {
-        const json = JSON.parse(body);
+        const json = JSON.parse(body) as GeminiTokenResponse;
         if (json.access_token)
           proxyEvents.emit(GEMINI_CLI_EVENTS.TOKENS, JSON.stringify(json));
       } catch (e) {
@@ -70,37 +82,44 @@ export const proxyHandler: ProxyHandler = {
 
     if (
       host &&
-      host.includes('cloudcode-pa.googleapis.com') &&
-      url.includes(':loadCodeAssist')
+      host.includes(HOSTS.CLOUDCODE_PA) &&
+      url.includes(API_PATHS.LOAD_CODE_ASSIST)
     ) {
       try {
-        const json = JSON.parse(body);
-        if (json.cloudaicompanionProject) {
+        const json = JSON.parse(body) as GeminiLoadCodeAssistResponse;
+        const rawProject = json[API_FIELDS.PROJECT_ID];
+        if (rawProject) {
           const projectId =
-            typeof json.cloudaicompanionProject === 'string'
-              ? json.cloudaicompanionProject
-              : json.cloudaicompanionProject.id;
+            typeof rawProject === 'string'
+              ? rawProject
+              : rawProject[API_FIELDS.PROJECT_ID_NESTED] || '';
           proxyEvents.emit(GEMINI_CLI_EVENTS.USER_INFO, { projectId });
         }
       } catch (e) {
-        logger.error('[Proxy] Failed to parse Gemini CLI loadCodeAssist response:', e);
+        logger.error(
+          '[Proxy] Failed to parse Gemini CLI loadCodeAssist response:',
+          e,
+        );
       }
     }
 
     if (
       host &&
-      host.includes('www.googleapis.com') &&
-      url.includes('/userinfo')
+      host.includes(HOSTS.WWW_GOOGLEAPIS) &&
+      url.includes(API_PATHS.USERINFO)
     ) {
       try {
-        const json = JSON.parse(body);
+        const json = JSON.parse(body) as GeminiUserInfoResponse;
         if (json.email)
           proxyEvents.emit(GEMINI_CLI_EVENTS.USER_INFO, {
             email: json.email,
             name: json.name,
           });
       } catch (e) {
-        logger.error('[Proxy] Failed to parse Gemini CLI userinfo response:', e);
+        logger.error(
+          '[Proxy] Failed to parse Gemini CLI userinfo response:',
+          e,
+        );
       }
     }
   },

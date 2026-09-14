@@ -36,8 +36,7 @@ import { getDb } from '../../database';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
-// ── Gemini CLI Imports ──
-import { proxyHandler } from './gemini-cli.proxy-handler';
+// ── Gemini CLI Constants ──
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -55,27 +54,56 @@ import {
   X_GOOG_API_CLIENT,
   CLIENT_METADATA,
   DEFAULT_PROJECT_ID,
+  API_FIELDS,
+  CONTENT_TYPES,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADERS,
+  LOGIN_CONFIG,
+  MESSAGE_ROLES,
+  OAUTH_CONFIG,
+  OAUTH_SCOPES,
+  OAUTH_URLS,
+  PAYLOAD_DEFAULTS,
+  REGEX_PATTERNS,
+  SSE_PROTOCOL,
+  TERMINALS,
+  TOKEN_FIELDS,
 } from './gemini-cli.constant';
+
+// ── Gemini CLI Types ──
+import {
+  GeminiCapturedTokens,
+  GeminiLoadCodeAssistResponse,
+  GeminiModelOutput,
+  GeminiQuotaResponse,
+  GeminiRequestPayload,
+  GeminiSSEChunk,
+  GeminiTokenResponse,
+  GeminiTokens,
+} from './gemini-cli.types';
+
+// ── Gemini CLI Internal ──
+import { proxyHandler } from './gemini-cli.proxy-handler';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('GeminiCLIProvider');
 
+/**
+ * Runtime OAuth config cho Gemini CLI.
+ * Đọc từ env + URL/scopes được định nghĩa trong constant.
+ */
 export const GEMINI_CONFIG = {
-  clientId: process.env.GEMINI_CLIENT_ID || '',
-  clientSecret: process.env.GEMINI_CLIENT_SECRET || '',
-  authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenUrl: 'https://oauth2.googleapis.com/token',
-  scopes: [
-    'https://www.googleapis.com/auth/cloud-platform',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile',
-  ],
+  clientId: process.env[OAUTH_CONFIG.CLIENT_ID_ENV_KEY] || '',
+  clientSecret: process.env[OAUTH_CONFIG.CLIENT_SECRET_ENV_KEY] || '',
+  authorizeUrl: OAUTH_URLS.AUTHORIZE,
+  tokenUrl: OAUTH_URLS.TOKEN,
+  scopes: [...OAUTH_SCOPES],
 };
 
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class GeminiCLIProvider implements Provider {
-  name = 'gemini-cli';
+  name = PROVIDER_ID;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -93,25 +121,19 @@ export class GeminiCLIProvider implements Provider {
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login() {
-    const tempHome = path.join(os.tmpdir(), `gemini-login-fresh-${Date.now()}`);
+    const tempHome = path.join(
+      os.tmpdir(),
+      `${LOGIN_CONFIG.TEMP_DIR_PREFIX}${Date.now()}`,
+    );
     fs.mkdirSync(tempHome, { recursive: true });
 
     await proxyService.start();
     const { port } = proxyService.getServerInfo();
     const proxyUrl = `http://127.0.0.1:${port}`;
-    const logFile = path.join(tempHome, 'gemini-cli.log');
+    const logFile = path.join(tempHome, LOGIN_CONFIG.LOG_FILE_NAME);
 
-    const terminals = [
-      'gnome-terminal',
-      'konsole',
-      'xfce4-terminal',
-      'kitty',
-      'alacritty',
-      'xterm',
-      'x-terminal-emulator',
-    ];
     let terminal = '';
-    for (const t of terminals) {
+    for (const t of TERMINALS) {
       try {
         execSync(`which ${t}`, { stdio: 'ignore' });
         terminal = t;
@@ -169,18 +191,16 @@ export class GeminiCLIProvider implements Provider {
       const checkInterval = setInterval(() => {
         if (fs.existsSync(logFile)) {
           const content = fs.readFileSync(logFile, 'utf8');
-          const urlMatch = content.match(
-            /https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?[^\s"']+/,
-          );
+          const urlMatch = content.match(REGEX_PATTERNS.OAUTH_AUTHORIZE_URL);
           if (urlMatch && !capturedUrl) {
             capturedUrl = urlMatch[0];
             clearInterval(checkInterval);
 
             loginService
               .captureCredentialsViaCDP({
-                providerId: 'gemini-cli',
+                providerId: PROVIDER_ID,
                 loginUrl: capturedUrl,
-                partition: `gemini-cli-${Date.now()}`,
+                partition: `${LOGIN_CONFIG.PARTITION_PREFIX}${Date.now()}`,
                 skipProxy: true,
                 extraEvents: [
                   GEMINI_CLI_EVENTS.TOKENS,
@@ -189,7 +209,7 @@ export class GeminiCLIProvider implements Provider {
                 validate: async (captured) => {
                   if (captured.cookies || captured.headers) {
                     try {
-                      const tokens = captured.cookies
+                      const tokens: GeminiCapturedTokens = captured.cookies
                         ? JSON.parse(captured.cookies)
                         : {};
                       const projectId = captured.headers?.projectId || '';
@@ -200,10 +220,10 @@ export class GeminiCLIProvider implements Provider {
                         return {
                           isValid: true,
                           cookies: JSON.stringify({
-                            accessToken: tokens.access_token,
-                            refreshToken: tokens.refresh_token,
-                            expiresIn: tokens.expires_in,
-                            projectId: projectId,
+                            [TOKEN_FIELDS.ACCESS_TOKEN]: tokens.access_token,
+                            [TOKEN_FIELDS.REFRESH_TOKEN]: tokens.refresh_token,
+                            [TOKEN_FIELDS.EXPIRES_IN]: tokens.expires_in,
+                            [TOKEN_FIELDS.PROJECT_ID]: projectId,
                           }),
                           email: email,
                         };
@@ -229,7 +249,7 @@ export class GeminiCLIProvider implements Provider {
               .catch(reject);
           }
         }
-      }, 1000);
+      }, LOGIN_CONFIG.POLL_INTERVAL_MS);
 
       terminalSpawn.on('error', (err: Error) => {
         clearInterval(checkInterval);
@@ -242,21 +262,21 @@ export class GeminiCLIProvider implements Provider {
           logger.error('[GeminiCLI] Login timed out waiting for OAuth URL');
           reject(new Error('Timed out waiting for Gemini CLI login URL'));
         }
-      }, 60000);
+      }, LOGIN_CONFIG.TIMEOUT_MS);
     });
   }
 
   // ─── Refresh Token ──────────────────────────────────────────────────
 
-  async refreshToken(refreshTokenStr: string) {
+  async refreshToken(refreshTokenStr: string): Promise<GeminiTokenResponse> {
     const response = await fetch(GEMINI_CONFIG.tokenUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
       },
       body: new URLSearchParams({
-        grant_type: 'refresh_token',
+        grant_type: OAUTH_CONFIG.GRANT_TYPE_REFRESH,
         client_id: GEMINI_CONFIG.clientId,
         client_secret: GEMINI_CONFIG.clientSecret,
         refresh_token: refreshTokenStr,
@@ -268,7 +288,7 @@ export class GeminiCLIProvider implements Provider {
       );
       throw new Error('Failed to refresh Gemini CLI token');
     }
-    return await response.json();
+    return (await response.json()) as GeminiTokenResponse;
   }
 
   // ─── Fetch Project ID ──────────────────────────────────────────────
@@ -277,12 +297,13 @@ export class GeminiCLIProvider implements Provider {
     const response = await fetch(CLOUDCODE_LOAD_CODE_ASSIST_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        'X-Goog-Api-Client': X_GOOG_API_CLIENT,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]:
+          `${HTTP_HEADERS.BEARER_PREFIX}${accessToken}`,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        [HTTP_HEADER_NAMES.X_GOOG_API_CLIENT]: X_GOOG_API_CLIENT,
       },
-      body: JSON.stringify({ metadata: CLIENT_METADATA, mode: 1 }),
+      body: JSON.stringify({ metadata: CLIENT_METADATA, mode: PAYLOAD_DEFAULTS.MODE }),
     });
     if (!response.ok) {
       logger.warn(
@@ -290,11 +311,12 @@ export class GeminiCLIProvider implements Provider {
       );
       return '';
     }
-    const data = await response.json();
-    if (data.cloudaicompanionProject) {
-      return typeof data.cloudaicompanionProject === 'string'
-        ? data.cloudaicompanionProject.trim()
-        : data.cloudaicompanionProject.id?.trim() || '';
+    const data = (await response.json()) as GeminiLoadCodeAssistResponse;
+    const rawProject = data[API_FIELDS.PROJECT_ID];
+    if (rawProject) {
+      return typeof rawProject === 'string'
+        ? rawProject.trim()
+        : rawProject[API_FIELDS.PROJECT_ID_NESTED]?.trim() || '';
     }
     logger.warn(
       '[GeminiCLI] fetchProjectId response missing cloudaicompanionProject',
@@ -316,9 +338,9 @@ export class GeminiCLIProvider implements Provider {
       accountId,
     } = options;
 
-    let tokens: any;
+    let tokens: GeminiTokens;
     try {
-      tokens = JSON.parse(credential);
+      tokens = JSON.parse(credential) as GeminiTokens;
     } catch (e) {
       logger.warn(
         '[GeminiCLI] Credential is not valid JSON, treating as raw access token',
@@ -339,13 +361,16 @@ export class GeminiCLIProvider implements Provider {
     const sendRequest = async (token: string, projectId?: string) => {
       const sessionId = Math.random().toString(36).substring(2, 15);
       const userPromptId = `${sessionId}########1`;
-      const body: any = {
+      const body: GeminiRequestPayload = {
         model: model,
         project: projectId || DEFAULT_PROJECT_ID,
         user_prompt_id: userPromptId,
         request: {
           contents: messages.map((m) => ({
-            role: m.role === 'assistant' ? 'model' : m.role,
+            role:
+              m.role === MESSAGE_ROLES.ASSISTANT
+                ? MESSAGE_ROLES.MODEL
+                : m.role,
             parts: [{ text: m.content }],
           })),
         },
@@ -354,10 +379,11 @@ export class GeminiCLIProvider implements Provider {
       return await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'User-Agent': USER_AGENT,
-          'X-Goog-Api-Client': X_GOOG_API_CLIENT,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+          [HTTP_HEADER_NAMES.AUTHORIZATION]:
+            `${HTTP_HEADERS.BEARER_PREFIX}${token}`,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+          [HTTP_HEADER_NAMES.X_GOOG_API_CLIENT]: X_GOOG_API_CLIENT,
         },
         body: JSON.stringify(body),
       });
@@ -409,17 +435,22 @@ export class GeminiCLIProvider implements Provider {
           buffer = lines.pop() || '';
           for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            const jsonStr = trimmed.slice(6).trim();
-            if (jsonStr === '[DONE]') {
+            if (!trimmed || !trimmed.startsWith(SSE_PROTOCOL.DATA_PREFIX))
+              continue;
+            const jsonStr = trimmed
+              .slice(SSE_PROTOCOL.DATA_PREFIX.length)
+              .trim();
+            if (jsonStr === SSE_PROTOCOL.DONE) {
               onDone();
               return;
             }
             try {
-              const json = JSON.parse(jsonStr);
+              const json = JSON.parse(jsonStr) as GeminiSSEChunk;
               const responseObj = json.response || json;
               const content =
-                responseObj.candidates?.[0]?.content?.parts?.[0]?.text;
+                responseObj[API_FIELDS.CANDIDATES]?.[0]?.[
+                  API_FIELDS.CONTENT
+                ]?.[API_FIELDS.PARTS]?.[0]?.[API_FIELDS.TEXT];
               if (content) onContent(content);
             } catch (e) {
               logger.warn('[GeminiCLI] Failed to parse SSE line:', e);
@@ -428,10 +459,12 @@ export class GeminiCLIProvider implements Provider {
         }
         onDone();
       } else {
-        const json = await response.json();
+        const json = (await response.json()) as GeminiSSEChunk;
         const responseObj = json.response || json;
         const content =
-          responseObj.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          responseObj[API_FIELDS.CANDIDATES]?.[0]?.[API_FIELDS.CONTENT]?.[
+            API_FIELDS.PARTS
+          ]?.[0]?.[API_FIELDS.TEXT] || '';
         onContent(content);
         onDone();
       }
@@ -449,10 +482,10 @@ export class GeminiCLIProvider implements Provider {
 
   // ─── Get Models ─────────────────────────────────────────────────────
 
-  async getModels(credential: string): Promise<any[]> {
-    let tokens: any;
+  async getModels(credential: string): Promise<GeminiModelOutput[]> {
+    let tokens: GeminiTokens;
     try {
-      tokens = JSON.parse(credential);
+      tokens = JSON.parse(credential) as GeminiTokens;
     } catch (e) {
       logger.warn('[GeminiCLI] getModels: credential is not valid JSON');
       tokens = { accessToken: credential };
@@ -468,10 +501,11 @@ export class GeminiCLIProvider implements Provider {
     const response = await fetch(CLOUDCODE_RETRIEVE_QUOTA_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${tokens.accessToken}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        'X-Goog-Api-Client': X_GOOG_API_CLIENT,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]:
+          `${HTTP_HEADERS.BEARER_PREFIX}${tokens.accessToken}`,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        [HTTP_HEADER_NAMES.X_GOOG_API_CLIENT]: X_GOOG_API_CLIENT,
       },
       body: JSON.stringify({ project: projectId }),
     });
@@ -481,22 +515,16 @@ export class GeminiCLIProvider implements Provider {
       );
       return [];
     }
-    const data = await response.json();
-    if (!data.buckets) {
+    const data = (await response.json()) as GeminiQuotaResponse;
+    const buckets = data[API_FIELDS.BUCKETS];
+    if (!buckets) {
       logger.warn('[GeminiCLI] getModels: quota API response missing buckets');
       return [];
     }
-    return data.buckets.map((bucket: any) => ({
-      id: bucket.modelId,
-      name: bucket.modelId,
+    return buckets.map((bucket) => ({
+      id: bucket[API_FIELDS.MODEL_ID] || '',
+      name: bucket[API_FIELDS.MODEL_ID] || '',
     }));
-  }
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('gemini') || m.startsWith('gemini-');
   }
 }
 

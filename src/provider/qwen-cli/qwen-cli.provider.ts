@@ -10,7 +10,7 @@
  * - login()          : Đăng nhập qua terminal OAuth
  * - refreshToken()   : Refresh access token
  * - handleMessage()  : Gửi tin nhắn với streaming response
- * - getProfile()     : Lấy thông tin user profile
+ * - getUserProfile() : Lấy thông tin user profile
  * ------------------------------------------------------------------
  */
 
@@ -38,6 +38,14 @@ import { createLogger } from '../../utils/logger';
 
 // ── Qwen CLI Imports ──
 import { proxyHandler } from './qwen-cli.proxy-handler';
+import { parseSSEStream } from './qwen-cli.sse-parser';
+import {
+  QwenChatPayload,
+  QwenSSEEvent,
+  QwenTokenResponse,
+  QwenTokens,
+  QwenUserProfile,
+} from './qwen-cli.types';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -51,23 +59,35 @@ import {
   QWEN_CLI_EVENTS,
   USER_INFO_URL,
   CHAT_COMPLETIONS_URL,
+  QWEN_CONFIG,
+  OAUTH_PATHS,
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  API_FIELDS,
+  GRANT_TYPES,
+  CONTENT_BLOCK_TYPES,
+  DASHSCOPE_AUTH_TYPE,
+  AUTH_PREFIXES,
+  QWEN_CLI_VERSION,
+  QWEN_CODE_USER_AGENT_PREFIX,
+  QWEN_CHAT_USER_AGENT,
+  LOGIN_PARTITION,
+  LOGIN_TEMP_HOME_PREFIX,
+  LOGIN_TIMEOUT_MS,
+  LOGIN_POLL_INTERVAL_MS,
+  QWEN_CLI_RELATIVE_PATH,
+  TERMINAL_EMULATORS,
+  AUTHORIZE_URL_REGEX,
+  DEFAULT_EXPIRES_IN_PROVIDER,
 } from './qwen-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenCLIProvider');
 
-export const QWEN_CONFIG = {
-  clientId: 'f0304373b74a44d2b584a3fb70ca9e56',
-  deviceCodeUrl: 'https://chat.qwen.ai/api/v1/oauth2/device/code',
-  tokenUrl: 'https://chat.qwen.ai/api/v1/oauth2/token',
-  scope: 'openid profile email model.completion',
-  codeChallengeMethod: 'S256',
-};
-
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class QwenCoderCLIProvider implements Provider {
-  name = 'qwen-cli';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -86,30 +106,18 @@ export class QwenCoderCLIProvider implements Provider {
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login() {
-    const tempHome = path.join(os.tmpdir(), `qwen-login-fresh`);
+    const tempHome = path.join(os.tmpdir(), LOGIN_TEMP_HOME_PREFIX);
     if (fs.existsSync(tempHome))
       fs.rmSync(tempHome, { recursive: true, force: true });
     fs.mkdirSync(tempHome, { recursive: true });
 
-    const cliPath = path.resolve(
-      __dirname,
-      '../../../../../temp/qwen-cli/cli.js',
-    );
+    const cliPath = path.resolve(__dirname, QWEN_CLI_RELATIVE_PATH);
     await proxyService.start();
     const { port } = proxyService.getServerInfo();
     const logFile = path.join(tempHome, 'qwen-cli.log');
 
-    const terminals = [
-      'gnome-terminal',
-      'konsole',
-      'xfce4-terminal',
-      'kitty',
-      'alacritty',
-      'xterm',
-      'x-terminal-emulator',
-    ];
     let terminal = '';
-    for (const t of terminals) {
+    for (const t of TERMINAL_EMULATORS) {
       try {
         execSync(`which ${t}`, { stdio: 'ignore' });
         terminal = t;
@@ -167,17 +175,15 @@ export class QwenCoderCLIProvider implements Provider {
       const checkInterval = setInterval(() => {
         if (fs.existsSync(logFile)) {
           const content = fs.readFileSync(logFile, 'utf8');
-          const urlMatch = content.match(
-            /https:\/\/chat\.qwen\.ai\/authorize\?user_code=[A-Z0-9-]+&client=qwen-code/,
-          );
+          const urlMatch = content.match(AUTHORIZE_URL_REGEX);
           if (urlMatch && !capturedUrl) {
             capturedUrl = urlMatch[0];
             clearInterval(checkInterval);
             loginService
               .captureCredentialsViaCDP({
-                providerId: 'qwen-cli',
+                providerId: PROVIDER_ID,
                 loginUrl: capturedUrl,
-                partition: 'qwen-cli',
+                partition: LOGIN_PARTITION,
                 skipProxy: true,
                 extraEvents: [
                   QWEN_CLI_EVENTS.TOKENS,
@@ -200,7 +206,7 @@ export class QwenCoderCLIProvider implements Provider {
               .catch(reject);
           }
         }
-      }, 1000);
+      }, LOGIN_POLL_INTERVAL_MS);
       terminalSpawn.on('error', reject);
       setTimeout(() => {
         if (!capturedUrl) {
@@ -208,27 +214,31 @@ export class QwenCoderCLIProvider implements Provider {
           logger.error('[QwenCLI] Login timed out waiting for OAuth URL');
           reject(new Error('Timed out'));
         }
-      }, 60000);
+      }, LOGIN_TIMEOUT_MS);
     });
   }
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(accessToken: string) {
+  async getUserProfile(accessToken: string) {
     try {
+      const userAgent = `${QWEN_CODE_USER_AGENT_PREFIX}${QWEN_CLI_VERSION} (${process.platform}; ${process.arch})`;
       const response = await fetch(USER_INFO_URL, {
         headers: {
-          'User-Agent': `QwenCode/0.10.6 (${process.platform}; ${process.arch})`,
-          'x-dashscope-authtype': 'qwen-oauth',
-          Authorization: `Bearer ${accessToken}`,
+          [HTTP_HEADER_NAMES.USER_AGENT]: userAgent,
+          [HTTP_HEADER_NAMES.X_DASHSCOPE_AUTHTYPE]: DASHSCOPE_AUTH_TYPE,
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
         },
       });
       if (response.ok) {
-        const data = await response.json();
-        if (!data.email && !data.username) {
+        const data = (await response.json()) as QwenUserProfile;
+        if (!data[API_FIELDS.EMAIL] && !data[API_FIELDS.USERNAME]) {
           logger.warn('[QwenCLI] Get Profile response missing email/username');
         }
-        return { email: data.email || data.username || null };
+        return {
+          email:
+            data[API_FIELDS.EMAIL] || data[API_FIELDS.USERNAME] || null,
+        };
       }
       logger.warn(`[QwenCLI] Get Profile returned status ${response.status}`);
     } catch (e) {
@@ -243,13 +253,13 @@ export class QwenCoderCLIProvider implements Provider {
     const response = await fetch(QWEN_CONFIG.tokenUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+        [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
       },
       body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: QWEN_CONFIG.clientId,
-        refresh_token: refreshTokenStr,
+        [API_FIELDS.GRANT_TYPE]: GRANT_TYPES.REFRESH_TOKEN,
+        [API_FIELDS.CLIENT_ID]: QWEN_CONFIG.clientId,
+        [API_FIELDS.REFRESH_TOKEN]: refreshTokenStr,
       }),
     });
     if (!response.ok) {
@@ -258,15 +268,16 @@ export class QwenCoderCLIProvider implements Provider {
       );
       throw new Error('Failed to refresh Qwen token');
     }
-    const json = await response.json();
-    let data = json;
+    const json = (await response.json()) as QwenTokenResponse;
+    let data: QwenTokenResponse = json;
+    const rawResponse = json[API_FIELDS.RESPONSE];
     if (
-      json.response &&
-      typeof json.response === 'string' &&
-      json.response.startsWith('{')
+      rawResponse &&
+      typeof rawResponse === 'string' &&
+      rawResponse.startsWith('{')
     ) {
       try {
-        data = JSON.parse(json.response);
+        data = JSON.parse(rawResponse) as QwenTokenResponse;
       } catch (e) {
         logger.warn('[QwenCLI] Failed to parse nested token response:', e);
       }
@@ -288,9 +299,9 @@ export class QwenCoderCLIProvider implements Provider {
       accountId,
     } = options;
 
-    let tokens: any;
+    let tokens: QwenTokens;
     try {
-      tokens = JSON.parse(credential);
+      tokens = JSON.parse(credential) as QwenTokens;
     } catch (e) {
       logger.warn(
         '[QwenCLI] Credential is not valid JSON, treating as raw access token',
@@ -301,24 +312,25 @@ export class QwenCoderCLIProvider implements Provider {
     const url = CHAT_COMPLETIONS_URL;
 
     const sendRequest = async (token: string) => {
+      const body: QwenChatPayload = {
+        model: model,
+        messages: messages.map((m: any) => ({
+          role: m.role,
+          content: [{ type: CONTENT_BLOCK_TYPES.TEXT, text: m.content }],
+        })),
+        stream: stream !== false,
+        stream_options:
+          stream !== false ? { include_usage: true } : undefined,
+      };
       return await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
-          'User-Agent': 'QwenCode/0.10.6 (linux; x64)',
-          'x-dashscope-authtype': 'qwen-oauth',
-          'Content-Type': 'application/json',
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${token}`,
+          [HTTP_HEADER_NAMES.USER_AGENT]: QWEN_CHAT_USER_AGENT,
+          [HTTP_HEADER_NAMES.X_DASHSCOPE_AUTHTYPE]: DASHSCOPE_AUTH_TYPE,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
         },
-        body: JSON.stringify({
-          model: model,
-          messages: messages.map((m: any) => ({
-            role: m.role,
-            content: [{ type: 'text', text: m.content }],
-          })),
-          stream: stream !== false,
-          stream_options:
-            stream !== false ? { include_usage: true } : undefined,
-        }),
+        body: JSON.stringify(body),
       });
     };
 
@@ -328,8 +340,9 @@ export class QwenCoderCLIProvider implements Provider {
       if (response.status === 401 && tokens.refreshToken) {
         try {
           const newTokens = await this.refreshToken(tokens.refreshToken);
-          tokens.accessToken = newTokens.access_token;
-          tokens.refreshToken = newTokens.refresh_token || tokens.refreshToken;
+          tokens.accessToken = newTokens[API_FIELDS.ACCESS_TOKEN]!;
+          tokens.refreshToken =
+            newTokens[API_FIELDS.REFRESH_TOKEN] || tokens.refreshToken;
 
           if (accountId) {
             try {
@@ -337,7 +350,9 @@ export class QwenCoderCLIProvider implements Provider {
               const newCredential = JSON.stringify({
                 accessToken: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
-                expiresIn: newTokens.expires_in || 21600,
+                expiresIn:
+                  newTokens[API_FIELDS.EXPIRES_IN] ||
+                  DEFAULT_EXPIRES_IN_PROVIDER,
               });
               db.prepare('UPDATE accounts SET credential = ? WHERE id = ?').run(
                 newCredential,
@@ -361,32 +376,17 @@ export class QwenCoderCLIProvider implements Provider {
 
       if (stream !== false) {
         if (!response.body) throw new Error('No response body');
-        let buffer = '';
-        for await (const chunk of response.body as any) {
-          buffer += chunk.toString();
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            const jsonStr = trimmed.slice(6).trim();
-            if (jsonStr === '[DONE]') {
-              onDone();
-              return;
-            }
-            try {
-              const json = JSON.parse(jsonStr);
-              if (json.choices?.[0]?.delta?.content)
-                onContent(json.choices[0].delta.content);
-            } catch (e) {
-              logger.warn('[QwenCLI] Failed to parse SSE line:', e);
-            }
-          }
-        }
+        await parseSSEStream(response.body as NodeJS.ReadableStream, {
+          onContent,
+        });
         onDone();
       } else {
-        const json = await response.json();
-        onContent(json.choices?.[0]?.message?.content || '');
+        const json = (await response.json()) as QwenSSEEvent;
+        onContent(
+          json[API_FIELDS.CHOICES]?.[0]?.[API_FIELDS.MESSAGE]?.[
+            API_FIELDS.CONTENT
+          ] || '',
+        );
         onDone();
       }
     } catch (err: any) {
@@ -399,13 +399,6 @@ export class QwenCoderCLIProvider implements Provider {
 
   async continueMessage(options: SendMessageOptions): Promise<void> {
     return this.handleMessage(options);
-  }
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('qwen') || m.startsWith('qwen-');
   }
 }
 

@@ -9,8 +9,7 @@
  * Main features:
  * - login()           : Đăng nhập qua browser
  * - handleMessage()   : Gửi tin nhắn với streaming response
- * - getProfile()      : Lấy thông tin user profile
- * - isModelSupported(): Kiểm tra model có hỗ trợ không
+ * - getUserProfile()      : Lấy thông tin user profile
  *
  * Credential format:
  * - cookies          : Cookie string (chứa session token)
@@ -18,9 +17,6 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
-import { Router } from 'express';
-
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
 
@@ -33,12 +29,15 @@ import { createLogger } from '../../utils/logger';
 
 // ── Claude Imports ──
 import { proxyHandler } from './claude.proxy-handler';
+import { parseSSEStream } from './claude.sse-parser';
+import { ClaudeChatPayload, ClaudeUserProfile } from './claude.types';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
   IS_ENABLED,
   WEBSITE_URL,
   AUTH_METHOD,
+  CLAUDE_AUTH_METHODS,
   CONNECTION_TYPE,
   MODELS,
   IS_PAUSABLE,
@@ -48,6 +47,15 @@ import {
   USER_AGENT,
   GOOGLE_OAUTH_LOGIN_URL,
   API_PATHS,
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  REFERER_PATHS,
+  API_FIELDS,
+  DEFAULT_LOGIN_PATH,
+  LOGIN_PARTITION_PREFIX,
+  MAX_TOKENS,
+  MASKED_EMAIL_INDICATOR,
+  MASKED_EMAIL_CHAR,
 } from './claude.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -56,7 +64,7 @@ const logger = createLogger('ClaudeProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class ClaudeProvider implements Provider {
-  name = 'Claude';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -74,27 +82,27 @@ export class ClaudeProvider implements Provider {
 
   // ─── Get Profile ────────────────────────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
       const client = new HttpClient({
         baseURL: BASE_URL,
         headers: {
-          Cookie: credential,
-          'User-Agent': USER_AGENT,
+          [HTTP_HEADER_NAMES.COOKIE]: credential,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
         },
       });
       const response = await client.get(API_PATHS.PROFILE);
       if (response.ok) {
-        const data = await response.json();
-        if (!data.email) {
+        const data = (await response.json()) as ClaudeUserProfile;
+        if (!data[API_FIELDS.EMAIL]) {
           logger.warn('[Claude] Get Profile response missing email field');
         }
         return {
-          email: data.email || null,
-          name: data.name,
-          id: data.id,
+          email: data[API_FIELDS.EMAIL] || null,
+          name: data[API_FIELDS.NAME],
+          id: data[API_FIELDS.ID],
         };
       }
       logger.warn(`[Claude] Get Profile returned status ${response.status}`);
@@ -108,14 +116,16 @@ export class ClaudeProvider implements Provider {
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login(options?: { method?: 'basic' | 'google' }) {
-    const method = options?.method || 'basic';
+    const method = options?.method || CLAUDE_AUTH_METHODS.BASIC;
     const loginUrl =
-      method === 'google' ? GOOGLE_OAUTH_LOGIN_URL : `${BASE_URL}/login`;
+      method === CLAUDE_AUTH_METHODS.GOOGLE
+        ? GOOGLE_OAUTH_LOGIN_URL
+        : `${BASE_URL}${DEFAULT_LOGIN_PATH}`;
 
     return await loginService.captureCredentialsViaCDP({
-      providerId: 'claude',
+      providerId: PROVIDER_ID,
       loginUrl,
-      partition: `claude-${Date.now()}`,
+      partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
       cookieEvent: CLAUDE_EVENTS.LOGIN_TOKEN,
       infoEvent: CLAUDE_EVENTS.LOGIN_EMAIL,
       validate: async (data: {
@@ -127,9 +137,14 @@ export class ClaudeProvider implements Provider {
           const token = data.cookies;
           let email = data.email;
 
-          if (!email) {
-            const profile = await this.getProfile(token);
-            email = profile.email || undefined;
+          // Nếu email bị mask (chứa *** hoặc *), gọi profile để lấy email thật
+          if (
+            !email ||
+            email.includes(MASKED_EMAIL_INDICATOR) ||
+            email.includes(MASKED_EMAIL_CHAR)
+          ) {
+            const profile = await this.getUserProfile(token);
+            email = profile.email || email;
           }
 
           if (email) {
@@ -153,6 +168,7 @@ export class ClaudeProvider implements Provider {
       model,
       onContent,
       onThinking,
+      onRaw,
       onMetadata,
       onDone,
       onError,
@@ -162,20 +178,20 @@ export class ClaudeProvider implements Provider {
     const client = new HttpClient({
       baseURL: BASE_URL,
       headers: {
-        Cookie: credential,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        Origin: BASE_URL,
-        Referer: `${BASE_URL}/`,
+        [HTTP_HEADER_NAMES.COOKIE]: credential,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
       },
     });
 
     try {
-      const payload: any = {
+      const payload: ClaudeChatPayload = {
         model,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
         stream: true,
-        max_tokens: 4096,
+        max_tokens: MAX_TOKENS,
       };
 
       if (conversationId) {
@@ -193,36 +209,11 @@ export class ClaudeProvider implements Provider {
         throw new Error('No response body');
       }
 
-      let buffer = '';
-      let accumulatedContent = '';
-
-      for await (const chunk of response.body) {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.substring(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const json = JSON.parse(data);
-              if (json.type === 'content_block_delta' && json.delta?.text) {
-                const content = json.delta.text;
-                accumulatedContent += content;
-                onContent(content);
-              }
-              if (json.type === 'message_stop') {
-                onDone();
-                return;
-              }
-            } catch (e) {
-              logger.warn('[Claude] Failed to parse SSE line:', e);
-            }
-          }
-        }
-      }
+      await parseSSEStream(response.body, {
+        onContent,
+        onThinking,
+        onRaw,
+      });
 
       onDone();
     } catch (err: any) {
@@ -235,17 +226,6 @@ export class ClaudeProvider implements Provider {
 
   async continueMessage(options: SendMessageOptions): Promise<void> {
     return this.handleMessage(options);
-  }
-
-  // ─── Misc ────────────────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('claude');
-  }
-
-  registerRoutes(router: Router) {
-    // No additional routes
   }
 }
 

@@ -10,7 +10,7 @@
  * - login()          : Đăng nhập qua browser và capture cookies
  * - handleMessage()  : Gửi tin nhắn với streaming response
  * - getModels()      : Lấy danh sách models từ API
- * - getProfile()     : Lấy thông tin user profile
+ * - getUserProfile() : Lấy thông tin user profile
  * - Thinking mode    : Hỗ trợ <think> tags trong response
  *
  * Credential format:
@@ -36,8 +36,7 @@ import { HttpClient } from '../../utils/http-client';
 import { createLogger } from '../../utils/logger';
 import { countTokens, countMessagesTokens } from '../../utils/tokenizer';
 
-// ── HuggingChat Imports ──
-import { proxyHandler } from './huggingchat.proxy-handler';
+// ── HuggingChat Constants ──
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -50,15 +49,44 @@ import {
   BASE_URL,
   HUGGINGCHAT_EVENTS,
   USER_AGENT,
+  API_FIELDS,
+  API_PATHS,
+  CONTENT_TYPES,
+  ESCAPE_SEQUENCES,
+  FORM_CONFIG,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADERS,
+  LOGIN_CONFIG,
+  PAYLOAD_DEFAULTS,
+  STREAM_TYPES,
+  THINK_TAGS,
 } from './huggingchat.constant';
 
-// ─── Constants ─────────────────────────────────────────��────────────────
+// ── HuggingChat Types ──
+import {
+  HuggingChatConversationCreateRequest,
+  HuggingChatConversationCreateResponse,
+  HuggingChatConversationDetails,
+  HuggingChatModelEntry,
+  HuggingChatModelOutput,
+  HuggingChatModelsResponse,
+  HuggingChatSSEChunk,
+  HuggingChatStreamPayload,
+  HuggingChatUserInfo,
+  HuggingChatUserResponse,
+} from './huggingchat.types';
+
+// ── HuggingChat Internal ──
+import { proxyHandler } from './huggingchat.proxy-handler';
+import { parseSSEStream } from './huggingchat.sse-parser';
+
+// ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('HuggingChatProvider');
 
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class HuggingChatProvider implements Provider {
-  name = 'HuggingChat';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -86,15 +114,15 @@ export class HuggingChatProvider implements Provider {
 
     try {
       return await loginService.captureCredentialsViaCDP({
-        providerId: 'huggingchat',
-        loginUrl: `${BASE_URL}/chat/login`,
-        partition: `huggingchat-${Date.now()}`,
+        providerId: PROVIDER_ID,
+        loginUrl: `${BASE_URL}${API_PATHS.CHAT_LOGIN}`,
+        partition: `${LOGIN_CONFIG.PARTITION_PREFIX}${Date.now()}`,
         cookieEvent: HUGGINGCHAT_EVENTS.COOKIES,
         infoEvent: HUGGINGCHAT_EVENTS.LOGIN_DATA,
         extraEvents: [HUGGINGCHAT_EVENTS.LOGIN_DATA],
         validate: async (data: {
           cookies: string;
-          headers?: any;
+          headers?: Record<string, string>;
           email?: string;
         }) => {
           if (!data.cookies) return { isValid: false };
@@ -103,7 +131,7 @@ export class HuggingChatProvider implements Provider {
           let apiEmail = '';
 
           try {
-            const profile = await this.getProfile(data.cookies);
+            const profile = await this.getUserProfile(data.cookies);
             if (profile.email) {
               apiEmail = profile.email;
             }
@@ -137,20 +165,18 @@ export class HuggingChatProvider implements Provider {
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(
-    credential: string,
-  ): Promise<{ email: string | null; name?: string; id?: string }> {
+  async getUserProfile(credential: string): Promise<HuggingChatUserInfo> {
     try {
-      const response = await fetch(`${BASE_URL}/chat/api/v2/user`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.CHAT_USER}`, {
         headers: {
-          Cookie: credential,
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-          accept: 'application/json',
+          [HTTP_HEADER_NAMES.COOKIE]: credential,
+          [HTTP_HEADER_NAMES.USER_AGENT]: HTTP_HEADERS.USER_AGENT_SHORT,
+          [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
         },
       });
 
       if (response.ok) {
-        const chatUser = await response.json();
+        const chatUser = (await response.json()) as HuggingChatUserResponse;
         if (!chatUser.email && !chatUser.username) {
           logger.warn(
             '[HuggingChat] Get Profile response missing email/username',
@@ -159,9 +185,9 @@ export class HuggingChatProvider implements Provider {
         return {
           email:
             chatUser.email ||
-            (chatUser.username ? `${chatUser.username}@hf.co` : null),
-          name: chatUser.username || chatUser.name,
-          id: chatUser.id || chatUser._id,
+            (chatUser.username
+              ? `${chatUser.username}${LOGIN_CONFIG.EMAIL_SUFFIX}`
+              : null),
         };
       }
       logger.warn(
@@ -194,67 +220,78 @@ export class HuggingChatProvider implements Provider {
     try {
       let conversationId = options.conversationId;
       if (!conversationId) {
-        const createRes = await client.post('/chat/conversation', {
+        const createBody: HuggingChatConversationCreateRequest = {
           model: model,
-          preprompt: '',
-        });
-        const createData = await createRes.json();
-        conversationId = createData.conversationId;
+          preprompt: PAYLOAD_DEFAULTS.PREPROMPT,
+        };
+        const createRes = await client.post(
+          API_PATHS.CHAT_CONVERSATION,
+          createBody,
+        );
+        const createData =
+          (await createRes.json()) as HuggingChatConversationCreateResponse;
+        conversationId = createData[API_FIELDS.CONVERSATION_ID];
       }
 
       if (!conversationId) throw new Error('Failed to obtain conversation ID');
 
       const detailRes = await client.get(
-        `/chat/api/v2/conversations/${conversationId}`,
+        `${API_PATHS.CHAT_CONVERSATIONS}/${conversationId}`,
       );
-      const detail = await detailRes.json();
-      const details = detail.json || detail;
+      const detail = (await detailRes.json()) as HuggingChatConversationDetails;
+      const details = detail[API_FIELDS.JSON] || detail;
 
       let parentMessageId = '';
-      if (details.messages && details.messages.length > 0) {
-        parentMessageId = details.messages[details.messages.length - 1].id;
-      } else if (details.rootMessageId) {
-        parentMessageId = details.rootMessageId;
+      const detailsMessages = details[API_FIELDS.MESSAGES];
+      const detailsRootId = details[API_FIELDS.ROOT_MESSAGE_ID];
+      if (detailsMessages && detailsMessages.length > 0) {
+        parentMessageId =
+          detailsMessages[detailsMessages.length - 1][API_FIELDS.ID];
+      } else if (detailsRootId) {
+        parentMessageId = detailsRootId;
       } else {
         parentMessageId = crypto.randomUUID();
       }
 
       const lastMessage = messages[messages.length - 1];
       const boundary =
-        '----WebKitFormBoundary' + crypto.randomBytes(16).toString('hex');
+        FORM_CONFIG.BOUNDARY_PREFIX +
+        crypto
+          .randomBytes(FORM_CONFIG.BOUNDARY_RANDOM_BYTES)
+          .toString('hex');
 
-      const payload = {
+      const payload: HuggingChatStreamPayload = {
         inputs: lastMessage.content,
         id: parentMessageId,
-        is_retry: false,
-        is_continue: false,
+        is_retry: PAYLOAD_DEFAULTS.IS_RETRY,
+        is_continue: PAYLOAD_DEFAULTS.IS_CONTINUE,
         selectedMcpServerNames: [],
         selectedMcpServers: [],
       };
 
-      const formData = `--${boundary}\r\nContent-Disposition: form-data; name="data"\r\n\r\n${JSON.stringify(payload)}\r\n--${boundary}--\r\n`;
+      const formData =
+        `--${boundary}${FORM_CONFIG.CRLF}` +
+        `Content-Disposition: form-data; name="${FORM_CONFIG.FIELD_NAME}"${FORM_CONFIG.CRLF}${FORM_CONFIG.CRLF}` +
+        `${JSON.stringify(payload)}${FORM_CONFIG.CRLF}--${boundary}--${FORM_CONFIG.CRLF}`;
       const formBuffer = Buffer.from(formData, 'utf-8');
 
-      const response = await fetch(
-        `${BASE_URL}/chat/conversation/${conversationId}`,
-        {
-          method: 'POST',
-          headers: {
-            Cookie: cookieHeader,
-            'Content-Type': `multipart/form-data; boundary=${boundary}`,
-            'User-Agent': USER_AGENT,
-            Origin: BASE_URL,
-            Referer: `${BASE_URL}/chat/conversation/${conversationId}`,
-          },
-          body: formBuffer,
+      const conversationUrl = `${BASE_URL}${API_PATHS.CHAT_CONVERSATION}/${conversationId}`;
+      const response = await fetch(conversationUrl, {
+        method: 'POST',
+        headers: {
+          [HTTP_HEADER_NAMES.COOKIE]: cookieHeader,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: `${CONTENT_TYPES.MULTIPART_PREFIX}${boundary}`,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+          [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+          [HTTP_HEADER_NAMES.REFERER]: conversationUrl,
         },
-      );
+        body: formBuffer,
+      });
 
-      if (!response.ok)
-        throw new Error(`HuggingChat API Error ${response.status}`);
+      if (!response.body) throw new Error('No response body');
 
       const promptTokens = countMessagesTokens(messages);
-      let completionTokens = 0;
+      const completionTokensRef = { value: 0 };
 
       if (onMetadata)
         onMetadata({
@@ -262,52 +299,14 @@ export class HuggingChatProvider implements Provider {
           total_token: promptTokens,
         });
 
-      if (!response.body) throw new Error('No response body');
+      await parseSSEStream(response.body, {
+        onContent,
+        onThinking,
+        onMetadata,
+        promptTokens,
+        completionTokensRef,
+      });
 
-      let buffer = '';
-      let isThinking = false;
-
-      for await (const chunk of response.body as any) {
-        const chunkStr = chunk.toString().replace(/\\u0000/g, '');
-        buffer += chunkStr;
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const json = JSON.parse(line);
-            if (json.type === 'stream' && json.token) {
-              const token = json.token;
-              completionTokens += countTokens(token);
-
-              if (token.includes('<think>')) {
-                isThinking = true;
-                const [before, after] = token.split('<think>');
-                if (before) onContent(before);
-                if (after && onThinking) onThinking(after);
-                else if (after) onContent(after);
-              } else if (token.includes('</think>')) {
-                isThinking = false;
-                const [before, after] = token.split('</think>');
-                if (before && onThinking) onThinking(before);
-                else if (before) onContent(before);
-                if (after) onContent(after);
-              } else {
-                if (isThinking && onThinking) onThinking(token);
-                else onContent(token);
-              }
-
-              if (onMetadata)
-                onMetadata({ total_token: promptTokens + completionTokens });
-            } else if (json.type === 'title' && json.title && onMetadata) {
-              onMetadata({ conversation_title: json.title });
-            }
-          } catch (e) {
-            logger.warn('[HuggingChat] Failed to parse SSE line:', e);
-          }
-        }
-      }
       onDone();
     } catch (err: any) {
       logger.error('[HuggingChat] Error in handleMessage:', err);
@@ -323,26 +322,35 @@ export class HuggingChatProvider implements Provider {
 
   // ─── Get Models ─────────────────────────────────────────────────────
 
-  async getModels(credential: string): Promise<any[]> {
+  async getModels(credential: string): Promise<HuggingChatModelOutput[]> {
     try {
       const client = this.createClient(credential);
-      const res = await client.get('/chat/api/v2/models');
-      const data = await res.json();
-      const modelsList = data.json || data.models || data || [];
+      const res = await client.get(API_PATHS.CHAT_MODELS);
+      const data = (await res.json()) as
+        | HuggingChatModelEntry[]
+        | HuggingChatModelsResponse;
+      const modelsList: HuggingChatModelEntry[] = Array.isArray(data)
+        ? data
+        : data[API_FIELDS.JSON] || data[API_FIELDS.MODELS] || [];
 
-      return modelsList.map((model: any) => {
+      return modelsList.map((model) => {
         let contextLength: number | null = null;
-        if (model.providers && Array.isArray(model.providers)) {
-          for (const provider of model.providers) {
-            if (provider.context_length) {
-              contextLength = provider.context_length;
+        const providers = model[API_FIELDS.PROVIDERS];
+        if (providers && Array.isArray(providers)) {
+          for (const provider of providers) {
+            const ctx = provider[API_FIELDS.CONTEXT_LENGTH];
+            if (ctx) {
+              contextLength = ctx;
               break;
             }
           }
         }
         return {
-          id: model.id,
-          name: model.displayName || model.name || model.id,
+          id: model[API_FIELDS.ID],
+          name:
+            model[API_FIELDS.DISPLAY_NAME] ||
+            model[API_FIELDS.NAME] ||
+            model[API_FIELDS.ID],
           is_thinking: false,
           max_context_length: contextLength,
         };
@@ -359,22 +367,11 @@ export class HuggingChatProvider implements Provider {
     return new HttpClient({
       baseURL: BASE_URL,
       headers: {
-        Cookie: cookie,
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
+        [HTTP_HEADER_NAMES.COOKIE]: cookie,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
       },
     });
-  }
-
-  // ─── Routes ─────────────────────────────────────────────────────────
-
-  registerRoutes(_router: Router) {}
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return (m.includes('/') && !m.includes(':free')) || m === 'omni';
   }
 }
 

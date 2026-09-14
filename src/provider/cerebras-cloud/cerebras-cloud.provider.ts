@@ -10,7 +10,7 @@
  * - login()          : Đăng nhập qua browser và lấy credential
  * - handleMessage()  : Gửi tin nhắn với streaming response
  * - getModels()      : Lấy danh sách models từ API
- * - getProfile()     : Lấy thông tin user profile
+ * - getUserProfile() : Lấy thông tin user profile
  * - rate limiting    : Tự động giới hạn request/token theo account
  *
  * Credential format:
@@ -33,13 +33,17 @@ import { loginService } from '../../services/login.service';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
-// ── Cerebras Imports ──
+// ── Cerebras Types ──
 import {
-  BASE_URL,
-  API_BASE_URL,
   CerebrasCompletionPayload,
   CerebrasUserInfo,
+  CerebrasUserSessionResponse,
+  CerebrasModelsResponse,
+  CerebrasModelEntry,
+  CerebrasModelOutput,
 } from './cerebras-cloud.types';
+
+// ── Cerebras Constants ──
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -49,9 +53,22 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  BASE_URL,
+  API_BASE_URL,
+  API_PATHS,
   CEREBRAS_EVENTS,
   USER_AGENT,
+  HTTP_HEADERS,
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  REFERER_PATHS,
+  PAYLOAD_DEFAULTS,
+  MODELS_DEFAULTS,
+  COOKIE_CONFIG,
+  LOGIN_PARTITION_PREFIX,
 } from './cerebras-cloud.constant';
+
+// ── Cerebras Internal ──
 import { proxyHandler } from './cerebras-cloud.proxy-handler';
 import { parseSSEStream } from './cerebras-cloud.sse-parser';
 import { usageTracker } from './cerebras-cloud.rate-limiter';
@@ -62,7 +79,7 @@ const logger = createLogger('CerebrasCloudProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class CerebrasCloudProvider implements Provider {
-  name = 'cerebras-cloud';
+  name = PROVIDER_ID;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -81,21 +98,21 @@ export class CerebrasCloudProvider implements Provider {
 
   async login() {
     return await loginService.captureCredentialsViaCDP({
-      providerId: 'cerebras-cloud',
-      loginUrl: `${BASE_URL}/`,
-      partition: `cerebras-cloud-${Date.now()}`,
+      providerId: PROVIDER_ID,
+      loginUrl: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+      partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
       cookieEvent: CEREBRAS_EVENTS.COOKIES,
       infoEvent: CEREBRAS_EVENTS.USER_INFO,
       validate: async (data: {
         cookies: string;
-        headers?: any;
+        headers?: Record<string, string>;
         email?: string;
       }) => {
         if (!data.cookies) return { isValid: false };
 
         const hasSessionToken =
-          data.cookies.includes('authjs.session-token') ||
-          data.cookies.includes('__Secure-authjs.callback-url');
+          data.cookies.includes(COOKIE_CONFIG.SESSION_TOKEN_NAME) ||
+          data.cookies.includes(COOKIE_CONFIG.CALLBACK_URL_NAME);
 
         if (!hasSessionToken) {
           logger.warn(
@@ -107,7 +124,7 @@ export class CerebrasCloudProvider implements Provider {
         let email = data.email;
 
         if (!email) {
-          const profile = await this.getProfile(data.cookies);
+          const profile = await this.getUserProfile(data.cookies);
           email = profile.email || undefined;
         }
 
@@ -122,20 +139,18 @@ export class CerebrasCloudProvider implements Provider {
 
   // ─── Get Profile ────────────────────────────────────────────────────
 
-  async getProfile(credential: string): Promise<CerebrasUserInfo> {
+  async getUserProfile(credential: string): Promise<CerebrasUserInfo> {
     try {
-      const response = await fetch(`${BASE_URL}/api/auth/session`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
         method: 'GET',
         headers: this.buildBaseHeaders(credential, BASE_URL),
       });
 
       if (response.ok) {
-        const json = (await response.json()) as any;
+        const json = (await response.json()) as CerebrasUserSessionResponse;
         if (json?.user) {
           return {
             email: json.user.email || null,
-            name: json.user.name,
-            id: json.user.id,
           };
         }
         logger.warn('[CerebrasCloud] Get Profile response missing user field');
@@ -149,29 +164,31 @@ export class CerebrasCloudProvider implements Provider {
 
   // ─── Get Models ─────────────────────────────────────────────────────
 
-  async getModels(credential: string): Promise<any[]> {
+  async getModels(credential: string): Promise<CerebrasModelOutput[]> {
     try {
       const apiKey = this.extractApiKey(credential);
 
       const headers: Record<string, string> = {
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Origin: BASE_URL,
-        Referer: `${BASE_URL}/`,
-        'sec-fetch-site': 'same-site',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-dest': 'empty',
-        'accept-language': 'en-US,en;q=0.9',
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+        [HTTP_HEADER_NAMES.SEC_FETCH_SITE]:
+          HTTP_HEADERS.SEC_FETCH_SITE_SAME_SITE,
+        [HTTP_HEADER_NAMES.SEC_FETCH_MODE]: HTTP_HEADERS.SEC_FETCH_MODE_CORS,
+        [HTTP_HEADER_NAMES.SEC_FETCH_DEST]: HTTP_HEADERS.SEC_FETCH_DEST_EMPTY,
+        [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: HTTP_HEADERS.ACCEPT_LANGUAGE,
       };
 
       if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+          `${HTTP_HEADERS.BEARER_PREFIX}${apiKey}`;
       } else {
-        headers['Cookie'] = credential;
+        headers[HTTP_HEADER_NAMES.COOKIE] = credential;
       }
 
-      const response = await fetch(`${API_BASE_URL}/v1/models`, {
+      const response = await fetch(`${API_BASE_URL}${API_PATHS.MODELS}`, {
         method: 'GET',
         headers,
       });
@@ -184,7 +201,7 @@ export class CerebrasCloudProvider implements Provider {
         return [];
       }
 
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as CerebrasModelsResponse;
       const modelsData = json.data || json.models || [];
 
       if (!Array.isArray(modelsData)) {
@@ -192,14 +209,17 @@ export class CerebrasCloudProvider implements Provider {
         return [];
       }
 
-      return modelsData.map((model: any) => ({
+      return modelsData.map((model: CerebrasModelEntry) => ({
         id: model.id,
         name: model.id,
         description: model.description || '',
-        max_context_length: model.context_window || model.max_tokens || 8192,
+        max_context_length:
+          model.context_window ||
+          model.max_tokens ||
+          MODELS_DEFAULTS.MAX_CONTEXT_LENGTH,
         is_thinking: false,
       }));
-    } catch (e: any) {
+    } catch (e) {
       logger.error('Error fetching Cerebras Cloud models:', e);
       return [];
     }
@@ -223,7 +243,7 @@ export class CerebrasCloudProvider implements Provider {
 
     const selectedModel = model;
     const apiKey = this.extractApiKey(credential);
-    const accountId = (options as any).accountId || credential.slice(0, 32);
+    const accountId = options.accountId || credential.slice(0, 32);
 
     const estimatedInputTokens = messages.reduce(
       (sum, m) => sum + Math.ceil((m.content?.length || 0) / 4),
@@ -245,20 +265,26 @@ export class CerebrasCloudProvider implements Provider {
       })),
       model: selectedModel,
       stream: true,
-      temperature: typeof temperature === 'number' ? temperature : 1,
-      max_completion_tokens: 65000,
-      top_p: '0.95',
+      temperature:
+        typeof temperature === 'number'
+          ? temperature
+          : PAYLOAD_DEFAULTS.TEMPERATURE,
+      max_completion_tokens: PAYLOAD_DEFAULTS.MAX_COMPLETION_TOKENS,
+      top_p: PAYLOAD_DEFAULTS.TOP_P,
       tools: [],
     };
 
     try {
       const headers = this.buildApiHeaders(credential, apiKey);
 
-      const response = await fetch(`${API_BASE_URL}/v1/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}${API_PATHS.CHAT_COMPLETIONS}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -272,9 +298,10 @@ export class CerebrasCloudProvider implements Provider {
       }
 
       let totalTokensUsed = 0;
-      const wrappedOnMetadata = (meta: any) => {
-        if (meta?.total_token && meta.total_token > totalTokensUsed) {
-          totalTokensUsed = meta.total_token;
+      const wrappedOnMetadata = (meta: Record<string, unknown>) => {
+        const total = meta?.total_token;
+        if (typeof total === 'number' && total > totalTokensUsed) {
+          totalTokensUsed = total;
         }
         if (onMetadata) onMetadata(meta);
       };
@@ -291,7 +318,7 @@ export class CerebrasCloudProvider implements Provider {
       }
 
       onDone();
-    } catch (err: any) {
+    } catch (err) {
       logger.error('[CerebrasCloud] Error in handleMessage:', err);
       onError(err);
     }
@@ -306,7 +333,7 @@ export class CerebrasCloudProvider implements Provider {
   // ─── Helpers ────────────────────────────────────────────────────────
 
   private extractApiKey(credential: string): string | null {
-    if (credential.trim().startsWith('csk-')) {
+    if (credential.trim().startsWith(COOKIE_CONFIG.API_KEY_PREFIX)) {
       return credential.trim();
     }
 
@@ -322,33 +349,39 @@ export class CerebrasCloudProvider implements Provider {
     apiKey: string | null,
   ): Record<string, string> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'User-Agent': USER_AGENT,
-      Origin: BASE_URL,
-      Referer: `${BASE_URL}/`,
-      'sec-ch-ua':
-        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Linux"',
-      'sec-fetch-site': 'same-site',
-      'sec-fetch-mode': 'cors',
-      'sec-fetch-dest': 'empty',
-      'accept-language': 'en-US,en;q=0.9',
-      'x-stainless-lang': 'js',
-      'x-stainless-runtime': 'browser:chrome',
-      'x-stainless-runtime-version': '146.0.0',
-      'x-stainless-package-version': '1.64.1',
-      'x-stainless-os': 'Unknown',
-      'x-stainless-arch': 'unknown',
-      'x-stainless-retry-count': '0',
-      'x-stainless-timeout': '10',
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: HTTP_HEADERS.SEC_CH_UA,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: HTTP_HEADERS.SEC_CH_UA_MOBILE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: HTTP_HEADERS.SEC_CH_UA_PLATFORM,
+      [HTTP_HEADER_NAMES.SEC_FETCH_SITE]:
+        HTTP_HEADERS.SEC_FETCH_SITE_SAME_SITE,
+      [HTTP_HEADER_NAMES.SEC_FETCH_MODE]: HTTP_HEADERS.SEC_FETCH_MODE_CORS,
+      [HTTP_HEADER_NAMES.SEC_FETCH_DEST]: HTTP_HEADERS.SEC_FETCH_DEST_EMPTY,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: HTTP_HEADERS.ACCEPT_LANGUAGE,
+      [HTTP_HEADER_NAMES.X_STAINLESS_LANG]: HTTP_HEADERS.X_STAINLESS_LANG,
+      [HTTP_HEADER_NAMES.X_STAINLESS_RUNTIME]:
+        HTTP_HEADERS.X_STAINLESS_RUNTIME,
+      [HTTP_HEADER_NAMES.X_STAINLESS_RUNTIME_VERSION]:
+        HTTP_HEADERS.X_STAINLESS_RUNTIME_VERSION,
+      [HTTP_HEADER_NAMES.X_STAINLESS_PACKAGE_VERSION]:
+        HTTP_HEADERS.X_STAINLESS_PACKAGE_VERSION,
+      [HTTP_HEADER_NAMES.X_STAINLESS_OS]: HTTP_HEADERS.X_STAINLESS_OS,
+      [HTTP_HEADER_NAMES.X_STAINLESS_ARCH]: HTTP_HEADERS.X_STAINLESS_ARCH,
+      [HTTP_HEADER_NAMES.X_STAINLESS_RETRY_COUNT]:
+        HTTP_HEADERS.X_STAINLESS_RETRY_COUNT,
+      [HTTP_HEADER_NAMES.X_STAINLESS_TIMEOUT]:
+        HTTP_HEADERS.X_STAINLESS_TIMEOUT,
     };
 
     if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+        `${HTTP_HEADERS.BEARER_PREFIX}${apiKey}`;
     } else {
-      headers['Cookie'] = credential;
+      headers[HTTP_HEADER_NAMES.COOKIE] = credential;
     }
 
     return headers;
@@ -359,57 +392,21 @@ export class CerebrasCloudProvider implements Provider {
     refererBase: string,
   ): Record<string, string> {
     return {
-      'Content-Type': 'application/json',
-      Accept: '*/*',
-      'User-Agent': USER_AGENT,
-      Origin: refererBase,
-      Referer: `${refererBase}/`,
-      'sec-ch-ua':
-        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Linux"',
-      'sec-fetch-site': 'same-origin',
-      'sec-fetch-mode': 'cors',
-      'sec-fetch-dest': 'empty',
-      'accept-language': 'en-US,en;q=0.9',
-      Cookie: credential,
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_ANY,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      [HTTP_HEADER_NAMES.ORIGIN]: refererBase,
+      [HTTP_HEADER_NAMES.REFERER]: `${refererBase}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: HTTP_HEADERS.SEC_CH_UA,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: HTTP_HEADERS.SEC_CH_UA_MOBILE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: HTTP_HEADERS.SEC_CH_UA_PLATFORM,
+      [HTTP_HEADER_NAMES.SEC_FETCH_SITE]:
+        HTTP_HEADERS.SEC_FETCH_SITE_SAME_ORIGIN,
+      [HTTP_HEADER_NAMES.SEC_FETCH_MODE]: HTTP_HEADERS.SEC_FETCH_MODE_CORS,
+      [HTTP_HEADER_NAMES.SEC_FETCH_DEST]: HTTP_HEADERS.SEC_FETCH_DEST_EMPTY,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: HTTP_HEADERS.ACCEPT_LANGUAGE,
+      [HTTP_HEADER_NAMES.COOKIE]: credential,
     };
-  }
-
-  // ─── Routes & Misc ──────────────────────────────────────────────────
-
-  registerRoutes(router: Router) {
-    router.get('/usage', (req, res) => {
-      const accountId = req.query.accountId as string;
-      if (!accountId) {
-        res
-          .status(400)
-          .json({ success: false, message: 'accountId is required' });
-        return;
-      }
-      const summary = usageTracker.getUsageSummary(accountId);
-      res.json({
-        success: true,
-        data: {
-          accountId,
-          usage: summary,
-          limits: { requests: 5, tokens: 30000 },
-        },
-      });
-    });
-  }
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return (
-      m.includes('cerebras') ||
-      m.includes('llama3') ||
-      m.includes('llama-3') ||
-      m.includes('qwen-3') ||
-      m.includes('gpt-oss') ||
-      m.includes('zai-glm') ||
-      m.includes('csk-')
-    );
   }
 }
 

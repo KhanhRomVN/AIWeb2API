@@ -33,6 +33,10 @@ export const PROVIDER_NAME = 'Kimi';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://www.kimi.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
+export const KIMI_AUTH_METHODS = {
+  BASIC: 'basic',
+  GOOGLE: 'google',
+} as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
@@ -152,3 +156,216 @@ export const AUTH_REFRESH_URL =
 export const CHAT_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.chat.v1.ChatService/Chat`;
 export const GET_USER_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.account.v1.UserService/GetCurrentUser`;
 export const LIST_THIRD_ACCOUNTS_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.account.v1.SecurityService/ListThirdAccounts`;
+
+// ─── Hosts ───────────────────────────────────────────────────────────
+
+export const HOSTS = {
+  KIMI_AI: 'kimi.ai',
+  KIMI_COM: 'kimi.com',
+  MOONSHOT_CN: 'moonshot.cn',
+  AUTH_KIMI: 'auth.kimi.ai',
+} as const;
+
+// ─── HTTP Header Names ───────────────────────────────────────────────
+
+export const HTTP_HEADER_NAMES = {
+  AUTHORIZATION: 'Authorization',
+  CONTENT_TYPE: 'Content-Type',
+  ACCEPT: 'Accept',
+  USER_AGENT: 'User-Agent',
+  ORIGIN: 'Origin',
+  REFERER: 'Referer',
+  COOKIE: 'Cookie',
+  X_MSH_DEVICE_ID: 'x-msh-device-id',
+  X_MSH_SESSION_ID: 'x-msh-session-id',
+  X_TRAFFIC_ID: 'x-traffic-id',
+  CONNECT_PROTOCOL_VERSION: 'connect-protocol-version',
+  R_TIMEZONE: 'r-timezone',
+} as const;
+
+export const HTTP_HEADER_NAMES_LOWERCASE = {
+  AUTHORIZATION: 'authorization',
+  COOKIE: 'cookie',
+  USER_AGENT: 'user-agent',
+} as const;
+
+// ─── Content Types ───────────────────────────────────────────────────
+
+export const CONTENT_TYPES = {
+  JSON: 'application/json',
+  CONNECT_JSON: 'application/connect+json',
+} as const;
+
+// ─── Referer Paths ───────────────────────────────────────────────────
+
+export const REFERER_PATHS = {
+  ROOT: '/',
+} as const;
+
+// ─── Auth Prefixes ───────────────────────────────────────────────────
+
+export const AUTH_PREFIXES = {
+  BEARER: 'Bearer ',
+  JWT: 'eyJ',
+} as const;
+
+// ─── Credential / Cookie Keys ────────────────────────────────────────
+
+export const CREDENTIAL_KEYS = {
+  KIMI_AUTH: 'kimi-auth',
+  KIMI_REFRESH: 'kimi-refresh',
+  REFRESH_TOKEN: 'refresh_token',
+  ACCESS_TOKEN: 'access_token',
+  TOKEN: 'token',
+} as const;
+
+// ─── Regex Patterns ──────────────────────────────────────────────────
+
+export const REGEX_PATTERNS = {
+  KIMI_AUTH: /kimi-auth=([^;]+)/,
+  KIMI_REFRESH: /kimi-refresh=([^;]+)/,
+  REFRESH_TOKEN: /refresh_token=([^;]+)/,
+  ACCESS_TOKEN: /access_token=([^;]+)/,
+  TOKEN: /token=([^;]+)/,
+  ID_TOKEN: /id_token=([^&#]+)/,
+  ID_TOKEN_NO_HASH: /id_token=([^&]+)/,
+} as const;
+
+// ─── API Field Names ─────────────────────────────────────────────────
+
+export const AUTH_FIELDS = {
+  ACCESS_TOKEN: 'accessToken',
+  ACCESS_TOKEN_SNAKE: 'access_token',
+  REFRESH_TOKEN: 'refreshToken',
+  REFRESH_TOKEN_SNAKE: 'refresh_token',
+  TOKEN: 'token',
+  DATA: 'data',
+  USER: 'user',
+  EMAIL: 'email',
+  NAME: 'name',
+  NICKNAME: 'nickname',
+  ID: 'id',
+  THIRD_PARTY: 'thirdParty',
+} as const;
+
+export const JWT_PAYLOAD_FIELDS = {
+  EMAIL: 'email',
+  NAME: 'name',
+  NICKNAME: 'nickname',
+  SUB: 'sub',
+  ABSTRACT_USER_ID: 'abstract_user_id',
+  ID: 'id',
+} as const;
+
+export const CHAT_REQUEST_FIELDS = {
+  SCENARIO: 'scenario',
+  OPTIONS: 'options',
+  MESSAGE: 'message',
+  ROLE: 'role',
+  BLOCKS: 'blocks',
+  TEXT: 'text',
+  CONTENT: 'content',
+  THINKING: 'thinking',
+  ENABLE_PLUGIN: 'enable_plugin',
+  REASONING_EFFORT: 'reasoning_effort',
+  MODEL: 'model',
+  TOOLS: 'tools',
+  TYPE: 'type',
+  SEARCH: 'search',
+  CHAT_ID: 'chat_id',
+  KIMIPLUS_ID: 'kimiplus_id',
+} as const;
+
+export const SSE_EVENT_FIELDS = {
+  DONE: 'done',
+  HEARTBEAT: 'heartbeat',
+  ERROR: 'error',
+  DETAILS: 'details',
+  DEBUG: 'debug',
+  LOCALIZED_MESSAGE: 'localizedMessage',
+  MESSAGE: 'message',
+  CODE: 'code',
+  CHAT: 'chat',
+  LAST_REQUEST: 'lastRequest',
+  ID: 'id',
+  BLOCK: 'block',
+  TEXT: 'text',
+  THINK: 'think',
+  CONTENT: 'content',
+  MASK: 'mask',
+  MULTI_STAGE: 'multiStage',
+  STAGE: 'stage',
+  STATUS: 'status',
+} as const;
+
+// ─── Scenario / Model / Reasoning Values ─────────────────────────────
+
+export const SCENARIOS = {
+  K2D5: 'SCENARIO_K2D5',
+  OK_COMPUTER: 'SCENARIO_OK_COMPUTER',
+} as const;
+
+export const KIMI_CHAT_MODELS = {
+  K2D6_CHAT: 'k2d6-chat',
+  OK_COMPUTER: 'ok-computer',
+} as const;
+
+export const REASONING_EFFORTS = {
+  HIGH: 'REASONING_EFFORT_HIGH',
+  LOW: 'REASONING_EFFORT_LOW',
+} as const;
+
+export const TOOL_TYPES = {
+  SEARCH: 'TOOL_TYPE_SEARCH',
+} as const;
+
+// ─── SSE Frame Protocol ──────────────────────────────────────────────
+
+export const FRAME_PROTOCOL = {
+  HEADER_SIZE: 5,
+  FLAG_BYTE_OFFSET: 0,
+  FLAG_BYTE_VALUE: 0,
+  LENGTH_OFFSET: 1,
+  ENCODING: 'utf8',
+} as const;
+
+export const SSE_STAGES = {
+  NAME_THINKING: 'STAGE_NAME_THINKING',
+} as const;
+
+export const SSE_MESSAGE_STATUSES = {
+  COMPLETED: 'MESSAGE_STATUS_COMPLETED',
+} as const;
+
+export const SSE_MASKS = {
+  BLOCK_TEXT_CONTENT: 'block.text.content',
+  BLOCK_THINK_CONTENT: 'block.think.content',
+} as const;
+
+// ─── URL / Encoding Patterns ─────────────────────────────────────────
+
+export const URL_PATTERNS = {
+  GOOGLE_CALLBACK: 'google-callback',
+  ID_TOKEN_PARAM: 'id_token=',
+} as const;
+
+export const ENCODINGS = {
+  BASE64URL: 'base64url',
+  UTF8: 'utf8',
+} as const;
+
+// ─── ID Config ───────────────────────────────────────────────────────
+
+export const ID_PREFIXES = {
+  DEVICE: 'dev_',
+  SESSION: 'sess_',
+  TEMP_CHAT: 'kimi_temp_',
+  USER: 'Kimi_',
+} as const;
+
+export const ID_RANDOM_BYTES = 8;
+export const JWT_SUB_PREFIX_LENGTH = 8;
+export const DEFAULT_EMAIL = 'kimi_user@kimi.ai';
+export const DEFAULT_TIMEZONE = 'Asia/Saigon';
+export const DEFAULT_TIMEOUT_MS = 120000;
+export const LOGIN_PARTITION_PREFIX = 'kimi-';

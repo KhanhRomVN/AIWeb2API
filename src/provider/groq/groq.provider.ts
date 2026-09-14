@@ -10,7 +10,7 @@
  * - login()          : Đăng nhập qua browser và capture cookie
  * - handleMessage()  : Gửi tin nhắn với streaming response
  * - getModels()      : Lấy danh sách models từ API
- * - getProfile()     : Lấy email từ JWT trong cookie
+ * - getUserProfile() : Lấy email từ JWT trong cookie
  *
  * Credential format:
  * - cookies          : Cookie string (chứa stytch_session_jwt)
@@ -19,7 +19,6 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import { Router } from 'express';
 import fetch from 'node-fetch';
 
 // ── Types ──
@@ -33,6 +32,13 @@ import { createLogger } from '../../utils/logger';
 
 // ── Groq Imports ──
 import { proxyHandler } from './groq.proxy-handler';
+import { parseSSEStream } from './groq.sse-parser';
+import {
+  GroqChatPayload,
+  GroqJwtPayload,
+  GroqModelInfo,
+  GroqModelRaw,
+} from './groq.types';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -46,7 +52,21 @@ import {
   API_CHAT_COMPLETIONS_URL,
   API_MODELS_URL,
   SESSION_COOKIE_NAME,
+  PREFERENCES_ORG_KEY,
+  BEARER_PREFIX,
+  DEFAULT_LOGIN_PATH,
+  LOGIN_PARTITION_PREFIX,
+  JWT_SESSION_CLAIM,
+  JWT_AUTH_FACTORS_KEY,
+  JWT_EMAIL_FACTOR_KEY,
+  JWT_EMAIL_ADDRESS_KEY,
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  REFERER_PATHS,
+  USER_AGENT,
+  API_FIELDS,
   GROQ_EVENTS,
+  REGEX_PATTERNS,
 } from './groq.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -55,7 +75,7 @@ const logger = createLogger('GroqProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class GroqProvider implements Provider {
-  name = 'Groq';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -74,9 +94,9 @@ export class GroqProvider implements Provider {
 
   async login() {
     return await loginService.captureCredentialsViaCDP({
-      providerId: 'groq',
-      loginUrl: `${BASE_URL}/login`,
-      partition: `groq-${Date.now()}`,
+      providerId: PROVIDER_ID,
+      loginUrl: `${BASE_URL}${DEFAULT_LOGIN_PATH}`,
+      partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
       cookieEvent: GROQ_EVENTS.COOKIES,
       validate: async (data: {
         cookies: string;
@@ -84,43 +104,10 @@ export class GroqProvider implements Provider {
         email?: string;
       }) => {
         if (!data.cookies) return { isValid: false };
-
-        let email: string | null = null;
-        try {
-          const cookieList = data.cookies.split(';').map((c) => {
-            const parts = c.trim().split('=');
-            return { name: parts[0], value: parts.slice(1).join('=') };
-          });
-
-          const sessionJwt = cookieList.find(
-            (c) => c.name === SESSION_COOKIE_NAME,
-          )?.value;
-          if (sessionJwt) {
-            const base64Url = sessionJwt.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(
-              atob(base64)
-                .split('')
-                .map(
-                  (c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2),
-                )
-                .join(''),
-            );
-            const payload = JSON.parse(jsonPayload);
-            const stytchSession = payload['https://stytch.com/session'];
-            if (
-              stytchSession?.authentication_factors?.[0]?.email_factor
-                ?.email_address
-            ) {
-              email =
-                stytchSession.authentication_factors[0].email_factor
-                  .email_address;
-            }
-          }
-        } catch (e) {
-          logger.warn('[Groq] Failed to extract email from JWT:', e);
+        const email = this.extractEmailFromSessionCookie(data.cookies);
+        if (!email) {
+          logger.warn('[Groq] Login: no email found in session JWT');
         }
-
         return { isValid: true, cookies: data.cookies, email };
       },
     });
@@ -128,46 +115,14 @@ export class GroqProvider implements Provider {
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
-    let email: string | null = null;
-    try {
-      const cookieList = credential.split(';').map((c) => {
-        const parts = c.trim().split('=');
-        return { name: parts[0], value: parts.slice(1).join('=') };
-      });
-
-      const sessionJwt = cookieList.find(
-        (c) => c.name === SESSION_COOKIE_NAME,
-      )?.value;
-      if (sessionJwt) {
-        const base64Url = sessionJwt.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-          atob(base64)
-            .split('')
-            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join(''),
-        );
-        const payload = JSON.parse(jsonPayload);
-        const stytchSession = payload['https://stytch.com/session'];
-        if (
-          stytchSession?.authentication_factors?.[0]?.email_factor
-            ?.email_address
-        ) {
-          email =
-            stytchSession.authentication_factors[0].email_factor.email_address;
-        }
-      }
-      if (!email) {
-        logger.warn('[Groq] Get Profile: no email found in session JWT');
-      }
-      return { email };
-    } catch (e) {
-      logger.error('[Groq] Get Profile Error:', e);
-      return { email: null };
+    const email = this.extractEmailFromSessionCookie(credential);
+    if (!email) {
+      logger.warn('[Groq] Get Profile: no email found in session JWT');
     }
+    return { email };
   }
 
   // ─── Handle Message ─────────────────────────────────────────────────
@@ -183,7 +138,7 @@ export class GroqProvider implements Provider {
       onError,
     } = options;
 
-    const payload: any = {
+    const payload: GroqChatPayload = {
       model: model,
       messages: messages.map((m) => ({
         role: m.role.toLowerCase(),
@@ -200,10 +155,10 @@ export class GroqProvider implements Provider {
       const response = await fetch(API_CHAT_COMPLETIONS_URL, {
         method: 'POST',
         headers: {
-          Cookie: credential,
-          'Content-Type': 'application/json',
-          Origin: BASE_URL,
-          Referer: `${BASE_URL}/`,
+          [HTTP_HEADER_NAMES.COOKIE]: credential,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+          [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+          [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
         },
         body: JSON.stringify(payload),
       });
@@ -218,29 +173,9 @@ export class GroqProvider implements Provider {
         throw new Error('No response body');
       }
 
-      let buffer = '';
-      for await (const chunk of response.body) {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine || trimmedLine === 'data: [DONE]') continue;
-
-          if (trimmedLine.startsWith('data: ')) {
-            try {
-              const json = JSON.parse(trimmedLine.substring(6));
-              const delta = json.choices?.[0]?.delta;
-              if (delta?.content) {
-                onContent(delta.content);
-              }
-            } catch (e) {
-              logger.warn('[Groq] Failed to parse SSE line:', e);
-            }
-          }
-        }
-      }
+      await parseSSEStream(response.body, {
+        onContent,
+      });
 
       onDone();
     } catch (err: any) {
@@ -255,14 +190,12 @@ export class GroqProvider implements Provider {
     return this.handleMessage(options);
   }
 
-  // ─── Get Models ─────���───────────────────────────────────────────────
+  // ─── Get Models ─────────────────────────────────────────────────────
 
-  async getModels(credential: string): Promise<any[]> {
+  async getModels(credential: string): Promise<GroqModelInfo[]> {
     try {
       let token = '';
-      const match = credential.match(
-        new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`),
-      );
+      const match = credential.match(REGEX_PATTERNS.SESSION_COOKIE);
       if (match && match[1]) {
         token = match[1];
       }
@@ -278,31 +211,30 @@ export class GroqProvider implements Provider {
 
       let organization = '';
       const preferencesMatch = credential.match(
-        /(?:^|;\s*)user-preferences=([^;]+)/,
+        REGEX_PATTERNS.PREFERENCES_COOKIE,
       );
       if (preferencesMatch && preferencesMatch[1]) {
         try {
           const preferences = JSON.parse(
             decodeURIComponent(preferencesMatch[1]),
           );
-          organization = preferences['current-org'];
+          organization = preferences[PREFERENCES_ORG_KEY];
         } catch (e) {
           logger.warn('Failed to parse user-preferences from cookie', e);
         }
       }
 
       const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-        Cookie: credential,
-        'Content-Type': 'application/json',
-        Origin: BASE_URL,
-        Referer: `${BASE_URL}/`,
-        'User-Agent':
-          'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${BEARER_PREFIX}${token}`,
+        [HTTP_HEADER_NAMES.COOKIE]: credential,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
       };
 
       if (organization) {
-        headers['groq-organization'] = organization;
+        headers[HTTP_HEADER_NAMES.GROQ_ORGANIZATION] = organization;
       }
 
       const response = await fetch(API_MODELS_URL, {
@@ -318,8 +250,8 @@ export class GroqProvider implements Provider {
         return [];
       }
 
-      const json = await response.json();
-      const modelsData = json.data || [];
+      const json = (await response.json()) as { data?: GroqModelRaw[] };
+      const modelsData = json[API_FIELDS.DATA] || [];
 
       if (!Array.isArray(modelsData)) {
         logger.warn('[Groq] Models API returned invalid format');
@@ -327,13 +259,16 @@ export class GroqProvider implements Provider {
       }
 
       return modelsData
-        .filter((model: any) => model.active !== false)
-        .map((model: any) => ({
-          id: model.id,
-          name: model.metadata?.display_name || model.id,
-          description: model.metadata?.model_card,
-          max_context_length: model.context_window,
-          is_thinking: model.features?.reasoning === true,
+        .filter((model) => model[API_FIELDS.ACTIVE] !== false)
+        .map<GroqModelInfo>((model) => ({
+          id: model[API_FIELDS.ID],
+          name:
+            model[API_FIELDS.METADATA]?.[API_FIELDS.DISPLAY_NAME] ||
+            model[API_FIELDS.ID],
+          description: model[API_FIELDS.METADATA]?.[API_FIELDS.MODEL_CARD],
+          max_context_length: model[API_FIELDS.CONTEXT_WINDOW],
+          is_thinking:
+            model[API_FIELDS.FEATURES]?.[API_FIELDS.REASONING] === true,
         }));
     } catch (e: any) {
       logger.error('Error fetching Groq models:', e);
@@ -341,15 +276,45 @@ export class GroqProvider implements Provider {
     }
   }
 
-  // ─── Routes ─────────────────────────────────────────────────────────
+  // ─── Utility Methods ────────────────────────────────────────────────
 
-  registerRoutes(_router: Router) {}
+  /**
+   * Giải mã JWT trong cookie `stytch_session_jwt` để lấy email.
+   * Trả `null` nếu không tìm thấy cookie hoặc payload không đúng shape.
+   */
+  private extractEmailFromSessionCookie(cookie: string): string | null {
+    try {
+      const cookieList = cookie.split(';').map((c) => {
+        const parts = c.trim().split('=');
+        return { name: parts[0], value: parts.slice(1).join('=') };
+      });
 
-  // ─── Model Support ──────────────────────────────────────────────────
+      const sessionJwt = cookieList.find(
+        (c) => c.name === SESSION_COOKIE_NAME,
+      )?.value;
+      if (!sessionJwt) return null;
 
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('groq') || m.includes('llama') || m.includes('mixtral');
+      const base64Url = sessionJwt.split('.')[1];
+      const base64 = base64Url
+        .replace(REGEX_PATTERNS.BASE64URL_DASH, '+')
+        .replace(REGEX_PATTERNS.BASE64URL_UNDERSCORE, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join(''),
+      );
+      const payload = JSON.parse(jsonPayload) as GroqJwtPayload;
+      const session = payload[JWT_SESSION_CLAIM];
+      const email =
+        session?.[JWT_AUTH_FACTORS_KEY]?.[0]?.[JWT_EMAIL_FACTOR_KEY]?.[
+          JWT_EMAIL_ADDRESS_KEY
+        ];
+      return email || null;
+    } catch (e) {
+      logger.warn('[Groq] Failed to extract email from JWT:', e);
+      return null;
+    }
   }
 }
 

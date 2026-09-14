@@ -26,14 +26,10 @@ export interface SendMessageOptions {
 export interface Provider {
   name: string;
   handleMessage(options: SendMessageOptions): Promise<void>;
-  registerRoutes?(router: Router): void;
   uploadFile?(credential: string, file: any): Promise<any>;
   getModels?(credential: string, accountId?: string): Promise<any[]>;
-  isModelSupported?(model: string): boolean;
   login?(options?: any): Promise<any>;
-  getProfile?(
-    credential: string,
-  ): Promise<{ email: string | null; name?: string; id?: string }>;
+  getUserProfile?(credential: string): Promise<{ email: string | null }>;
   refreshToken?(refreshToken: string): Promise<any>;
   getUsage?(
     credential: string,

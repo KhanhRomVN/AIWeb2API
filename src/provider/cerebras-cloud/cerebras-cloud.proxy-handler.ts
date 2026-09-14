@@ -20,20 +20,28 @@ import { proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
 
 // ── Constants ──
-import { CEREBRAS_EVENTS } from './cerebras-cloud.constant';
+import {
+  CEREBRAS_EVENTS,
+  HOSTS,
+  API_PATHS,
+  COOKIE_CONFIG,
+} from './cerebras-cloud.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('CerebrasProxy');
 
-// ─── Proxy Handler ────────────────────────────────────────────────────
+// ─── Proxy Handler ───────────────────────────────────────────────────��
 
 export const proxyHandler: ProxyHandler = {
   onRequest: (ctx: any, callback: () => void) => {
     const host = ctx.clientToProxyRequest.headers.host;
 
-    if (host && host.includes('cloud.cerebras.ai')) {
+    if (host && host.includes(HOSTS.CEREBRAS_CLOUD)) {
       const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-      if (reqCookies && reqCookies.includes('authjs.session-token')) {
+      if (
+        reqCookies &&
+        reqCookies.includes(COOKIE_CONFIG.SESSION_TOKEN_NAME)
+      ) {
         proxyEvents.emit(CEREBRAS_EVENTS.COOKIES, reqCookies);
       }
     }
@@ -46,8 +54,8 @@ export const proxyHandler: ProxyHandler = {
 
     if (
       host &&
-      host.includes('cloud.cerebras.ai') &&
-      url.includes('/api/auth/session')
+      host.includes(HOSTS.CEREBRAS_CLOUD) &&
+      url.includes(API_PATHS.AUTH_SESSION)
     ) {
       try {
         const json = JSON.parse(body);

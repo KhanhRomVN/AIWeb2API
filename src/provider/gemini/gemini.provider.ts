@@ -9,7 +9,7 @@
  * Main features:
  * - login()          : Đăng nhập qua browser và capture cookies
  * - handleMessage()  : Gửi tin nhắn với streaming response
- * - getProfile()     : Lấy thông tin user profile từ HTML
+ * - getUserProfile() : Lấy thông tin user profile từ HTML
  * - XSRF retry       : Tự động retry với XSRF token từ error response
  * - Model mapping    : Hỗ trợ các mode: FAST, THINKING, PRO, AUTO
  *
@@ -24,7 +24,6 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import { Router } from 'express';
 import fetch from 'node-fetch';
 
 // ── Types ──
@@ -36,10 +35,10 @@ import { proxyEvents } from '../../services/proxy.service';
 
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
-import { countTokens, countMessagesTokens } from '../../utils/tokenizer';
+import { countMessagesTokens } from '../../utils/tokenizer';
 
 // ── Gemini Imports ──
-import { GeminiCredential } from './gemini.types';
+import { GeminiCredential, GeminiModelConfig } from './gemini.types';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -53,16 +52,27 @@ import {
   BASE_URL,
   USER_AGENT,
   GEMINI_EVENTS,
+  GEMINI_AUTH_METHODS,
   MODEL_MAP,
-} from './gemini.constants';
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  REGEX_PATTERNS,
+  DEFAULT_LOGIN_PATH,
+  LOGIN_PARTITION_PREFIX,
+  COOKIE_NAMES,
+  GEMINI_DEFAULT_MODE,
+  GEMINI_DEFAULT_THINK,
+  MAX_RETRY_ATTEMPTS,
+  XSRF_WAIT_MS,
+  ERROR_SLICE_LENGTH,
+} from './gemini.constant';
 import { proxyHandler } from './gemini.proxy-handler';
+import { parseSSEStream } from './gemini.sse-parser';
 import {
   makeSapisidHash,
   getAccountPrefix,
   buildRequestBody,
   getStreamGenerateUrl,
-  extractTextsFromLine,
-  cleanText,
 } from './gemini.helpers';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -71,7 +81,7 @@ const logger = createLogger('GeminiProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class GeminiProvider implements Provider {
-  name = 'gemini';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -89,24 +99,26 @@ export class GeminiProvider implements Provider {
 
   // ─── Profile ─────────────────────────────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
       const cred = this.parseCredential(credential);
       const prefix = getAccountPrefix(cred.authUser);
-      const url = `${BASE_URL}${prefix}/app`;
+      const url = `${BASE_URL}${prefix}${DEFAULT_LOGIN_PATH}`;
       const headers: Record<string, string> = {
-        'User-Agent': USER_AGENT,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
       };
       if (cred.cookies) {
-        headers['Cookie'] = cred.cookies;
+        headers[HTTP_HEADER_NAMES.COOKIE] = cred.cookies;
       }
       if (cred.sapisid) {
-        headers['Authorization'] = makeSapisidHash(cred.sapisid);
+        headers[HTTP_HEADER_NAMES.AUTHORIZATION] = makeSapisidHash(
+          cred.sapisid,
+        );
       }
       if (cred.authUser) {
-        headers['X-Goog-AuthUser'] = cred.authUser;
+        headers[HTTP_HEADER_NAMES.X_GOOG_AUTH_USER] = cred.authUser;
       }
 
       const response = await fetch(url, { method: 'GET', headers });
@@ -114,8 +126,8 @@ export class GeminiProvider implements Provider {
       if (response.ok) {
         const html = await response.text();
         const emailMatch =
-          html.match(/"email"\s*:\s*"([^"]+@[^"]+)"/) ||
-          html.match(/userEmail["']?\s*:\s*["']([^"']+)["']/);
+          html.match(REGEX_PATTERNS.EMAIL_IN_HTML) ||
+          html.match(REGEX_PATTERNS.USER_EMAIL_IN_HTML);
         if (emailMatch && emailMatch[1]) {
           return { email: emailMatch[1] };
         }
@@ -138,15 +150,15 @@ export class GeminiProvider implements Provider {
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login(options?: { method?: 'google' | 'basic' }) {
-    const method = options?.method || 'google';
-    const loginUrl = `${BASE_URL}/app`;
+    const method = options?.method || GEMINI_AUTH_METHODS.GOOGLE;
+    const loginUrl = `${BASE_URL}${DEFAULT_LOGIN_PATH}`;
 
     let validating = false;
     const captured = { xsrfToken: '', authUser: '' };
-    const onXsrf = (data: any) => {
+    const onXsrf = (data: { xsrfToken?: string } | undefined) => {
       if (data?.xsrfToken) captured.xsrfToken = data.xsrfToken;
     };
-    const onAuthUser = (data: any) => {
+    const onAuthUser = (data: { authUser?: string } | undefined) => {
       if (data?.authUser) captured.authUser = data.authUser;
     };
     proxyEvents.on(GEMINI_EVENTS.XSRF, onXsrf);
@@ -154,9 +166,9 @@ export class GeminiProvider implements Provider {
 
     return await loginService
       .captureCredentialsViaCDP({
-        providerId: 'gemini',
+        providerId: PROVIDER_ID,
         loginUrl,
-        partition: `gemini-${Date.now()}`,
+        partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
         cookieEvent: GEMINI_EVENTS.COOKIES,
         infoEvent: GEMINI_EVENTS.EMAIL,
         extraEvents: [
@@ -178,13 +190,15 @@ export class GeminiProvider implements Provider {
             const cookie = data.cookies;
             let email = data.email;
 
-            const sapisidMatch = cookie.match(/SAPISID=([^;]+)/);
+            const sapisidMatch = cookie.match(
+              REGEX_PATTERNS.SAPISID_IN_COOKIE,
+            );
             const sapisid = sapisidMatch ? sapisidMatch[1] : '';
 
             if (!email) {
               try {
                 const credStr = JSON.stringify({ cookies: cookie, sapisid });
-                const profile = await this.getProfile(credStr);
+                const profile = await this.getUserProfile(credStr);
                 email = profile.email || undefined;
               } catch (e) {
                 logger.warn(
@@ -195,11 +209,12 @@ export class GeminiProvider implements Provider {
             }
 
             if (!captured.xsrfToken) {
-              await new Promise((r) => setTimeout(r, 1500));
+              await new Promise((r) => setTimeout(r, XSRF_WAIT_MS));
             }
 
             const hasSID =
-              cookie.includes('SID=') && cookie.includes('__Secure-1PSID=');
+              cookie.includes(COOKIE_NAMES.SID) &&
+              cookie.includes(COOKIE_NAMES.SECURE_1PSID);
             if (hasSID) {
               const credential = JSON.stringify({
                 cookies: cookie,
@@ -278,22 +293,23 @@ export class GeminiProvider implements Provider {
 
       const buildHeaders = (c: typeof cred): Record<string, string> => {
         const h: Record<string, string> = {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Origin: BASE_URL,
-          Referer: `${BASE_URL}${getAccountPrefix(c.authUser)}/app`,
-          'X-Same-Domain': '1',
-          'User-Agent': USER_AGENT,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+          [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+          [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${getAccountPrefix(c.authUser)}${DEFAULT_LOGIN_PATH}`,
+          [HTTP_HEADER_NAMES.X_SAME_DOMAIN]: '1',
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
         };
-        if (c.authUser) h['X-Goog-AuthUser'] = c.authUser;
-        if (c.cookies) h['Cookie'] = c.cookies;
-        if (c.sapisid) h['Authorization'] = makeSapisidHash(c.sapisid);
+        if (c.authUser) h[HTTP_HEADER_NAMES.X_GOOG_AUTH_USER] = c.authUser;
+        if (c.cookies) h[HTTP_HEADER_NAMES.COOKIE] = c.cookies;
+        if (c.sapisid)
+          h[HTTP_HEADER_NAMES.AUTHORIZATION] = makeSapisidHash(c.sapisid);
         return h;
       };
 
       let currentCred = cred;
       let attempt = 0;
 
-      while (attempt < 2) {
+      while (attempt < MAX_RETRY_ATTEMPTS) {
         attempt++;
         const url = getStreamGenerateUrl(currentCred.authUser);
         const body = buildRequestBody(
@@ -308,7 +324,9 @@ export class GeminiProvider implements Provider {
         if (!response.ok) {
           const errorText = await response.text();
 
-          const xsrfFromError = errorText.match(/"xsrf","([^"]+)"/)?.[1];
+          const xsrfFromError = errorText.match(
+            REGEX_PATTERNS.XSRF_IN_ERROR,
+          )?.[1];
           if (xsrfFromError && attempt === 1) {
             logger.warn('[Gemini] XSRF token missing, retrying with new token');
             currentCred = { ...currentCred, xsrfToken: xsrfFromError };
@@ -316,7 +334,7 @@ export class GeminiProvider implements Provider {
           }
 
           throw new Error(
-            `Gemini API returned ${response.status}: ${errorText.slice(0, 500)}`,
+            `Gemini API returned ${response.status}: ${errorText.slice(0, ERROR_SLICE_LENGTH)}`,
           );
         }
 
@@ -325,53 +343,13 @@ export class GeminiProvider implements Provider {
         }
 
         const promptTokens = countMessagesTokens(messages);
-        const completionTokensRef = { value: 0 };
-        let prevText = '';
-        let buffer = '';
-        let totalBytes = 0;
 
-        for await (const chunk of response.body as NodeJS.ReadableStream) {
-          const chunkStr = chunk.toString();
-          totalBytes += chunkStr.length;
-          if (onRaw) onRaw(chunkStr);
-          buffer += chunkStr;
-
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const texts = extractTextsFromLine(line);
-            for (const t of texts) {
-              if (t.length > prevText.length) {
-                const delta = cleanText(t.slice(prevText.length));
-                if (delta) {
-                  completionTokensRef.value += countTokens(delta);
-                  onContent(delta);
-                  if (onMetadata) {
-                    onMetadata({
-                      total_token: promptTokens + completionTokensRef.value,
-                    });
-                  }
-                }
-                prevText = t;
-              }
-            }
-          }
-        }
-
-        if (buffer.trim()) {
-          const texts = extractTextsFromLine(buffer);
-          for (const t of texts) {
-            if (t.length > prevText.length) {
-              const delta = cleanText(t.slice(prevText.length));
-              if (delta) {
-                completionTokensRef.value += countTokens(delta);
-                onContent(delta);
-              }
-              prevText = t;
-            }
-          }
-        }
+        await parseSSEStream(response.body as NodeJS.ReadableStream, {
+          onContent,
+          onMetadata,
+          onRaw,
+          promptTokens,
+        });
 
         onDone();
         return;
@@ -404,7 +382,7 @@ export class GeminiProvider implements Provider {
       logger.warn(
         '[Gemini] Credential is not valid JSON, treating as raw cookie string',
       );
-      const sapisidMatch = credential.match(/SAPISID=([^;]+)/);
+      const sapisidMatch = credential.match(REGEX_PATTERNS.SAPISID_IN_COOKIE);
       return {
         cookies: credential,
         sapisid: sapisidMatch ? sapisidMatch[1] : '',
@@ -412,11 +390,11 @@ export class GeminiProvider implements Provider {
     }
   }
 
-  private resolveModel(modelName: string): { mode: number; think: number } {
+  private resolveModel(modelName: string): GeminiModelConfig {
     let name = modelName.trim().toLowerCase();
     let thinkOverride: number | null = null;
 
-    const thinkMatch = name.match(/@think=(\d+)$/);
+    const thinkMatch = name.match(REGEX_PATTERNS.THINK_OVERRIDE);
     if (thinkMatch) {
       thinkOverride = parseInt(thinkMatch[1], 10);
       name = name.replace(/@think=\d+$/, '').trim();
@@ -427,7 +405,7 @@ export class GeminiProvider implements Provider {
       logger.warn(
         `[Gemini] Unknown model "${modelName}", falling back to flash`,
       );
-      return { mode: 1, think: 4 };
+      return { mode: GEMINI_DEFAULT_MODE, think: GEMINI_DEFAULT_THINK };
     }
 
     return {
@@ -437,21 +415,6 @@ export class GeminiProvider implements Provider {
   }
 
   async stopStream(_credential: string, _chatId: string, _messageId: string) {}
-
-  // ─── Routes ─────────────────────────────────────────────────────────
-
-  registerRoutes(router: Router) {
-    router.post('/files', async (_req, res) => {
-      res.json({ error: 'File upload not supported for Gemini Web provider' });
-    });
-  }
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('gemini') || m.startsWith('gemini-');
-  }
 }
 
 export default new GeminiProvider();

@@ -20,36 +20,47 @@ import { proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
 
 // ── Constants ──
-import { QWEN_CLI_EVENTS } from './qwen-cli.constant';
+import {
+  QWEN_CLI_EVENTS,
+  CHAT_QWEN_HOST,
+  OAUTH_PATHS,
+  API_FIELDS,
+  DEFAULT_EXPIRES_IN_PROXY,
+} from './qwen-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenCLIProxy');
 
-// ─── Proxy Handler ────────────────────────────────────────────────────
+// ─── Proxy Handler ─────────────────────────────────────��──────────────
 
 export const proxyHandler: ProxyHandler = {
   onResponseBody: (ctx: any, body: string) => {
     const host = ctx.clientToProxyRequest.headers.host;
     const url = ctx.clientToProxyRequest.url;
 
-    if (host && host.includes('chat.qwen.ai')) {
-      if (url.includes('/api/v1/oauth2/token')) {
+    if (host && host.includes(CHAT_QWEN_HOST)) {
+      if (url.includes(OAUTH_PATHS.TOKEN)) {
         try {
-          const json = JSON.parse(body);
-          let tokenData = json;
+          const json = JSON.parse(body) as Record<string, unknown>;
+          let tokenData: Record<string, unknown> = json;
+          const rawResponse = json[API_FIELDS.RESPONSE];
           if (
-            json.response &&
-            typeof json.response === 'string' &&
-            json.response.startsWith('{')
+            rawResponse &&
+            typeof rawResponse === 'string' &&
+            rawResponse.startsWith('{')
           ) {
-            try { tokenData = JSON.parse(json.response); } catch (e) {}
+            try {
+              tokenData = JSON.parse(rawResponse) as Record<string, unknown>;
+            } catch (e) {}
           }
-          if (tokenData.access_token) {
+          if (tokenData[API_FIELDS.ACCESS_TOKEN]) {
             proxyEvents.emit(QWEN_CLI_EVENTS.TOKENS, {
               cookies: JSON.stringify({
-                accessToken: tokenData.access_token,
-                refreshToken: tokenData.refresh_token || '',
-                expiresIn: tokenData.expires_in || 3600,
+                accessToken: tokenData[API_FIELDS.ACCESS_TOKEN],
+                refreshToken: tokenData[API_FIELDS.REFRESH_TOKEN] || '',
+                expiresIn:
+                  tokenData[API_FIELDS.EXPIRES_IN] ||
+                  DEFAULT_EXPIRES_IN_PROXY,
               }),
             });
           }
@@ -57,21 +68,32 @@ export const proxyHandler: ProxyHandler = {
           logger.error('[Proxy] Failed to parse Qwen CLI token response:', e);
         }
       }
-      if (url.includes('/api/v1/user') || url.includes('/api/v1/auths')) {
+      if (url.includes(OAUTH_PATHS.USER) || url.includes(OAUTH_PATHS.AUTHS)) {
         try {
-          const json = JSON.parse(body);
-          let data = json;
+          const json = JSON.parse(body) as Record<string, unknown>;
+          let data: Record<string, unknown> = json;
+          const rawResponse = json[API_FIELDS.RESPONSE];
           if (
-            json.response &&
-            typeof json.response === 'string' &&
-            json.response.startsWith('{')
+            rawResponse &&
+            typeof rawResponse === 'string' &&
+            rawResponse.startsWith('{')
           ) {
-            try { data = JSON.parse(json.response); } catch (e) {}
+            try {
+              data = JSON.parse(rawResponse) as Record<string, unknown>;
+            } catch (e) {}
           }
-          const email = data.email || data.data?.email;
+          const nestedData = data[API_FIELDS.DATA] as
+            | Record<string, unknown>
+            | undefined;
+          const email =
+            (data[API_FIELDS.EMAIL] as string) ||
+            (nestedData?.[API_FIELDS.EMAIL] as string);
           if (email) proxyEvents.emit(QWEN_CLI_EVENTS.USER_INFO, { email });
         } catch (e) {
-          logger.error('[Proxy] Failed to parse Qwen CLI user info response:', e);
+          logger.error(
+            '[Proxy] Failed to parse Qwen CLI user info response:',
+            e,
+          );
         }
       }
     }

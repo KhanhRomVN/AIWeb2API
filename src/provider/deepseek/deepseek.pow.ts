@@ -22,7 +22,7 @@ import { createLogger } from '../../utils/logger';
 import { PoWChallenge, PoWResponse } from './deepseek.types';
 
 // ── Constants ──
-import { BASE_URL } from './deepseek.constant';
+import { BASE_URL, WASM_ABI } from './deepseek.constant';
 
 export { BASE_URL };
 
@@ -48,7 +48,7 @@ export class DeepSeekHash {
       const wasmBuffer = fs.readFileSync(this.wasmPath);
       const wasmModule = new WebAssembly.Module(wasmBuffer);
       const instance = new WebAssembly.Instance(wasmModule, {
-        wasi_snapshot_preview1: {
+        [WASM_ABI.IMPORT_MODULE]: {
           fd_write: () => 0,
           environ_sizes_get: () => 0,
           environ_get: () => 0,
@@ -58,7 +58,7 @@ export class DeepSeekHash {
           fd_fdstat_get: () => 0,
           proc_exit: () => 0,
         },
-        env: {},
+        [WASM_ABI.IMPORT_ENV]: {},
       });
       this.instance = instance;
       this.memory = instance.exports.memory as WebAssembly.Memory;
@@ -73,9 +73,10 @@ export class DeepSeekHash {
     const encoder = new TextEncoder();
     const encoded = encoder.encode(text);
     const length = encoded.length;
-    const malloc = this.instance.exports
-      .__wbindgen_export_0 as CallableFunction;
-    const ptr = malloc(length, 1) as number;
+    const malloc = this.instance.exports[
+      WASM_ABI.EXPORT_MALLOC
+    ] as CallableFunction;
+    const ptr = malloc(length, WASM_ABI.MALLOC_ALIGN) as number;
     const memoryView = new Uint8Array(this.memory.buffer);
     memoryView.set(encoded, ptr);
     return [ptr, length];
@@ -87,20 +88,25 @@ export class DeepSeekHash {
     prefix: string,
   ): number | null {
     if (!this.instance || !this.memory) throw new Error('WASM not initialized');
-    const stackPointerFn = this.instance.exports
-      .__wbindgen_add_to_stack_pointer as CallableFunction;
-    const solveFn = this.instance.exports.wasm_solve as CallableFunction;
-    const retptr = stackPointerFn(-16) as number;
+    const stackPointerFn = this.instance.exports[
+      WASM_ABI.EXPORT_STACK_PTR
+    ] as CallableFunction;
+    const solveFn = this.instance.exports[
+      WASM_ABI.EXPORT_SOLVE
+    ] as CallableFunction;
+    const retptr = stackPointerFn(-WASM_ABI.STACK_PTR_SIZE) as number;
     try {
       const [cPtr, cLen] = this.writeToMemory(challenge);
       const [pPtr, pLen] = this.writeToMemory(prefix);
       solveFn(retptr, cPtr, cLen, pPtr, pLen, difficulty);
       const memoryView = new DataView(this.memory.buffer);
       const status = memoryView.getInt32(retptr, true);
-      if (status === 0) return null;
-      return Number(memoryView.getFloat64(retptr + 8, true));
+      if (status === WASM_ABI.STATUS_NULL) return null;
+      return Number(
+        memoryView.getFloat64(retptr + WASM_ABI.RETPTR_VALUE_OFFSET, true),
+      );
     } finally {
-      stackPointerFn(16);
+      stackPointerFn(WASM_ABI.STACK_PTR_SIZE);
     }
   }
 }

@@ -105,7 +105,9 @@ export class ZaiBrowserProvider implements Provider {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         wsServer.off('connected', onConnected);
-        logger.error('[ZaiBrowser] Extension connection timeout after 30 seconds');
+        logger.error(
+          '[ZaiBrowser] Extension connection timeout after 30 seconds',
+        );
         reject(new Error('Extension connection timeout after 30 seconds'));
       }, 30000);
 
@@ -160,7 +162,7 @@ export class ZaiBrowserProvider implements Provider {
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     const parsed = parseZaiBrowserCredential(credential);
@@ -285,22 +287,6 @@ export class ZaiBrowserProvider implements Provider {
       logger.error('[ZaiBrowser] Login failed:', error);
       throw new Error(`Z.AI Browser login failed: ${error.message}`);
     }
-  }
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('glm') || m.includes('z.ai') || m.includes('glm-5');
-  }
-
-  // ─── Routes ─────────────────────────────────────────────────────────
-
-  registerRoutes(router: Router): void {
-    router.get('/auth/status', async (_req, res) => {
-      const sessions = findBrowserAccountsByProvider('zai-browser');
-      res.json({ authenticated: sessions.length > 0 });
-    });
   }
 
   // ─── Disconnect ─────────────────────────────────────────────────────

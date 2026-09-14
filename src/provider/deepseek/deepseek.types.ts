@@ -5,13 +5,19 @@
  * Type definitions cho DeepSeek API.
  *
  * Main exports:
- * - PoWChallenge        : PoW challenge structure
- * - PoWResponse         : PoW response structure
- * - ChatPayload         : Chat completion request payload
+ * - PoWChallenge / PoWResponse     : PoW challenge & response
+ * - ChatPayload                    : Chat completion request payload
+ * - ContinuePayload                : /chat/continue request payload
+ * - DeepSeekApiEnvelope<T>         : Envelope chung của mọi response
+ * - DeepSeekChatSession / DeepSeekChatMessage
+ * - DeepSeekUserInfo               : User info từ /users/current
+ * - DeepSeekFileItem / UploadFileInput
+ * - SSEMetadata / SSEEventPayload  : SSE parser types
+ * - WasmExports                    : WASM instance exports
  * ------------------------------------------------------------------
  */
 
-// ─── Types ──────────────────────────────────────────────────────────────
+// ─── PoW ────────────────────────────────────────────────────────────────
 
 export interface PoWChallenge {
   algorithm: string;
@@ -32,6 +38,8 @@ export interface PoWResponse {
   target_path: string;
 }
 
+// ─── Chat Payload ───────────────────────────────────────────────────────
+
 export interface ChatPayload {
   chat_session_id: string;
   parent_message_id: string | null | undefined;
@@ -42,4 +50,130 @@ export interface ChatPayload {
   search_enabled: boolean;
   action: null;
   preempt: boolean;
+}
+
+export interface ContinuePayload {
+  chat_session_id: string;
+  message_id: number;
+  fallback_to_resume: boolean;
+}
+
+// ─── API Envelope ───────────────────────────────────────────────────────
+
+/**
+ * Envelope chung của DeepSeek API. Hầu hết response có shape:
+ * `{ code, msg, data: { biz_data: T } }`.
+ * Với endpoint không có biz_data, `data` chính là `T`.
+ */
+export interface DeepSeekApiEnvelope<T = unknown> {
+  code: number;
+  msg?: string;
+  data?:
+    | (T & {
+        biz_data?: T;
+      })
+    | null;
+}
+
+// ─── Session & Message ──────────────────────────────────────────────────
+
+export interface DeepSeekChatSession {
+  id: string;
+}
+
+export interface DeepSeekChatMessage {
+  message_id: string;
+  role: 'USER' | 'ASSISTANT' | string;
+  content?: string;
+}
+
+// ─── User ───────────────────────────────────────────────────────────────
+
+export interface DeepSeekUserInfo {
+  id: string;
+  email: string;
+  name?: string;
+  token: string;
+}
+
+// ─── Upload ─────────────────────────────────────────────────────────────
+
+export interface UploadFileInput {
+  originalname: string;
+  mimetype: string;
+  buffer: Buffer;
+}
+
+export type DeepSeekFileStatus = 'SUCCESS' | 'READY' | 'FAIL' | 'ERROR';
+
+export interface DeepSeekFileItem {
+  id: string;
+  status: DeepSeekFileStatus;
+  token_usage: number;
+}
+
+export interface UploadResult {
+  id: string;
+  token_usage: number;
+}
+
+// ─── SSE ────────────────────────────────────────────────────────────────
+
+export interface SSEMetadata {
+  total_token?: number;
+  thinking_elapsed?: number;
+  response_message_id?: number;
+  conversation_id?: string;
+  continuing?: boolean;
+  continuation_count?: number;
+  continuation_complete?: boolean;
+  total_continuations?: number;
+}
+
+export interface SSEFragment {
+  type: string;
+  content?: string;
+}
+
+export interface SSEResponseInner {
+  message_id?: number;
+  status?: string;
+  fragments?: SSEFragment[];
+}
+
+/**
+ * Wrapper cho `json.v` khi SSE event trả về snapshot đầy đủ.
+ * Shape: `{ response: { message_id, status, fragments } }`.
+ */
+export interface SSEResponseSnapshot {
+  response?: SSEResponseInner;
+}
+
+export interface SSEEventPayload {
+  p?: string;
+  v?: unknown;
+  o?: string;
+  type?: string;
+  content?: string;
+  response_message_id?: number;
+  response?: SSEResponseSnapshot;
+  choices?: Array<{
+    delta: { content?: string };
+  }>;
+}
+
+// ─── WASM ───────────────────────────────────────────────────────────────
+
+export interface WasmExports {
+  memory: WebAssembly.Memory;
+  __wbindgen_export_0: (length: number, align: number) => number;
+  __wbindgen_add_to_stack_pointer: (offset: number) => number;
+  wasm_solve: (
+    retptr: number,
+    challengePtr: number,
+    challengeLen: number,
+    prefixPtr: number,
+    prefixLen: number,
+    difficulty: number,
+  ) => void;
 }

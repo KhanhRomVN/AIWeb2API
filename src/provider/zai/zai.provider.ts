@@ -10,7 +10,7 @@
  * - login()          : Đăng nhập qua browser
  * - handleMessage()  : Gửi tin nhắn với streaming response
  * - getModels()      : Lấy danh sách models
- * - getProfile()     : Lấy thông tin user profile từ JWT
+ * - getUserProfile()     : Lấy thông tin user profile từ JWT
  * - Rate limiting    : Tự động giới hạn request (8 req/min)
  * - Signature auth   : Tạo signature cho mỗi request
  *
@@ -154,7 +154,7 @@ export class ZAIProvider implements Provider {
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
@@ -197,8 +197,8 @@ export class ZAIProvider implements Provider {
         email?: string;
       }) => {
         if (data.cookies) {
-          const profile = await this.getProfile(data.cookies);
-          const emailOrId = profile.email || profile.id;
+          const profile = await this.getUserProfile(data.cookies);
+          const emailOrId = profile.email;
           const isGuest = emailOrId
             ? emailOrId.toLowerCase().includes('guest')
             : true;
@@ -336,10 +336,7 @@ export class ZAIProvider implements Provider {
           );
         if (onSessionCreated) onSessionCreated(chatId);
         if (onMetadata) {
-          onMetadata({
-            conversation_id: chatId,
-            conversation_title: prompt.substring(0, 50) || 'New Chat',
-          });
+          onMetadata({ conversation_id: chatId });
         }
       }
 
@@ -480,27 +477,6 @@ export class ZAIProvider implements Provider {
 
   async continueMessage(options: SendMessageOptions): Promise<void> {
     return this.handleMessage(options);
-  }
-
-  // ─── Routes ─────────────────────────────────────────────────────────
-
-  registerRoutes(router: Router) {
-    router.get('/auth/status', (_req, res) => {
-      const db = getDb();
-      const zaiAccount = db
-        .prepare(
-          "SELECT id FROM accounts WHERE provider_id = 'z' OR provider_id = 'zai' LIMIT 1",
-        )
-        .get();
-      res.json({ authenticated: !!zaiAccount });
-    });
-  }
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('glm') || m.includes('z.ai') || m.includes('glm-5');
   }
 }
 

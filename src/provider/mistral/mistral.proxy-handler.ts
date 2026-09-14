@@ -18,10 +18,10 @@ import { proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
 
 // ── Constants ──
-import { MISTRAL_EVENTS } from './mistral.constant';
+import { MISTRAL_EVENTS, MISTRAL_HOSTS } from './mistral.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('MistralProvider');
+const logger = createLogger('MistralProxy');
 
 // ─── Proxy Handler ────────────────────────────────────────────────────
 
@@ -31,7 +31,8 @@ export const proxyHandler: ProxyHandler = {
 
     if (
       host &&
-      (host.includes('auth.mistral.ai') || host.includes('console.mistral.ai'))
+      (host.includes(MISTRAL_HOSTS.AUTH) ||
+        host.includes(MISTRAL_HOSTS.CONSOLE))
     ) {
       const reqCookies = ctx.clientToProxyRequest.headers.cookie;
       if (reqCookies && reqCookies.length > 0) {

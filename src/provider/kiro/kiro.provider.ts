@@ -6,10 +6,10 @@
  * Sử dụng AWS OIDC Device Authorization Grant cho Google/GitHub login.
  *
  * Main features:
- * - login()                    : Đăng nhập qua OAuth Device Code Flow
- * - initiateDeviceAuthorization: Bắt đầu device flow, lấy user_code
- * - pollForTokens()            : Polling để lấy tokens sau khi user authorize
- * - getProfile()               : Lấy thông tin user profile
+ * - login()                     : Đăng nhập qua OAuth Device Code Flow
+ * - initiateDeviceAuthorization : Bắt đầu device flow, lấy user_code
+ * - pollForTokens()             : Polling để lấy tokens sau khi user authorize
+ * - getUserProfile()            : Lấy thông tin user profile
  * ------------------------------------------------------------------
  */
 
@@ -25,8 +25,7 @@ import { Provider, SendMessageOptions } from '../../types';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
-// ── Kiro Imports ──
-import { proxyHandler } from './kiro.proxy-handler';
+// ── Kiro Constants ──
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -38,14 +37,38 @@ import {
   IS_PAUSABLE,
   IS_MEMORY,
   BASE_URL,
+  BASE_URLS,
   DEVICE_CODE_FLOW,
+  API_FIELDS,
+  API_PATHS,
+  AUTH_DATA_DEFAULTS,
+  AUTH_METHODS,
+  CONTENT_TYPES,
+  DEFAULT_REGION,
+  DEVICE_CODE_DEFAULTS,
+  FALLBACK_EMAIL,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADERS,
 } from './kiro.constant';
+
+// ── Kiro Types ──
 import type {
   KiroAuthData,
+  KiroAuthMethod,
+  KiroClientRegistrationRequest,
+  KiroClientRegistrationResponse,
+  KiroDeviceAuthorizationRequest,
+  KiroDeviceAuthorizationResponse,
+  KiroTokenPollRequest,
+  KiroTokenPollResponse,
+  KiroUserProfileResponse,
   DeviceCodeResponse,
   DeviceTokenResponse,
   DeviceCodeError,
 } from './kiro.types';
+
+// ── Kiro Internal ──
+import { proxyHandler } from './kiro.proxy-handler';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('KiroProvider');
@@ -53,7 +76,7 @@ const logger = createLogger('KiroProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class KiroProvider implements Provider {
-  name = 'Kiro';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -76,23 +99,25 @@ export class KiroProvider implements Provider {
    * Gọi AWS OIDC device authorization endpoint để lấy device_code và user_code
    */
   private async initiateDeviceAuthorization(
-    authMethod: 'google' | 'github',
+    authMethod: KiroAuthMethod,
   ): Promise<DeviceCodeResponse> {
     // Register OIDC client first
     const clientRegistration = await this.registerOIDCClient();
 
     // AWS OIDC device_authorization requires JSON body with clientId, clientSecret, startUrl
+    const requestBody: KiroDeviceAuthorizationRequest = {
+      clientId: clientRegistration.clientId,
+      clientSecret: clientRegistration.clientSecret,
+      startUrl: DEVICE_CODE_FLOW.START_URL,
+    };
+
     const response = await fetch(DEVICE_CODE_FLOW.DEVICE_AUTHORIZATION_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
       },
-      body: JSON.stringify({
-        clientId: clientRegistration.clientId,
-        clientSecret: clientRegistration.clientSecret,
-        startUrl: DEVICE_CODE_FLOW.START_URL,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -101,22 +126,25 @@ export class KiroProvider implements Provider {
       throw new Error(`Device authorization failed: ${response.status}`);
     }
 
-    const data = (await response.json()) as any;
+    const data = (await response.json()) as KiroDeviceAuthorizationResponse;
 
     // AWS OIDC returns camelCase fields
     const deviceCodeResponse: DeviceCodeResponse = {
-      device_code: data.deviceCode,
-      user_code: data.userCode,
+      device_code: data[API_FIELDS.DEVICE_CODE],
+      user_code: data[API_FIELDS.USER_CODE],
       verification_uri:
-        data.verificationUri || DEVICE_CODE_FLOW.VERIFICATION_URI,
-      verification_uri_complete: data.verificationUriComplete,
-      expires_in: data.expiresIn || 600,
-      interval: data.interval || 5,
+        data[API_FIELDS.VERIFICATION_URI] || DEVICE_CODE_FLOW.VERIFICATION_URI,
+      verification_uri_complete:
+        data[API_FIELDS.VERIFICATION_URI_COMPLETE],
+      expires_in:
+        data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.EXPIRES_SEC,
+      interval:
+        data[API_FIELDS.INTERVAL] || DEVICE_CODE_DEFAULTS.INTERVAL_SEC,
     };
 
     // Store client credentials for token polling
-    (deviceCodeResponse as any).clientId = clientRegistration.clientId;
-    (deviceCodeResponse as any).clientSecret = clientRegistration.clientSecret;
+    deviceCodeResponse.clientId = clientRegistration.clientId;
+    deviceCodeResponse.clientSecret = clientRegistration.clientSecret;
 
     return deviceCodeResponse;
   }
@@ -125,24 +153,22 @@ export class KiroProvider implements Provider {
    * Register OIDC client với AWS
    * Tạo dynamic client để sử dụng trong device flow
    */
-  private async registerOIDCClient(): Promise<{
-    clientId: string;
-    clientSecret: string;
-    clientSecretExpiresAt: number;
-  }> {
+  private async registerOIDCClient(): Promise<KiroClientRegistrationResponse> {
+    const requestBody: KiroClientRegistrationRequest = {
+      clientName: DEVICE_CODE_FLOW.CLIENT_NAME,
+      clientType: DEVICE_CODE_FLOW.CLIENT_TYPE,
+      scopes: DEVICE_CODE_FLOW.SCOPES,
+      grantTypes: DEVICE_CODE_FLOW.GRANT_TYPES,
+      issuerUrl: DEVICE_CODE_FLOW.ISSUER_URL,
+    };
+
     const response = await fetch(DEVICE_CODE_FLOW.REGISTER_CLIENT_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
       },
-      body: JSON.stringify({
-        clientName: DEVICE_CODE_FLOW.CLIENT_NAME,
-        clientType: DEVICE_CODE_FLOW.CLIENT_TYPE,
-        scopes: DEVICE_CODE_FLOW.SCOPES,
-        grantTypes: DEVICE_CODE_FLOW.GRANT_TYPES,
-        issuerUrl: DEVICE_CODE_FLOW.ISSUER_URL,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -151,11 +177,12 @@ export class KiroProvider implements Provider {
       throw new Error(`OIDC client registration failed: ${response.status}`);
     }
 
-    const data = (await response.json()) as any;
+    const data = (await response.json()) as KiroClientRegistrationResponse;
     return {
       clientId: data.clientId,
       clientSecret: data.clientSecret,
-      clientSecretExpiresAt: data.clientSecretExpiresAt || 0,
+      clientSecretExpiresAt:
+        data[API_FIELDS.CLIENT_SECRET_EXPIRES_AT] || 0,
     };
   }
 
@@ -176,27 +203,33 @@ export class KiroProvider implements Provider {
       await this.sleep(interval);
 
       try {
+        const requestBody: KiroTokenPollRequest = {
+          clientId,
+          clientSecret,
+          deviceCode: deviceCode,
+          grantType: DEVICE_CODE_FLOW.GRANT_TYPES[0],
+        };
+
         const response = await fetch(DEVICE_CODE_FLOW.TOKEN_URL, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
+            [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+            [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
           },
-          body: JSON.stringify({
-            clientId,
-            clientSecret,
-            deviceCode: deviceCode,
-            grantType: 'urn:ietf:params:oauth:grant-type:device_code',
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (response.ok) {
-          const data = (await response.json()) as any;
+          const data = (await response.json()) as KiroTokenPollResponse;
           return {
             accessToken: data.accessToken,
             refreshToken: data.refreshToken,
-            expiresIn: data.expiresIn || 3600,
-            tokenType: data.tokenType || 'Bearer',
+            expiresIn:
+              data[API_FIELDS.EXPIRES_IN] ||
+              DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+            tokenType:
+              data[API_FIELDS.TOKEN_TYPE] ||
+              DEVICE_CODE_DEFAULTS.TOKEN_TYPE,
           };
         }
 
@@ -208,7 +241,7 @@ export class KiroProvider implements Provider {
         }
 
         if (errorData.error === 'slow_down') {
-          interval += 5000;
+          interval += DEVICE_CODE_DEFAULTS.SLOW_DOWN_INCREMENT_MS;
           continue;
         }
 
@@ -272,21 +305,19 @@ export class KiroProvider implements Provider {
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login(options?: { kiroMethod?: 'google' | 'github' }) {
-    const method = options?.kiroMethod || 'google';
+    const method: KiroAuthMethod = options?.kiroMethod || AUTH_METHODS.GOOGLE;
     try {
       // Step 1: Lấy device code và user code
       const deviceAuth = await this.initiateDeviceAuthorization(method);
 
-      // Build device verification URL
-      const deviceVerificationUrl = `${DEVICE_CODE_FLOW.VERIFICATION_URI}?user_code=${deviceAuth.user_code}`;
-
       // Build enhanced signin URL with provider pre-selection and redirect
       // Format: /signin?user_code=XXX&login_provider=Github&redirect_to_after_auth=/account/device?user_code=XXX
-      const loginProvider = method === 'github' ? 'Github' : 'Google';
+      const loginProvider =
+        method === AUTH_METHODS.GITHUB ? 'Github' : 'Google';
       const encodedRedirect = encodeURIComponent(
-        `/account/device?user_code=${deviceAuth.user_code}`,
+        `${API_PATHS.DEVICE}?user_code=${deviceAuth.user_code}`,
       );
-      const enhancedSigninUrl = `https://app.kiro.dev/signin?user_code=${deviceAuth.user_code}&login_provider=${loginProvider}&redirect_to_after_auth=${encodedRedirect}`;
+      const enhancedSigninUrl = `${BASE_URLS.KIRO_APP}${API_PATHS.SIGNIN}?user_code=${deviceAuth.user_code}&login_provider=${loginProvider}&redirect_to_after_auth=${encodedRedirect}`;
 
       // Auto-open browser with enhanced signin URL
       this.openBrowser(enhancedSigninUrl);
@@ -294,18 +325,19 @@ export class KiroProvider implements Provider {
       // Step 2: Poll for tokens
       const tokens = await this.pollForTokens(
         deviceAuth.device_code,
-        (deviceAuth as any).clientId,
-        (deviceAuth as any).clientSecret,
+        deviceAuth.clientId || '',
+        deviceAuth.clientSecret || '',
         deviceAuth.interval * 1000,
       );
 
       // Step 3: Get user profile
       let email = '';
+      const fallbackEmail = `${FALLBACK_EMAIL.PREFIX}${method}-${Date.now()}${FALLBACK_EMAIL.SUFFIX}`;
       try {
-        const profile = await this.getProfile(tokens.accessToken);
-        email = profile.email || `kiro-${method}-${Date.now()}@kiro.local`;
+        const profile = await this.getUserProfile(tokens.accessToken);
+        email = profile.email || fallbackEmail;
       } catch (e) {
-        email = `kiro-${method}-${Date.now()}@kiro.local`;
+        email = fallbackEmail;
       }
 
       // Step 4: Tạo auth data object
@@ -313,10 +345,10 @@ export class KiroProvider implements Provider {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         expiresIn: tokens.expiresIn,
-        authMethod: 'device',
-        clientId: (deviceAuth as any).clientId,
-        clientSecret: (deviceAuth as any).clientSecret,
-        region: 'us-east-1',
+        authMethod: AUTH_METHODS.DEVICE,
+        clientId: deviceAuth.clientId,
+        clientSecret: deviceAuth.clientSecret,
+        region: DEFAULT_REGION,
       };
 
       return {
@@ -332,17 +364,15 @@ export class KiroProvider implements Provider {
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(
-    credential: string,
-  ): Promise<{ email: string | null; name?: string; id?: string }> {
+  async getUserProfile(credential: string): Promise<{ email: string | null }> {
     try {
       const authData = this.parseAuthData(credential);
 
-      const response = await fetch(`${BASE_URL}/api/user/profile`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.USER_PROFILE}`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${authData.accessToken}`,
-          'Content-Type': 'application/json',
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${HTTP_HEADERS.BEARER_PREFIX}${authData.accessToken}`,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
         },
       });
 
@@ -351,12 +381,13 @@ export class KiroProvider implements Provider {
         return { email: null };
       }
 
-      const data: any = await response.json();
+      const data = (await response.json()) as KiroUserProfileResponse;
 
       return {
-        email: data.email || data.user?.email || null,
-        name: data.name || data.user?.name || data.displayName,
-        id: data.id || data.userId || data.user?.id,
+        email:
+          data[API_FIELDS.EMAIL] ||
+          data[API_FIELDS.USER]?.[API_FIELDS.EMAIL] ||
+          null,
       };
     } catch (e) {
       logger.error('[Kiro] Get Profile Error:', e);
@@ -368,23 +399,23 @@ export class KiroProvider implements Provider {
 
   private parseAuthData(credential: string): KiroAuthData {
     try {
-      const parsed = JSON.parse(credential);
+      const parsed = JSON.parse(credential) as Partial<KiroAuthData>;
       return {
         accessToken: parsed.accessToken || credential,
-        refreshToken: parsed.refreshToken || '',
-        authMethod: parsed.authMethod || 'device',
+        refreshToken: parsed.refreshToken || AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
+        authMethod: parsed.authMethod || AUTH_DATA_DEFAULTS.METHOD,
         expiresIn: parsed.expiresIn,
         clientId: parsed.clientId,
         clientSecret: parsed.clientSecret,
-        region: parsed.region || 'us-east-1',
+        region: parsed.region || DEFAULT_REGION,
       };
     } catch {
       // Nếu không parse được, coi như là access token thuần
       return {
         accessToken: credential,
-        refreshToken: '',
-        authMethod: 'device',
-        region: 'us-east-1',
+        refreshToken: AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
+        authMethod: AUTH_DATA_DEFAULTS.METHOD,
+        region: DEFAULT_REGION,
       };
     }
   }
@@ -394,16 +425,6 @@ export class KiroProvider implements Provider {
   async handleMessage(options: SendMessageOptions): Promise<void> {
     const { onError } = options;
     onError(new Error('Kiro handleMessage not implemented yet'));
-  }
-
-  // ─── Routes ─────────────────────────────────────────────────────────
-
-  registerRoutes(_router: Router) {}
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    return model.toLowerCase().includes('kiro');
   }
 }
 

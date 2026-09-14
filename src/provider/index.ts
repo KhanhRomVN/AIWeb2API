@@ -33,4 +33,3 @@ export { default as KiroProvider } from './kiro';
 
 // ── Registry & Config ──
 export { providerRegistry } from './registry';
-export { providers as providerConfig } from './provider-config';

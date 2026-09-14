@@ -8,7 +8,7 @@
  * Main features:
  * - login()          : Đăng nhập qua browser
  * - handleMessage()  : Gửi tin nhắn với streaming response
- * - getProfile()     : Lấy thông tin user profile
+ * - getUserProfile() : Lấy thông tin user profile
  *
  * Credential format:
  * - cookies          : Cookie string (chứa session cookies)
@@ -17,7 +17,6 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import { Router } from 'express';
 import * as crypto from 'crypto';
 import fetch from 'node-fetch';
 
@@ -32,6 +31,8 @@ import { createLogger } from '../../utils/logger';
 
 // ── Mistral Imports ──
 import { proxyHandler } from './mistral.proxy-handler';
+import { parseSSEStream } from './mistral.sse-parser';
+import { MistralChatPayload, MistralUserProfile } from './mistral.types';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -45,6 +46,18 @@ import {
   CHAT_BASE_URL,
   AUTH_LOGIN_URL,
   MISTRAL_EVENTS,
+  API_PATHS,
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  REFERER_PATHS,
+  USER_AGENTS,
+  CHAT_MODES,
+  MESSAGE_INPUT_TYPES,
+  DEFAULT_FEATURES,
+  LOGIN_PARTITION_PREFIX,
+  DEFAULT_TIMEZONE,
+  DEFAULT_STABLE_ID,
+  API_FIELDS,
 } from './mistral.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -53,7 +66,7 @@ const logger = createLogger('MistralProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class MistralProvider implements Provider {
-  name = 'Mistral';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -72,9 +85,9 @@ export class MistralProvider implements Provider {
 
   async login() {
     return await loginService.captureCredentialsViaCDP({
-      providerId: 'mistral',
+      providerId: PROVIDER_ID,
       loginUrl: AUTH_LOGIN_URL,
-      partition: `mistral-${Date.now()}`,
+      partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
       cookieEvent: MISTRAL_EVENTS.COOKIES,
       validate: async (data: {
         cookies: string;
@@ -82,7 +95,7 @@ export class MistralProvider implements Provider {
         email?: string;
       }) => {
         if (data.cookies && data.cookies.length > 0) {
-          const profile = await this.getProfile(data.cookies);
+          const profile = await this.getUserProfile(data.cookies);
           if (profile.email) {
             return {
               isValid: true,
@@ -99,31 +112,30 @@ export class MistralProvider implements Provider {
     });
   }
 
-  // ─── Profile ────────────────────────────────────────────────────────
+  // ─── Profile ──────────────────────���─────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
-      const response = await fetch(`${BASE_URL}/api/users/me`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.USERS_ME}`, {
         method: 'GET',
         headers: {
-          Cookie: credential,
-          'User-Agent':
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          accept: 'application/json',
+          [HTTP_HEADER_NAMES.COOKIE]: credential,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.PROFILE,
+          [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
         },
       });
 
       if (response.status === 200) {
-        const json = await response.json();
-        if (!json.email) {
+        const json = (await response.json()) as MistralUserProfile;
+        if (!json[API_FIELDS.EMAIL]) {
           logger.warn('[Mistral] Get Profile response missing email field');
         }
         return {
-          email: json.email || null,
-          name: json.name || json.full_name,
-          id: json.id,
+          email: json[API_FIELDS.EMAIL] || null,
+          name: json[API_FIELDS.NAME] || json[API_FIELDS.FULL_NAME],
+          id: json[API_FIELDS.ID],
         };
       }
       logger.warn(`[Mistral] Get Profile returned status ${response.status}`);
@@ -155,7 +167,7 @@ export class MistralProvider implements Provider {
         await this.streamMistral(
           credential,
           conversationId!,
-          'start',
+          CHAT_MODES.START,
           null,
           onContent,
           onDone,
@@ -165,7 +177,7 @@ export class MistralProvider implements Provider {
         await this.streamMistral(
           credential,
           conversationId!,
-          'append',
+          CHAT_MODES.APPEND,
           content,
           onContent,
           onDone,
@@ -193,45 +205,41 @@ export class MistralProvider implements Provider {
     content: string | null,
     onContent: (c: string) => void,
     onDone: () => void,
-    onError: (e: any) => void,
+    onError: (e: Error) => void,
   ) {
-    const payload: any = {
+    const payload: MistralChatPayload = {
       chatId: chatId,
       mode: mode,
       disabledFeatures: [],
       clientPromptData: {
         currentDate: new Date().toISOString().split('T')[0],
-        userTimezone: 'Asia/Saigon',
+        userTimezone: DEFAULT_TIMEZONE,
       },
-      stableAnonymousIdentifier: '79zqlm',
+      stableAnonymousIdentifier: DEFAULT_STABLE_ID,
       shouldAwaitStreamBackgroundTasks: true,
       shouldUseMessagePatch: true,
       shouldUsePersistentStream: true,
     };
 
-    if (mode === 'append' && content) {
-      payload.messageInput = [{ type: 'text', text: content }];
+    if (mode === CHAT_MODES.APPEND && content) {
+      payload.messageInput = [
+        { type: MESSAGE_INPUT_TYPES.TEXT, text: content },
+      ];
       payload.messageFiles = [];
       payload.messageId = crypto.randomUUID();
-      payload.features = [
-        'beta-code-interpreter',
-        'beta-imagegen',
-        'beta-websearch',
-        'beta-reasoning',
-      ];
+      payload.features = DEFAULT_FEATURES;
       payload.libraries = [];
       payload.integrations = [];
     }
 
-    const response = await fetch(`${CHAT_BASE_URL}/api/chat`, {
+    const response = await fetch(`${CHAT_BASE_URL}${API_PATHS.CHAT}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Cookie: credential,
-        Origin: CHAT_BASE_URL,
-        Referer: `${CHAT_BASE_URL}/chat/${chatId}`,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.STREAM,
+        [HTTP_HEADER_NAMES.COOKIE]: credential,
+        [HTTP_HEADER_NAMES.ORIGIN]: CHAT_BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: `${CHAT_BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${chatId}`,
       },
       body: JSON.stringify(payload),
     });
@@ -240,56 +248,13 @@ export class MistralProvider implements Provider {
       throw new Error(`Mistral Stream Error ${response.status}`);
 
     if (response.body) {
-      const body = response.body as any;
-      body.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n');
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const colonIndex = line.indexOf(':');
-          if (colonIndex === -1) continue;
-          try {
-            const jsonStr = line.slice(colonIndex + 1);
-            const data = JSON.parse(jsonStr);
-            if (data?.json?.patches) {
-              for (const patch of data.json.patches) {
-                if (
-                  (patch.op === 'append' || patch.op === 'add') &&
-                  patch.path.includes('/text') &&
-                  patch.value
-                ) {
-                  onContent(patch.value);
-                } else if (
-                  patch.value &&
-                  typeof patch.value === 'string' &&
-                  patch.path.endsWith('/text')
-                ) {
-                  onContent(patch.value);
-                }
-              }
-            }
-          } catch (e) {
-            logger.warn('[Mistral] Failed to parse SSE line:', e);
-          }
-        }
+      await parseSSEStream(response.body as NodeJS.ReadableStream, {
+        onContent,
       });
-      body.on('end', () => onDone());
-      body.on('error', (err: any) => {
-        logger.error('[Mistral] Stream body error:', err);
-        onError(err);
-      });
+      onDone();
     } else {
       onDone();
     }
-  }
-
-  // ─── Routes ─────────────────────────────────────────────────────────
-
-  registerRoutes() {}
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    return model.toLowerCase().includes('mistral');
   }
 }
 

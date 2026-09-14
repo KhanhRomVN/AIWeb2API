@@ -19,8 +19,30 @@ import { ProxyHandler, proxyEvents } from '../../services/proxy.service';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── Types ──
+import {
+  KimiHeadersPayload,
+  KimiLoginTokenPayload,
+  KimiTokenResponse,
+} from './kimi.types';
+
 // ── Constants ──
-import { KIMI_EVENTS } from './kimi.constant';
+import {
+  KIMI_EVENTS,
+  HOSTS,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADER_NAMES_LOWERCASE,
+  AUTH_PREFIXES,
+  CREDENTIAL_KEYS,
+  REGEX_PATTERNS,
+  JWT_PAYLOAD_FIELDS,
+  AUTH_FIELDS,
+  URL_PATTERNS,
+  ENCODINGS,
+  ID_PREFIXES,
+  JWT_SUB_PREFIX_LENGTH,
+  DEFAULT_EMAIL,
+} from './kimi.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('KimiProxyHandler');
@@ -36,12 +58,17 @@ function extractInfoFromJwt(token: string): {
     const parts = token.split('.');
     if (parts.length >= 2) {
       const payload = JSON.parse(
-        Buffer.from(parts[1], 'base64url').toString('utf8'),
+        Buffer.from(parts[1], ENCODINGS.BASE64URL).toString(ENCODINGS.UTF8),
       );
       return {
-        email: payload.email,
-        name: payload.name || payload.nickname,
-        sub: payload.sub || payload.abstract_user_id || payload.id,
+        email: payload[JWT_PAYLOAD_FIELDS.EMAIL],
+        name:
+          payload[JWT_PAYLOAD_FIELDS.NAME] ||
+          payload[JWT_PAYLOAD_FIELDS.NICKNAME],
+        sub:
+          payload[JWT_PAYLOAD_FIELDS.SUB] ||
+          payload[JWT_PAYLOAD_FIELDS.ABSTRACT_USER_ID] ||
+          payload[JWT_PAYLOAD_FIELDS.ID],
       };
     }
   } catch {
@@ -58,82 +85,100 @@ export const kimiProxyHandler: ProxyHandler = {
     const url = ctx.clientToProxyRequest?.url || '';
 
     if (
-      host.includes('kimi.ai') ||
-      host.includes('kimi.com') ||
-      host.includes('moonshot.cn') ||
-      host.includes('auth.kimi.ai')
+      host.includes(HOSTS.KIMI_AI) ||
+      host.includes(HOSTS.KIMI_COM) ||
+      host.includes(HOSTS.MOONSHOT_CN) ||
+      host.includes(HOSTS.AUTH_KIMI)
     ) {
       const headers = ctx.clientToProxyRequest.headers;
-      const auth = headers['authorization'] || headers['Authorization'];
-      const cookie = headers['cookie'] || headers['Cookie'] || '';
+      const auth =
+        headers[HTTP_HEADER_NAMES_LOWERCASE.AUTHORIZATION] ||
+        headers[HTTP_HEADER_NAMES.AUTHORIZATION];
+      const cookie =
+        headers[HTTP_HEADER_NAMES_LOWERCASE.COOKIE] ||
+        headers[HTTP_HEADER_NAMES.COOKIE] ||
+        '';
 
       let capturedToken = '';
       let capturedRefreshToken = '';
 
-      if (auth && typeof auth === 'string' && auth.startsWith('Bearer ')) {
-        capturedToken = auth.slice(7).trim();
+      if (
+        auth &&
+        typeof auth === 'string' &&
+        auth.startsWith(AUTH_PREFIXES.BEARER)
+      ) {
+        capturedToken = auth.slice(AUTH_PREFIXES.BEARER.length).trim();
       }
 
-      if (!capturedToken && cookie.includes('kimi-auth=')) {
-        const match = cookie.match(/kimi-auth=([^;]+)/);
+      if (!capturedToken && cookie.includes(`${CREDENTIAL_KEYS.KIMI_AUTH}=`)) {
+        const match = cookie.match(REGEX_PATTERNS.KIMI_AUTH);
         if (match && match[1]) capturedToken = match[1];
       }
 
-      if (!capturedToken && cookie.includes('token=')) {
-        const match = cookie.match(/token=([^;]+)/);
-        if (match && match[1] && match[1].startsWith('eyJ'))
+      if (!capturedToken && cookie.includes(`${CREDENTIAL_KEYS.TOKEN}=`)) {
+        const match = cookie.match(REGEX_PATTERNS.TOKEN);
+        if (match && match[1] && match[1].startsWith(AUTH_PREFIXES.JWT))
           capturedToken = match[1];
       }
 
-      if (cookie.includes('kimi-refresh=')) {
-        const match = cookie.match(/kimi-refresh=([^;]+)/);
+      if (cookie.includes(`${CREDENTIAL_KEYS.KIMI_REFRESH}=`)) {
+        const match = cookie.match(REGEX_PATTERNS.KIMI_REFRESH);
         if (match && match[1]) capturedRefreshToken = match[1];
-      } else if (cookie.includes('refresh_token=')) {
-        const match = cookie.match(/refresh_token=([^;]+)/);
+      } else if (cookie.includes(`${CREDENTIAL_KEYS.REFRESH_TOKEN}=`)) {
+        const match = cookie.match(REGEX_PATTERNS.REFRESH_TOKEN);
         if (match && match[1]) capturedRefreshToken = match[1];
       }
 
-      const deviceId = headers['x-msh-device-id'];
-      const sessionId = headers['x-msh-session-id'];
-      const trafficId = headers['x-traffic-id'];
-      const userAgent = headers['user-agent'] || headers['User-Agent'];
+      const deviceId = headers[HTTP_HEADER_NAMES.X_MSH_DEVICE_ID];
+      const sessionId = headers[HTTP_HEADER_NAMES.X_MSH_SESSION_ID];
+      const trafficId = headers[HTTP_HEADER_NAMES.X_TRAFFIC_ID];
+      const userAgent =
+        headers[HTTP_HEADER_NAMES_LOWERCASE.USER_AGENT] ||
+        headers[HTTP_HEADER_NAMES.USER_AGENT];
 
-      const headerPayload: Record<string, string> = {};
-      if (deviceId) headerPayload['x-msh-device-id'] = String(deviceId);
-      if (sessionId) headerPayload['x-msh-session-id'] = String(sessionId);
-      if (trafficId) headerPayload['x-traffic-id'] = String(trafficId);
-      if (userAgent) headerPayload['User-Agent'] = String(userAgent);
-      if (cookie) headerPayload['Cookie'] = String(cookie);
+      const headerPayload: KimiHeadersPayload = {};
+      if (deviceId)
+        headerPayload[HTTP_HEADER_NAMES.X_MSH_DEVICE_ID] = String(deviceId);
+      if (sessionId)
+        headerPayload[HTTP_HEADER_NAMES.X_MSH_SESSION_ID] = String(sessionId);
+      if (trafficId)
+        headerPayload[HTTP_HEADER_NAMES.X_TRAFFIC_ID] = String(trafficId);
+      if (userAgent)
+        headerPayload[HTTP_HEADER_NAMES.USER_AGENT] = String(userAgent);
+      if (cookie) headerPayload[HTTP_HEADER_NAMES.COOKIE] = String(cookie);
 
       proxyEvents.emit(KIMI_EVENTS.HEADERS, headerPayload);
 
-      if (capturedToken && capturedToken.startsWith('eyJ')) {
+      if (capturedToken && capturedToken.startsWith(AUTH_PREFIXES.JWT)) {
         const jwtInfo = extractInfoFromJwt(capturedToken);
         const email =
           jwtInfo.email ||
           jwtInfo.name ||
           (jwtInfo.sub
-            ? `Kimi_${jwtInfo.sub.slice(0, 8)}`
-            : 'kimi_user@kimi.ai');
+            ? `${ID_PREFIXES.USER}${jwtInfo.sub.slice(0, JWT_SUB_PREFIX_LENGTH)}`
+            : DEFAULT_EMAIL);
 
         proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, { email });
 
-        const tokenPayload: any = {
-          token: capturedToken,
+        const tokenPayload: KimiLoginTokenPayload = {
+          [AUTH_FIELDS.TOKEN]: capturedToken,
           cookies: capturedToken,
-          email,
+          [AUTH_FIELDS.EMAIL]: email,
           headers: headerPayload,
         };
         if (capturedRefreshToken) {
-          tokenPayload.refreshToken = capturedRefreshToken;
-          tokenPayload.cookies = `kimi-auth=${capturedToken}; refresh_token=${capturedRefreshToken}`;
+          tokenPayload[AUTH_FIELDS.REFRESH_TOKEN] = capturedRefreshToken;
+          tokenPayload.cookies = `${CREDENTIAL_KEYS.KIMI_AUTH}=${capturedToken}; ${CREDENTIAL_KEYS.REFRESH_TOKEN}=${capturedRefreshToken}`;
         }
         proxyEvents.emit(KIMI_EVENTS.LOGIN_TOKEN, tokenPayload);
       }
     }
 
-    if (url.includes('google-callback') && url.includes('id_token=')) {
-      const match = url.match(/id_token=([^&]+)/);
+    if (
+      url.includes(URL_PATTERNS.GOOGLE_CALLBACK) &&
+      url.includes(URL_PATTERNS.ID_TOKEN_PARAM)
+    ) {
+      const match = url.match(REGEX_PATTERNS.ID_TOKEN_NO_HASH);
       if (match && match[1]) {
         const idToken = decodeURIComponent(match[1]);
         const jwtInfo = extractInfoFromJwt(idToken);
@@ -156,8 +201,8 @@ export const kimiProxyHandler: ProxyHandler = {
 
   onResponse: (ctx: any, callback: () => void) => {
     const location = ctx.serverToProxyResponse?.headers?.location || '';
-    if (location && location.includes('id_token=')) {
-      const match = location.match(/id_token=([^&#]+)/);
+    if (location && location.includes(URL_PATTERNS.ID_TOKEN_PARAM)) {
+      const match = location.match(REGEX_PATTERNS.ID_TOKEN);
       if (match && match[1]) {
         const idToken = decodeURIComponent(match[1]);
         const jwtInfo = extractInfoFromJwt(idToken);
@@ -174,61 +219,72 @@ export const kimiProxyHandler: ProxyHandler = {
     const url = ctx.clientToProxyRequest?.url || '';
 
     if (
-      host.includes('kimi.ai') ||
-      host.includes('kimi.com') ||
-      host.includes('moonshot.cn') ||
-      host.includes('auth.kimi.ai')
+      host.includes(HOSTS.KIMI_AI) ||
+      host.includes(HOSTS.KIMI_COM) ||
+      host.includes(HOSTS.MOONSHOT_CN) ||
+      host.includes(HOSTS.AUTH_KIMI)
     ) {
       try {
-        const json = JSON.parse(body);
+        const json = JSON.parse(body) as KimiTokenResponse;
 
         const token =
-          json.accessToken ||
-          json.access_token ||
-          json.token ||
-          json.data?.token ||
-          json.data?.access_token ||
-          json.data?.accessToken;
+          json[AUTH_FIELDS.ACCESS_TOKEN] ||
+          json[AUTH_FIELDS.ACCESS_TOKEN_SNAKE] ||
+          json[AUTH_FIELDS.TOKEN] ||
+          json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.TOKEN] ||
+          json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.ACCESS_TOKEN_SNAKE] ||
+          json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.ACCESS_TOKEN];
         const refreshToken =
-          json.refreshToken ||
-          json.refresh_token ||
-          json.data?.refreshToken ||
-          json.data?.refresh_token ||
-          json.refreshToken;
-        if (token && typeof token === 'string' && token.startsWith('eyJ')) {
+          json[AUTH_FIELDS.REFRESH_TOKEN] ||
+          json[AUTH_FIELDS.REFRESH_TOKEN_SNAKE] ||
+          json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.REFRESH_TOKEN] ||
+          json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.REFRESH_TOKEN_SNAKE] ||
+          json[AUTH_FIELDS.REFRESH_TOKEN];
+        if (
+          token &&
+          typeof token === 'string' &&
+          token.startsWith(AUTH_PREFIXES.JWT)
+        ) {
           const jwtInfo = extractInfoFromJwt(token);
           const email =
-            json.user?.email ||
-            json.user?.name ||
-            json.user?.nickname ||
-            json.data?.email ||
-            json.data?.name ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.EMAIL] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.EMAIL] ||
+            json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.NAME] ||
             jwtInfo.email ||
             jwtInfo.name ||
-            'kimi_user@kimi.ai';
+            DEFAULT_EMAIL;
 
           proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, { email });
-          const tokenPayload: any = {
-            token,
-            cookies: `kimi-auth=${token}${refreshToken ? `; refresh_token=${refreshToken}` : ''}`,
-            email,
+          const tokenPayload: KimiLoginTokenPayload = {
+            [AUTH_FIELDS.TOKEN]: token,
+            cookies: `${CREDENTIAL_KEYS.KIMI_AUTH}=${token}${refreshToken ? `; ${CREDENTIAL_KEYS.REFRESH_TOKEN}=${refreshToken}` : ''}`,
+            [AUTH_FIELDS.EMAIL]: email,
           };
           if (refreshToken) {
-            tokenPayload.refreshToken = refreshToken;
+            tokenPayload[AUTH_FIELDS.REFRESH_TOKEN] = refreshToken;
           }
           proxyEvents.emit(KIMI_EVENTS.LOGIN_TOKEN, tokenPayload);
         }
 
         if (
-          json.user &&
-          (json.user.nickname || json.user.name || json.user.email)
+          json[AUTH_FIELDS.USER] &&
+          (json[AUTH_FIELDS.USER][AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.USER][AUTH_FIELDS.NAME] ||
+            json[AUTH_FIELDS.USER][AUTH_FIELDS.EMAIL])
         ) {
-          const name = json.user.nickname || json.user.name || json.user.email;
+          const name =
+            json[AUTH_FIELDS.USER][AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.USER][AUTH_FIELDS.NAME] ||
+            json[AUTH_FIELDS.USER][AUTH_FIELDS.EMAIL];
           proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, { email: name });
         }
 
-        if (json.email && json.thirdParty) {
-          proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, { email: json.email });
+        if (json[AUTH_FIELDS.EMAIL] && json[AUTH_FIELDS.THIRD_PARTY]) {
+          proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, {
+            email: json[AUTH_FIELDS.EMAIL],
+          });
         }
       } catch {
         logger.warn('[Proxy] Kimi response body is not JSON');

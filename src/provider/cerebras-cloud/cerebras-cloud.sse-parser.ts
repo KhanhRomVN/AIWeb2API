@@ -14,6 +14,12 @@
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── Types ──
+import { CerebrasSSEChunk } from './cerebras-cloud.types';
+
+// ── Constants ──
+import { SSE_PROTOCOL } from './cerebras-cloud.constant';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('CerebrasSSE');
 
@@ -22,12 +28,16 @@ const logger = createLogger('CerebrasSSE');
 export interface ParseSSEOptions {
   onContent: (chunk: string) => void;
   onThinking?: (chunk: string) => void;
-  onMetadata?: (meta: any) => void;
+  onMetadata?: (meta: Record<string, unknown>) => void;
   onRaw?: (data: string) => void;
 }
 
 // ─── Functions ──────────────────────────────────────────────────────────
 
+/**
+ * Parse SSE stream từ Cerebras API và emit content / thinking / metadata.
+ * Hỗ trợ cả `delta.content` (nội dung) và `delta.reasoning` (thinking).
+ */
 export async function parseSSEStream(
   responseBody: NodeJS.ReadableStream,
   opts: ParseSSEOptions,
@@ -48,14 +58,19 @@ export async function parseSSEStream(
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
 
-      if (trimmedLine === 'data: [DONE]') {
+      if (
+        trimmedLine ===
+        `${SSE_PROTOCOL.DATA_PREFIX}${SSE_PROTOCOL.DONE}`
+      ) {
         return;
       }
 
-      if (!trimmedLine.startsWith('data: ')) continue;
+      if (!trimmedLine.startsWith(SSE_PROTOCOL.DATA_PREFIX)) continue;
 
       try {
-        const json = JSON.parse(trimmedLine.substring(6));
+        const json = JSON.parse(
+          trimmedLine.slice(SSE_PROTOCOL.DATA_PREFIX.length),
+        ) as CerebrasSSEChunk;
         const delta = json.choices?.[0]?.delta;
 
         if (!delta) continue;

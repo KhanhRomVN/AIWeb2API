@@ -5,18 +5,16 @@
  * Type definitions cho Kimi AI API.
  *
  * Main exports:
- * - KIMI_BASE_URL      : Base URL
- * - KimiCredential     : Credential structure
- * - KimiChatRequest    : Chat request payload
- * - KIMI_MODELS        : Model constants
+ * - KimiCredential         : Credential structure
+ * - KimiChatRequest        : Chat request payload
+ * - KimiChatBlock / KimiChatTool
+ * - KimiSSEEvent / KimiSSEMetadata
+ * - KimiTokenResponse / KimiUserResponse / KimiUserInfo
+ * - KimiHeadersPayload / KimiLoginTokenPayload / KimiLoginResult
  * ------------------------------------------------------------------
  */
 
-// ─── Constants (re-export) ─────────────────────────────────────────────
-
-export { KIMI_BASE_URL, KIMI_MODELS } from './kimi.constant';
-
-// ─── Types ──────────────────────────────────────────���───────────────────
+// ─── Credential ─────────────────────────────────────────────────────────
 
 export interface KimiCredential {
   accessToken: string;
@@ -28,21 +26,126 @@ export interface KimiCredential {
   userAgent?: string;
 }
 
+// ─── Chat Request ───────────────────────────────────────────────────────
+
+export interface KimiChatBlock {
+  text?: { content: string };
+  think?: { content: string };
+  multiStage?: { stage?: string; status?: string };
+  [key: string]: unknown;
+}
+
+export interface KimiChatTool {
+  type: string;
+  search?: Record<string, unknown>;
+}
+
 export interface KimiChatRequest {
   chat_id?: string;
-  scenario?: 'SCENARIO_K2D5' | 'SCENARIO_OK_COMPUTER' | string;
-  tools?: Array<{ type: string; search?: Record<string, any> }>;
+  scenario?: string;
+  tools?: KimiChatTool[];
   options?: {
     thinking?: boolean;
-    enablePlugin?: boolean;
-    reasoningEffort?: string;
+    enable_plugin?: boolean;
+    reasoning_effort?: string;
     model?: string;
   };
   message?: {
     role: string;
-    blocks: Array<{
-      text?: { content: string };
-      [key: string]: any;
-    }>;
+    blocks: KimiChatBlock[];
   };
+  kimiplus_id?: string;
+}
+
+// ─── SSE ────────────────────────────────────────────────────────────────
+
+export interface KimiSSEMetadata {
+  conversation_id?: string;
+  error?: string;
+  thinking_stage?: string;
+  message_status?: string;
+}
+
+export interface KimiSSEErrorDetail {
+  details?: Array<{
+    debug?: {
+      localizedMessage?: { message?: string };
+    };
+  }>;
+  message?: string;
+  code?: string;
+}
+
+export interface KimiSSEEvent {
+  done?: unknown;
+  heartbeat?: unknown;
+  error?: KimiSSEErrorDetail;
+  chat?: {
+    id?: string;
+    lastRequest?: { id?: string };
+  };
+  block?: {
+    text?: { content?: string };
+    think?: { content?: string };
+    multiStage?: { stage?: string; status?: string };
+  };
+  mask?: string;
+  message?: { status?: string };
+}
+
+// ─── API Response ───────────────────────────────────────────────────────
+
+export interface KimiUserInfo {
+  id?: string;
+  email?: string;
+  name?: string;
+  nickname?: string;
+}
+
+export interface KimiTokenResponse {
+  accessToken?: string;
+  access_token?: string;
+  token?: string;
+  refreshToken?: string;
+  refresh_token?: string;
+  data?: {
+    token?: string;
+    access_token?: string;
+    accessToken?: string;
+    refresh_token?: string;
+    refreshToken?: string;
+    email?: string;
+    name?: string;
+  };
+  user?: KimiUserInfo;
+  email?: string;
+  name?: string;
+  nickname?: string;
+  thirdParty?: unknown;
+}
+
+export interface KimiUserResponse {
+  user?: KimiUserInfo;
+  data?: { email?: string; name?: string };
+}
+
+// ─── Proxy ──────────────────────────────────────────────────────────────
+
+export interface KimiHeadersPayload {
+  [key: string]: string;
+}
+
+export interface KimiLoginTokenPayload {
+  token?: string;
+  cookies?: string;
+  email?: string;
+  refreshToken?: string;
+  refresh_token?: string;
+  headers?: KimiHeadersPayload;
+}
+
+export interface KimiLoginResult {
+  email: string;
+  cookies: string;
+  headers?: KimiHeadersPayload;
 }

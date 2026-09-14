@@ -10,7 +10,6 @@
  * - login()          : Đăng nhập qua Codex CLI với terminal
  * - refreshToken()   : Refresh access token
  * - handleMessage()  : Gửi tin nhắn với streaming response
- * - isModelSupported(): Kiểm tra model có hỗ trợ không
  * ------------------------------------------------------------------
  */
 
@@ -35,8 +34,7 @@ import { getDb } from '../../database';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
-// ── Codex Imports ──
-import { proxyHandler } from './codex-cli.proxy-handler';
+// ── Codex Constants ──
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
@@ -51,10 +49,35 @@ import {
   CODEX_RESPONSES_URL,
   AUTH_TOKEN_URL,
   USER_AGENT,
-  CLIENT_ID,
   ORIGINATOR,
   DEFAULT_INSTRUCTIONS,
+  API_FIELDS,
+  AUTH_CONFIG,
+  CONTENT_TYPES,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADERS,
+  LOGIN_CONFIG,
+  MESSAGE_TYPES,
+  PAYLOAD_DEFAULTS,
+  REGEX_PATTERNS,
+  SSE_PROTOCOL,
+  TERMINALS,
 } from './codex-cli.constant';
+
+// ── Codex Types ──
+import {
+  CodexCapturedTokens,
+  CodexJwtPayload,
+  CodexRequestPayload,
+  CodexSSEChunk,
+  CodexTokenResponse,
+  CodexTokens,
+  CodexUsageResponse,
+  CodexUserInfo,
+} from './codex-cli.types';
+
+// ── Codex Internal ──
+import { proxyHandler } from './codex-cli.proxy-handler';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('CodexCLIProvider');
@@ -68,7 +91,7 @@ try {
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class CodexCLIProvider implements Provider {
-  name = 'codex-cli';
+  name = PROVIDER_ID;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -85,17 +108,18 @@ export class CodexCLIProvider implements Provider {
 
   // ─── Get Profile ────────────────────────────────────────────────────
 
-  async getProfile(accessToken: string) {
+  async getUserProfile(accessToken: string): Promise<CodexUserInfo> {
     try {
       const response = await fetch(CHATGPT_USAGE_URL, {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-          'User-Agent': USER_AGENT,
+          [HTTP_HEADER_NAMES.AUTHORIZATION]:
+            `${HTTP_HEADERS.BEARER_PREFIX}${accessToken}`,
+          [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
         },
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as CodexUsageResponse;
         if (!data.email) {
           logger.warn('[CodexCLI] Get Profile response missing email field');
         }
@@ -117,8 +141,8 @@ export class CodexCLIProvider implements Provider {
   async login() {
     const tempHome = path.join(
       os.homedir(),
-      '.elara',
-      `codex-login-fresh-${Date.now()}`,
+      LOGIN_CONFIG.TEMP_DIR_NAME,
+      `${LOGIN_CONFIG.HOME_PREFIX}${Date.now()}`,
     );
     if (fs.existsSync(tempHome))
       fs.rmSync(tempHome, { recursive: true, force: true });
@@ -126,19 +150,10 @@ export class CodexCLIProvider implements Provider {
 
     await proxyService.start();
     const { port } = proxyService.getServerInfo();
-    const logFile = path.join(tempHome, 'codex-cli.log');
+    const logFile = path.join(tempHome, LOGIN_CONFIG.LOG_FILE_NAME);
 
-    const terminals = [
-      'gnome-terminal',
-      'konsole',
-      'xfce4-terminal',
-      'kitty',
-      'alacritty',
-      'xterm',
-      'x-terminal-emulator',
-    ];
     let terminal = '';
-    for (const t of terminals) {
+    for (const t of TERMINALS) {
       try {
         execSync(`which ${t}`, { stdio: 'ignore' });
         terminal = t;
@@ -155,7 +170,7 @@ export class CodexCLIProvider implements Provider {
     const proxyUrl = `http://127.0.0.1:${port}`;
     const caCertPath = path.join(
       os.homedir(),
-      '.elara',
+      LOGIN_CONFIG.TEMP_DIR_NAME,
       'certs',
       'certs',
       'ca.pem',
@@ -200,17 +215,15 @@ export class CodexCLIProvider implements Provider {
       const checkInterval = setInterval(() => {
         if (fs.existsSync(logFile)) {
           const content = fs.readFileSync(logFile, 'utf8');
-          const urlMatch = content.match(
-            /https:\/\/auth\.openai\.com\/oauth\/authorize\?[^\s"']+/,
-          );
+          const urlMatch = content.match(REGEX_PATTERNS.OAUTH_AUTHORIZE_URL);
           if (urlMatch && !capturedUrl) {
             capturedUrl = urlMatch[0];
             clearInterval(checkInterval);
             loginService
               .captureCredentialsViaCDP({
-                providerId: 'codex-cli',
+                providerId: PROVIDER_ID,
                 loginUrl: capturedUrl,
-                partition: 'codex-cli',
+                partition: PROVIDER_ID,
                 skipProxy: true,
                 extraEvents: [
                   CODEX_CLI_EVENTS.TOKENS,
@@ -219,9 +232,11 @@ export class CodexCLIProvider implements Provider {
                 validate: async (captured) => {
                   if (captured.cookies) {
                     try {
-                      const tokenData = JSON.parse(captured.cookies);
+                      const tokenData = JSON.parse(
+                        captured.cookies,
+                      ) as CodexCapturedTokens;
                       if (tokenData.accessToken) {
-                        const profile = await this.getProfile(
+                        const profile = await this.getUserProfile(
                           tokenData.accessToken,
                         );
                         if (profile && profile.email)
@@ -243,29 +258,29 @@ export class CodexCLIProvider implements Provider {
               .catch(reject);
           }
         }
-      }, 1000);
+      }, LOGIN_CONFIG.POLL_INTERVAL_MS);
       terminalSpawn.on('error', reject);
       setTimeout(() => {
         if (!capturedUrl) {
           clearInterval(checkInterval);
           reject(new Error('Timed out'));
         }
-      }, 60000);
+      }, LOGIN_CONFIG.TIMEOUT_MS);
     });
   }
 
   // ─── Refresh Token ──────────────────────────────────────────────────
 
-  async refreshToken(refreshTokenStr: string) {
+  async refreshToken(refreshTokenStr: string): Promise<CodexTokenResponse> {
     const response = await fetch(AUTH_TOKEN_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
       },
       body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: CLIENT_ID,
+        grant_type: AUTH_CONFIG.GRANT_TYPE_REFRESH,
+        client_id: AUTH_CONFIG.CLIENT_ID,
         refresh_token: refreshTokenStr,
       }),
     });
@@ -275,7 +290,7 @@ export class CodexCLIProvider implements Provider {
       );
       throw new Error('Failed to refresh Codex token');
     }
-    return await response.json();
+    return (await response.json()) as CodexTokenResponse;
   }
 
   // ─── Handle Message ─────────────────────────────────────────────────
@@ -293,14 +308,14 @@ export class CodexCLIProvider implements Provider {
       conversationId,
     } = options;
 
-    let tokens: any;
+    let tokens: CodexTokens;
     try {
-      tokens = JSON.parse(credential);
+      tokens = JSON.parse(credential) as CodexTokens;
     } catch (e) {
       logger.warn(
         '[CodexCLI] Credential is not valid JSON, treating as raw access token',
       );
-      tokens = { accessToken: credential };
+      tokens = { accessToken: credential, refreshToken: '', expiresIn: 0 };
     }
 
     const url = CODEX_RESPONSES_URL;
@@ -310,30 +325,35 @@ export class CodexCLIProvider implements Provider {
       try {
         const payload = JSON.parse(
           Buffer.from(token.split('.')[1], 'base64').toString(),
-        );
+        ) as CodexJwtPayload;
         chatgptAccountId =
-          payload['https://api.openai.com/auth']?.chatgpt_account_id;
+          payload[API_FIELDS.JWT_AUTH_CLAIM]?.[
+            API_FIELDS.JWT_CHATGPT_ACCOUNT_ID
+          ] || '';
       } catch (e) {
         logger.warn('[CodexCLI] Failed to decode JWT payload:', e);
       }
 
-      const bodyObj: any = {
+      const bodyObj: CodexRequestPayload = {
         model: model,
         instructions: DEFAULT_INSTRUCTIONS,
-        input: messages.map((m: any) => ({
-          type: 'message',
+        input: messages.map((m) => ({
+          type: MESSAGE_TYPES.MESSAGE,
           role: m.role,
           content: [
             {
-              type: m.role === 'assistant' ? 'output_text' : 'input_text',
+              type:
+                m.role === 'assistant'
+                  ? MESSAGE_TYPES.OUTPUT_TEXT
+                  : MESSAGE_TYPES.INPUT_TEXT,
               text: m.content,
             },
           ],
         })),
-        store: false,
+        store: PAYLOAD_DEFAULTS.STORE,
         stream: stream !== false,
-        include: ['reasoning.encrypted_content'],
-        reasoning: { effort: 'medium' },
+        include: [PAYLOAD_DEFAULTS.INCLUDE_REASONING_ENCRYPTED],
+        reasoning: { effort: PAYLOAD_DEFAULTS.REASONING_EFFORT },
       };
 
       // Gửi conversation_id để ChatGPT phân biệt các phiên hội thoại khác nhau
@@ -343,21 +363,24 @@ export class CodexCLIProvider implements Provider {
       }
 
       const jsonBody = JSON.stringify(bodyObj);
-      let finalBody: any = jsonBody;
-      const headers: any = {
-        Accept: 'text/event-stream',
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        originator: ORIGINATOR,
+      let finalBody: string | Buffer = jsonBody;
+      const headers: Record<string, string> = {
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_SSE,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]:
+          `${HTTP_HEADERS.BEARER_PREFIX}${token}`,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        [HTTP_HEADER_NAMES.ORIGINATOR]: ORIGINATOR,
       };
-      if (chatgptAccountId) headers['chatgpt-account-id'] = chatgptAccountId;
+      if (chatgptAccountId)
+        headers[HTTP_HEADER_NAMES.CHATGPT_ACCOUNT_ID] = chatgptAccountId;
 
       if (compress) {
         try {
           const compressed = await compress(Buffer.from(jsonBody));
           finalBody = compressed;
-          headers['Content-Encoding'] = 'zstd';
+          headers[HTTP_HEADER_NAMES.CONTENT_ENCODING] =
+            HTTP_HEADERS.CONTENT_ENCODING_ZSTD;
         } catch (e) {
           logger.warn(
             '[CodexCLI] Failed to compress request body with zstd:',
@@ -404,14 +427,17 @@ export class CodexCLIProvider implements Provider {
           buffer = lines.pop() || '';
           for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            const jsonStr = trimmed.slice(6).trim();
-            if (jsonStr === '[DONE]') {
+            if (!trimmed || !trimmed.startsWith(SSE_PROTOCOL.DATA_PREFIX))
+              continue;
+            const jsonStr = trimmed
+              .slice(SSE_PROTOCOL.DATA_PREFIX.length)
+              .trim();
+            if (jsonStr === SSE_PROTOCOL.DONE) {
               onDone();
               return;
             }
             try {
-              const json = JSON.parse(jsonStr);
+              const json = JSON.parse(jsonStr) as CodexSSEChunk;
               const content =
                 json.delta ||
                 json.choices?.[0]?.delta?.content ||
@@ -429,7 +455,7 @@ export class CodexCLIProvider implements Provider {
         }
         onDone();
       } else {
-        const json = await response.json();
+        const json = (await response.json()) as CodexSSEChunk;
         const content = json.choices?.[0]?.message?.content || '';
         onContent(content);
         onDone();
@@ -443,12 +469,6 @@ export class CodexCLIProvider implements Provider {
   // ─── Continue Message ───────────────────────────────────────────────
   async continueMessage(options: SendMessageOptions): Promise<void> {
     return this.handleMessage(options);
-  }
-
-  // ─── Misc ────────────────────────────────────────────────────────────
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('codex') || m.startsWith('gpt-5');
   }
 }
 export default new CodexCLIProvider();

@@ -11,7 +11,7 @@
  * - handleMessage()        : Gửi tin nhắn với streaming response
  * - refreshToken()         : Tự động refresh token khi hết hạn
  * - getModels()            : Lấy danh sách models từ API hoặc fallback
- * - getProfile()           : Lấy thông tin user profile
+ * - getUserProfile()           : Lấy thông tin user profile
  * - Session locking        : Ngăn concurrent requests trên cùng session
  * - Parent ID caching      : Cache parent_id để tránh lỗi sibling
  *
@@ -68,6 +68,32 @@ import {
   API_VERSION,
   BX_VERSION,
   USER_AGENT,
+  API_PATHS,
+  REFERER_PATHS,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADER_NAMES_LOWERCASE,
+  CONTENT_TYPES,
+  ACCEPT_VALUES,
+  ACCEPT_LANGUAGES,
+  SEC_CH_UA,
+  AUTH_PREFIXES,
+  TOKEN_COOKIE_KEY,
+  REGEX_PATTERNS,
+  SSE_PROTOCOL,
+  AUTH_FIELDS,
+  CREATE_CHAT_FIELDS,
+  CHAT_PAYLOAD_FIELDS,
+  SSE_EVENT_FIELDS,
+  RESPONSE_FIELDS,
+  MODEL_FIELDS,
+  CHAT_PAYLOAD_CONSTANTS,
+  DEFAULT_MAX_CONTEXT_LENGTH,
+  DEFAULT_TIMEOUT_MS,
+  TIMEZONE_OFFSET,
+  DB_PROVIDER_ID,
+  MODEL_PREFIX_QWEN_DASH,
+  MODEL_PREFIX_QWEN_3,
+  CHATS_LIST_QUERY,
 } from './qwen.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -100,7 +126,7 @@ const lastParentIdCache = new Map<string, string>();
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class QwenProvider implements Provider {
-  name = 'Qwen';
+  name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────
@@ -131,14 +157,17 @@ export class QwenProvider implements Provider {
 
         // New format: {accessToken, ...} or old format: {token, bxUa, ...}
         const token =
-          parsed.accessToken || parsed.access_token || parsed.token || null;
+          parsed[AUTH_FIELDS.ACCESS_TOKEN] ||
+          parsed[AUTH_FIELDS.ACCESS_TOKEN_SNAKE] ||
+          parsed[AUTH_FIELDS.TOKEN] ||
+          null;
 
         return {
           token,
-          cookieValue: token ? `token=${token}` : '',
-          bxUa: parsed.bxUa || '',
-          bxUmidToken: parsed.bxUmidToken || '',
-          userAgent: parsed.userAgent || USER_AGENT,
+          cookieValue: token ? `${TOKEN_COOKIE_KEY}=${token}` : '',
+          bxUa: parsed[AUTH_FIELDS.BX_UA] || '',
+          bxUmidToken: parsed[AUTH_FIELDS.BX_UMIDTOKEN] || '',
+          userAgent: parsed[AUTH_FIELDS.USER_AGENT] || USER_AGENT,
         };
       } catch {
         logger.warn(
@@ -148,11 +177,11 @@ export class QwenProvider implements Provider {
     }
 
     // Check if raw JWT token
-    if (credential.trim().startsWith('eyJ')) {
+    if (credential.trim().startsWith(AUTH_PREFIXES.JWT)) {
       const token = credential.trim();
       return {
         token,
-        cookieValue: `token=${token}`,
+        cookieValue: `${TOKEN_COOKIE_KEY}=${token}`,
         bxUa: '',
         bxUmidToken: '',
         userAgent: USER_AGENT,
@@ -160,7 +189,7 @@ export class QwenProvider implements Provider {
     }
 
     // Try extracting from cookie format: token=eyJ...
-    const m = credential.match(/(?:^|;\s*)token=(eyJ[^;]+)/);
+    const m = credential.match(REGEX_PATTERNS.COOKIE_TOKEN);
     if (m && m[1]) {
       return {
         token: m[1],
@@ -174,7 +203,7 @@ export class QwenProvider implements Provider {
     // Fallback: treat as raw token
     return {
       token: credential,
-      cookieValue: `token=${credential}`,
+      cookieValue: `${TOKEN_COOKIE_KEY}=${credential}`,
       bxUa: '',
       bxUmidToken: '',
       userAgent: USER_AGENT,
@@ -194,14 +223,15 @@ export class QwenProvider implements Provider {
     if (!accessToken) return null;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/v1/auths/`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${accessToken}`,
-          accept: 'application/json',
-          'accept-language': 'en-US,en;q=0.9',
-          source: 'web',
-          version: API_VERSION,
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+          [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+          [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+            ACCEPT_LANGUAGES.EN_US_Q09,
+          [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+          [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
         },
       });
 
@@ -229,9 +259,9 @@ export class QwenProvider implements Provider {
           const db = getDb();
           const accounts = db
             .prepare(
-              "SELECT * FROM accounts WHERE LOWER(provider_id) = 'qwen' AND LOWER(email) = ?",
+              'SELECT * FROM accounts WHERE LOWER(provider_id) = ? AND LOWER(email) = ?',
             )
-            .all(email.toLowerCase()) as any[];
+            .all(DB_PROVIDER_ID, email.toLowerCase()) as any[];
           for (const acc of accounts) {
             updateAccountCredential(acc.id, newAccessToken);
           }
@@ -297,9 +327,9 @@ export class QwenProvider implements Provider {
 
     try {
       return await loginService.captureCredentialsViaCDP({
-        providerId: 'qwen',
-        loginUrl: `${BASE_URL}/auth`,
-        partition: `qwen-${Date.now()}`,
+        providerId: PROVIDER_ID,
+        loginUrl: `${BASE_URL}${API_PATHS.AUTH_LOGIN}`,
+        partition: `${PROVIDER_ID}-${Date.now()}`,
         cookieEvent: QWEN_EVENTS.LOGIN_TOKEN,
         infoEvent: QWEN_EVENTS.LOGIN_EMAIL,
         extraEvents: [QWEN_EVENTS.HEADERS, QWEN_EVENTS.COOKIES],
@@ -311,11 +341,12 @@ export class QwenProvider implements Provider {
           if (!data.cookies) return { isValid: false };
 
           // Extract access token
-          const accessToken = data.cookies.trim().startsWith('eyJ')
+          const accessToken = data.cookies.trim().startsWith(AUTH_PREFIXES.JWT)
             ? data.cookies.trim()
-            : (data.cookies.match(/token=(eyJ[^;]+)/) || [])[1] || data.cookies;
+            : (data.cookies.match(REGEX_PATTERNS.RAW_TOKEN) || [])[1] ||
+              data.cookies;
 
-          if (!accessToken || !accessToken.startsWith('eyJ')) {
+          if (!accessToken || !accessToken.startsWith(AUTH_PREFIXES.JWT)) {
             logger.warn('[Qwen] Login validation failed: invalid token format');
             return { isValid: false };
           }
@@ -325,7 +356,7 @@ export class QwenProvider implements Provider {
           // Try fetching profile to get email
           if (!email) {
             try {
-              const profile = await this.getProfile(
+              const profile = await this.getUserProfile(
                 accessToken,
                 capturedHeaders,
               );
@@ -362,21 +393,22 @@ export class QwenProvider implements Provider {
       }
 
       const headers: Record<string, string> = {
-        Authorization: `Bearer ${accessToken}`,
-        accept: 'application/json, text/plain, */*',
-        'accept-language': 'en-US,en;q=0.9',
-        source: 'web',
-        version: API_VERSION,
-        'bx-v': BX_VERSION,
-        'x-request-id': crypto.randomUUID(),
-        'sec-ch-ua-platform': '"Linux"',
-        'sec-ch-ua':
-          '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-        'sec-ch-ua-mobile': '?0',
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]:
+          ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+          ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+        [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+        [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+        [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+        [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
       };
 
       const response = await fetch(
-        `${BASE_URL}/api/v2/chats/?page=1&exclude_project=true`,
+        `${BASE_URL}${API_PATHS.CHATS}${CHATS_LIST_QUERY}`,
         { headers },
       );
 
@@ -392,7 +424,7 @@ export class QwenProvider implements Provider {
 
   // ─── Profile ────────────────────────────────────────────────────────
 
-  async getProfile(
+  async getUserProfile(
     credential: string,
     extraHeaders?: any,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
@@ -405,27 +437,28 @@ export class QwenProvider implements Provider {
       }
 
       const headers: Record<string, string> = {
-        Authorization: `Bearer ${accessToken}`,
-        accept: 'application/json',
-        'accept-language': 'en-US,en;q=0.9',
-        source: 'web',
-        version: API_VERSION,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+          ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+        [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
       };
 
-      const response = await fetch(`${BASE_URL}/api/v1/auths/`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
         headers,
       });
 
       if (response.ok) {
         const json: any = await response.json();
-        const userData = json.data ?? json;
-        if (!userData?.email) {
+        const userData = json[AUTH_FIELDS.DATA] ?? json;
+        if (!userData?.[AUTH_FIELDS.EMAIL]) {
           logger.warn('[Qwen] Get Profile response missing email field');
         }
         return {
-          email: userData?.email || null,
-          name: userData?.name,
-          id: userData?.id,
+          email: userData?.[AUTH_FIELDS.EMAIL] || null,
+          name: userData?.[AUTH_FIELDS.NAME],
+          id: userData?.[AUTH_FIELDS.ID],
         };
       }
       logger.warn(`[Qwen] Get Profile returned status ${response.status}`);
@@ -438,10 +471,7 @@ export class QwenProvider implements Provider {
 
   // ─── Create Chat ────────────────────────────────────────────────────
 
-  private async createChat(
-    credential: string,
-    model: string,
-  ): Promise<string> {
+  private async createChat(credential: string, model: string): Promise<string> {
     const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
       this.parseCredential(credential);
 
@@ -450,46 +480,54 @@ export class QwenProvider implements Provider {
     }
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      accept: 'application/json, text/plain, */*',
-      'User-Agent': userAgent || USER_AGENT,
-      Cookie: cookieValue || `token=${token}`,
-      source: 'web',
-      version: API_VERSION,
-      Referer: `${BASE_URL}/c/new-chat`,
-      Origin: BASE_URL,
-      'X-Request-Id': crypto.randomUUID(),
-      'sec-ch-ua':
-        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Linux"',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Timezone:
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]:
+        ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+      [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES.COOKIE]:
+        cookieValue || `${TOKEN_COOKIE_KEY}=${token}`,
+      [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+      [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.NEW_CHAT}`,
+      [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+      [HTTP_HEADER_NAMES.TIMEZONE]:
         new Date().toDateString() +
         ' ' +
         new Date().toTimeString().split(' ')[0] +
-        ' GMT+0700',
-      'bx-v': BX_VERSION,
+        ' ' +
+        TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
     };
 
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    if (bxUa) headers['bx-ua'] = bxUa;
-    if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
+    if (token)
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+        `${AUTH_PREFIXES.BEARER}${token}`;
+    if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+    if (bxUmidToken)
+      headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
-    const response = await fetch(`${BASE_URL}/api/v2/chats/new`, {
+    const response = await fetch(`${BASE_URL}${API_PATHS.CHATS_NEW}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        chatId: '',
-        models: [model],
-        project_id: '',
-        timestamp: Date.now(),
-        chat_type: 't2t',
-        chat_mode: 'normal',
+        [CREATE_CHAT_FIELDS.CHAT_ID]: '',
+        [CREATE_CHAT_FIELDS.MODELS]: [model],
+        [CREATE_CHAT_FIELDS.PROJECT_ID]: '',
+        [CREATE_CHAT_FIELDS.TIMESTAMP]: Date.now(),
+        [CREATE_CHAT_FIELDS.CHAT_TYPE]: CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2T,
+        [CREATE_CHAT_FIELDS.CHAT_MODE]:
+          CHAT_PAYLOAD_CONSTANTS.CHAT_MODE_NORMAL,
       }),
     });
 
-    const actualStatusCode = response.headers.get('x-actual-status-code');
+    const actualStatusCode = response.headers.get(
+      HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE,
+    );
     if (actualStatusCode && actualStatusCode !== '200') {
       const errorText = await response.text();
       throw new Error(`Create chat failed: ${actualStatusCode} - ${errorText}`);
@@ -503,13 +541,18 @@ export class QwenProvider implements Provider {
     const json = await response.json();
 
     // Check if response indicates error (even with 200 status)
-    if (json.success === false) {
-      const errorCode = json.data?.code || 'unknown';
-      const errorDetails = json.data?.details || JSON.stringify(json);
+    if (json[CREATE_CHAT_FIELDS.SUCCESS] === false) {
+      const errorCode =
+        json[CREATE_CHAT_FIELDS.DATA]?.[CREATE_CHAT_FIELDS.CODE] || 'unknown';
+      const errorDetails =
+        json[CREATE_CHAT_FIELDS.DATA]?.[CREATE_CHAT_FIELDS.DETAILS] ||
+        JSON.stringify(json);
       throw new Error(`Create chat failed: ${errorCode} - ${errorDetails}`);
     }
 
-    const chatId = json.data?.id || json.id;
+    const chatId =
+      json[CREATE_CHAT_FIELDS.DATA]?.[CREATE_CHAT_FIELDS.ID] ||
+      json[CREATE_CHAT_FIELDS.ID];
 
     if (!chatId) {
       throw new Error(`No chat_id in response: ${JSON.stringify(json)}`);
@@ -528,33 +571,37 @@ export class QwenProvider implements Provider {
       this.parseCredential(credential);
 
     const headers: Record<string, string> = {
-      Cookie: cookieValue || `token=${token}`,
-      'User-Agent': userAgent || USER_AGENT,
-      accept: 'application/json',
-      source: 'web',
-      version: API_VERSION,
-      'x-request-id': crypto.randomUUID(),
-      'X-Request-Id': crypto.randomUUID(),
-      'sec-ch-ua-platform': '"Linux"',
-      'bx-v': BX_VERSION,
-      Referer: `${BASE_URL}/c/${conversationId}`,
-      'Accept-Language': 'en-US,en;q=0.9',
-      Timezone:
+      [HTTP_HEADER_NAMES.COOKIE]:
+        cookieValue || `${TOKEN_COOKIE_KEY}=${token}`,
+      [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+      [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+      [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+      [HTTP_HEADER_NAMES.TIMEZONE]:
         new Date().toDateString() +
         ' ' +
         new Date().toTimeString().split(' ')[0] +
-        ' GMT+0700',
-      'sec-ch-ua':
-        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-      'sec-ch-ua-mobile': '?0',
+        ' ' +
+        TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
     };
 
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    if (bxUa) headers['bx-ua'] = bxUa;
-    if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
+    if (token)
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+        `${AUTH_PREFIXES.BEARER}${token}`;
+    if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+    if (bxUmidToken)
+      headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
     const response = await fetch(
-      `${BASE_URL}/api/v2/chats/${conversationId}/messages/`,
+      `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/`,
       { headers },
     );
     if (!response.ok) {
@@ -565,12 +612,17 @@ export class QwenProvider implements Provider {
     }
 
     const json = await response.json();
-    const messages = json.messages || json.data || [];
+    const messages =
+      json[RESPONSE_FIELDS.MESSAGES] || json[RESPONSE_FIELDS.DATA] || [];
     if (messages.length > 0) {
       const lastAssistant = [...messages]
         .reverse()
-        .find((m: any) => m.role === 'assistant');
-      return lastAssistant?.id || null;
+        .find(
+          (m: any) =>
+            m[CHAT_PAYLOAD_FIELDS.ROLE] ===
+            CHAT_PAYLOAD_CONSTANTS.ROLE_ASSISTANT,
+        );
+      return lastAssistant?.[CHAT_PAYLOAD_FIELDS.ID] || null;
     }
     return null;
   }
@@ -589,8 +641,11 @@ export class QwenProvider implements Provider {
     }
     modelToUse = modelToUse.trim();
 
-    if (modelToUse.startsWith('qwen-3.')) {
-      modelToUse = modelToUse.replace('qwen-', 'qwen');
+    if (modelToUse.startsWith(MODEL_PREFIX_QWEN_3)) {
+      modelToUse = modelToUse.replace(
+        MODEL_PREFIX_QWEN_DASH,
+        MODEL_PREFIX_QWEN_DASH.slice(0, -1),
+      );
     }
 
     const lockKey = conversationId || options.accountId || 'qwen_default';
@@ -638,76 +693,96 @@ export class QwenProvider implements Provider {
       }
 
       const payload = {
-        stream: true,
-        version: '2.1',
-        incremental_output: true,
-        chatId: conversationId || '',
-        parentId: parentId || '',
-        ...(conversationId && { chat_id: conversationId }),
-        chat_mode: 'normal',
-        model: modelToUse,
-        parent_id: parentId as string | null,
-        messages: [
+        [CHAT_PAYLOAD_FIELDS.STREAM]: true,
+        [CHAT_PAYLOAD_FIELDS.VERSION]:
+          CHAT_PAYLOAD_CONSTANTS.STREAM_VERSION,
+        [CHAT_PAYLOAD_FIELDS.INCREMENTAL_OUTPUT]: true,
+        [CHAT_PAYLOAD_FIELDS.CHAT_ID]: conversationId || '',
+        [CHAT_PAYLOAD_FIELDS.PARENT_ID]: parentId || '',
+        ...(conversationId && {
+          [CHAT_PAYLOAD_FIELDS.CHAT_ID_SNAKE]: conversationId,
+        }),
+        [CHAT_PAYLOAD_FIELDS.CHAT_MODE]:
+          CHAT_PAYLOAD_CONSTANTS.CHAT_MODE_NORMAL,
+        [CHAT_PAYLOAD_FIELDS.MODEL]: modelToUse,
+        [CHAT_PAYLOAD_FIELDS.PARENT_ID_SNAKE]: parentId as string | null,
+        [CHAT_PAYLOAD_FIELDS.MESSAGES]: [
           {
-            id: null,
-            fid: msgFid,
-            parentId: parentId as string | null,
-            childrenIds: [] as string[],
-            role: lastMsg.role,
-            content: lastMsg.content,
-            user_action: 'chat',
-            files: [],
-            timestamp: nowSec,
-            models: [modelToUse],
-            model: '',
-            chat_type: 't2t',
-            feature_config: {
-              thinking_enabled: false,
-              output_schema: 'phase',
-              research_mode: 'normal',
-              auto_thinking: false,
-              thinking_mode: 'Fast',
-              auto_search: true,
+            [CHAT_PAYLOAD_FIELDS.ID]: null,
+            [CHAT_PAYLOAD_FIELDS.FID]: msgFid,
+            [CHAT_PAYLOAD_FIELDS.PARENT_ID]: parentId as string | null,
+            [CHAT_PAYLOAD_FIELDS.CHILDREN_IDS]: [] as string[],
+            [CHAT_PAYLOAD_FIELDS.ROLE]: lastMsg.role,
+            [CHAT_PAYLOAD_FIELDS.CONTENT]: lastMsg.content,
+            [CHAT_PAYLOAD_FIELDS.USER_ACTION]:
+              CHAT_PAYLOAD_CONSTANTS.USER_ACTION_CHAT,
+            [CHAT_PAYLOAD_FIELDS.FILES]: [],
+            [CHAT_PAYLOAD_FIELDS.TIMESTAMP]: nowSec,
+            [CHAT_PAYLOAD_FIELDS.MODELS]: [modelToUse],
+            [CHAT_PAYLOAD_FIELDS.MODEL]: '',
+            [CHAT_PAYLOAD_FIELDS.CHAT_TYPE]:
+              CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2T,
+            [CHAT_PAYLOAD_FIELDS.FEATURE_CONFIG]: {
+              [CHAT_PAYLOAD_FIELDS.THINKING_ENABLED]: false,
+              [CHAT_PAYLOAD_FIELDS.OUTPUT_SCHEMA]:
+                CHAT_PAYLOAD_CONSTANTS.OUTPUT_SCHEMA_PHASE,
+              [CHAT_PAYLOAD_FIELDS.RESEARCH_MODE]:
+                CHAT_PAYLOAD_CONSTANTS.RESEARCH_MODE_NORMAL,
+              [CHAT_PAYLOAD_FIELDS.AUTO_THINKING]: false,
+              [CHAT_PAYLOAD_FIELDS.THINKING_MODE]:
+                CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_FAST,
+              [CHAT_PAYLOAD_FIELDS.AUTO_SEARCH]: true,
             },
-            extra: { meta: { subChatType: 't2t' } },
-            sub_chat_type: 't2t',
-            parent_id: parentId as string | null,
+            [CHAT_PAYLOAD_FIELDS.EXTRA]: {
+              [CHAT_PAYLOAD_FIELDS.META]: {
+                [CHAT_PAYLOAD_FIELDS.SUB_CHAT_TYPE]:
+                  CHAT_PAYLOAD_CONSTANTS.SUB_CHAT_TYPE,
+              },
+            },
+            [CHAT_PAYLOAD_FIELDS.SUB_CHAT_TYPE_SNAKE]:
+              CHAT_PAYLOAD_CONSTANTS.SUB_CHAT_TYPE,
+            [CHAT_PAYLOAD_FIELDS.PARENT_ID_SNAKE]: parentId as string | null,
           },
         ],
-        timestamp: nowSec,
+        [CHAT_PAYLOAD_FIELDS.TIMESTAMP]: nowSec,
       };
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        accept: 'application/json',
-        'User-Agent': userAgent || USER_AGENT,
-        Cookie: cookieValue || `token=${token}`,
-        Origin: BASE_URL,
-        Referer: conversationId ? `${BASE_URL}/c/${conversationId}` : BASE_URL,
-        'x-accel-buffering': 'no',
-        'X-Accel-Buffering': 'no',
-        'x-request-id': requestId,
-        'X-Request-Id': requestId,
-        source: 'web',
-        version: API_VERSION,
-        'bx-v': BX_VERSION,
-        timezone,
-        Timezone: timezone,
-        'accept-language': 'en-US,en;q=0.9',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'sec-ch-ua':
-          '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Linux"',
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+        [HTTP_HEADER_NAMES.COOKIE]:
+          cookieValue || `${TOKEN_COOKIE_KEY}=${token}`,
+        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: conversationId
+          ? `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`
+          : BASE_URL,
+        [HTTP_HEADER_NAMES.X_ACCEL_BUFFERING]: 'no',
+        [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: requestId,
+        [HTTP_HEADER_NAMES.X_REQUEST_ID]: requestId,
+        [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+        [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.TIMEZONE]: timezone,
+        [HTTP_HEADER_NAMES.TIMEZONE]: timezone,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+          ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+        [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+        [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
       };
 
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      if (bxUa) headers['bx-ua'] = bxUa;
-      if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
+      if (token)
+        headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+          `${AUTH_PREFIXES.BEARER}${token}`;
+      if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+      if (bxUmidToken)
+        headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
       const url = conversationId
-        ? `${BASE_URL}/api/v2/chat/completions?chat_id=${conversationId}`
-        : `${BASE_URL}/api/v2/chat/completions`;
+        ? `${BASE_URL}${API_PATHS.CHAT_COMPLETIONS}?chat_id=${conversationId}`
+        : `${BASE_URL}${API_PATHS.CHAT_COMPLETIONS}`;
 
       const response = await fetch(url, {
         method: 'POST',
@@ -715,7 +790,9 @@ export class QwenProvider implements Provider {
         body: JSON.stringify(payload),
       });
 
-      const actualStatusCode = response.headers.get('x-actual-status-code');
+      const actualStatusCode = response.headers.get(
+        HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE,
+      );
       if (actualStatusCode && actualStatusCode !== '200') {
         const errText = await response.text();
         logger.error(
@@ -760,15 +837,17 @@ export class QwenProvider implements Provider {
           if (!trimmed) continue;
 
           let jsonStr = trimmed;
-          if (trimmed.startsWith('data: ')) {
-            jsonStr = trimmed.slice(6).trim();
-          } else if (trimmed.startsWith('data:')) {
-            jsonStr = trimmed.slice(5).trim();
+          if (trimmed.startsWith(SSE_PROTOCOL.DATA_PREFIX)) {
+            jsonStr = trimmed.slice(SSE_PROTOCOL.DATA_PREFIX_LENGTH).trim();
+          } else if (trimmed.startsWith(SSE_PROTOCOL.DATA_PREFIX_SHORT)) {
+            jsonStr = trimmed
+              .slice(SSE_PROTOCOL.DATA_PREFIX_SHORT_LENGTH)
+              .trim();
           } else {
             continue;
           }
 
-          if (jsonStr === '[DONE]') {
+          if (jsonStr === SSE_PROTOCOL.DONE) {
             thinkingParser.flush();
             onDone();
             return;
@@ -779,29 +858,43 @@ export class QwenProvider implements Provider {
             totalChunksProcessed++;
 
             let responseCreated = null;
-            if (json['response.created']) {
-              responseCreated = json['response.created'];
-            } else if (json.response && json.response.created) {
-              responseCreated = json.response.created;
+            if (json[SSE_EVENT_FIELDS.RESPONSE_CREATED_KEY]) {
+              responseCreated = json[SSE_EVENT_FIELDS.RESPONSE_CREATED_KEY];
+            } else if (
+              json[SSE_EVENT_FIELDS.RESPONSE] &&
+              json[SSE_EVENT_FIELDS.RESPONSE][SSE_EVENT_FIELDS.CREATED]
+            ) {
+              responseCreated =
+                json[SSE_EVENT_FIELDS.RESPONSE][SSE_EVENT_FIELDS.CREATED];
             }
 
             if (responseCreated) {
               if (
                 isNewChat &&
                 !conversationIdCaptured &&
-                responseCreated.chat_id
+                responseCreated[SSE_EVENT_FIELDS.CHAT_ID]
               ) {
                 conversationIdCaptured = true;
-                if (onSessionCreated) onSessionCreated(responseCreated.chat_id);
+                if (onSessionCreated)
+                  onSessionCreated(
+                    responseCreated[SSE_EVENT_FIELDS.CHAT_ID],
+                  );
                 if (onMetadata)
-                  onMetadata({ conversation_id: responseCreated.chat_id });
+                  onMetadata({
+                    conversation_id:
+                      responseCreated[SSE_EVENT_FIELDS.CHAT_ID],
+                  });
               }
 
-              if (!parentIdCaptured && responseCreated.response_id) {
+              if (
+                !parentIdCaptured &&
+                responseCreated[SSE_EVENT_FIELDS.RESPONSE_ID]
+              ) {
                 parentIdCaptured = true;
-                capturedParentId = responseCreated.response_id;
+                capturedParentId =
+                  responseCreated[SSE_EVENT_FIELDS.RESPONSE_ID];
                 const chatIdForCache =
-                  responseCreated.chat_id || conversationId;
+                  responseCreated[SSE_EVENT_FIELDS.CHAT_ID] || conversationId;
                 if (chatIdForCache && capturedParentId) {
                   lastParentIdCache.set(chatIdForCache, capturedParentId);
                 }
@@ -810,14 +903,19 @@ export class QwenProvider implements Provider {
               }
             }
 
-            const delta = json.choices?.[0]?.delta;
-            if (delta?.reasoning_content && onThinking) {
-              onThinking(delta.reasoning_content);
+            const delta =
+              json[SSE_EVENT_FIELDS.CHOICES]?.[0]?.[SSE_EVENT_FIELDS.DELTA];
+            if (
+              delta?.[SSE_EVENT_FIELDS.REASONING_CONTENT] &&
+              onThinking
+            ) {
+              onThinking(delta[SSE_EVENT_FIELDS.REASONING_CONTENT]);
             }
 
-            if (delta?.content) {
-              totalContentReceived += delta.content.length;
-              thinkingParser.feed(delta.content);
+            if (delta?.[SSE_EVENT_FIELDS.CONTENT]) {
+              totalContentReceived +=
+                delta[SSE_EVENT_FIELDS.CONTENT].length;
+              thinkingParser.feed(delta[SSE_EVENT_FIELDS.CONTENT]);
             } else if (delta && totalChunksProcessed <= 10) {
               // Log when delta exists but has no content
             }
@@ -884,36 +982,44 @@ export class QwenProvider implements Provider {
       this.parseCredential(credential);
 
     const headers: Record<string, string> = {
-      accept: 'application/json, text/plain, */*',
-      'content-type': 'application/json',
-      cookie: cookieValue || (token ? `token=${token}` : ''),
-      origin: BASE_URL,
-      referer: `${BASE_URL}/`,
-      'user-agent': userAgent || USER_AGENT,
-      'x-request-id': crypto.randomUUID(),
-      'sec-ch-ua-platform': '"Linux"',
-      'sec-ch-ua':
-        '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-      'sec-ch-ua-mobile': '?0',
-      source: 'web',
-      version: API_VERSION,
-      'bx-v': BX_VERSION,
-      timezone:
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]:
+        ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+      [HTTP_HEADER_NAMES_LOWERCASE.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES_LOWERCASE.COOKIE]: cookieValue
+        ? cookieValue
+        : token
+          ? `${TOKEN_COOKIE_KEY}=${token}`
+          : '',
+      [HTTP_HEADER_NAMES_LOWERCASE.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES_LOWERCASE.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES_LOWERCASE.USER_AGENT]: userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+      [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+      [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+      [HTTP_HEADER_NAMES_LOWERCASE.TIMEZONE]:
         new Date().toDateString() +
         ' ' +
         new Date().toTimeString().split(' ')[0] +
-        ' GMT+0700',
-      'accept-language': 'en-US',
+        ' ' +
+        TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US,
     };
 
-    if (token) headers['authorization'] = `Bearer ${token}`;
-    if (bxUa) headers['bx-ua'] = bxUa;
-    if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
+    if (token)
+      headers[HTTP_HEADER_NAMES_LOWERCASE.AUTHORIZATION] =
+        `${AUTH_PREFIXES.BEARER}${token}`;
+    if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+    if (bxUmidToken)
+      headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/v2/models/`, {
+      const response = await fetch(`${BASE_URL}${API_PATHS.MODELS}`, {
         headers,
-        timeout: 10000,
+        timeout: DEFAULT_TIMEOUT_MS,
       } as any);
 
       if (response.ok) {
@@ -921,29 +1027,38 @@ export class QwenProvider implements Provider {
 
         // Parse structure: {"success": true, "data": {"data": [...]}}
         const modelList =
-          json?.data?.data || json?.data || (Array.isArray(json) ? json : null);
+          json?.[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.DATA] ||
+          json?.[AUTH_FIELDS.DATA] ||
+          (Array.isArray(json) ? json : null);
 
         if (modelList && Array.isArray(modelList) && modelList.length > 0) {
           return modelList
             .filter((model: any) => {
               // Filter active models only
-              const info = model.info || {};
-              return info.is_active === true;
+              const info = model[MODEL_FIELDS.INFO] || {};
+              return info[MODEL_FIELDS.IS_ACTIVE] === true;
             })
             .map((model: any) => {
-              const info = model.info || {};
-              const meta = info.meta || {};
-              const capabilities = meta.capabilities || {};
+              const info = model[MODEL_FIELDS.INFO] || {};
+              const meta = info[MODEL_FIELDS.META] || {};
+              const capabilities = meta[MODEL_FIELDS.CAPABILITIES] || {};
 
               return {
-                id: model.id || info.id,
-                name: model.name || info.name || model.id,
-                is_thinking: capabilities.thinking === true,
-                max_context_length: meta.max_context_length || 1000000,
-                is_search: capabilities.search === true,
-                is_image_upload: capabilities.vision === true,
+                id: model[MODEL_FIELDS.ID] || info[MODEL_FIELDS.ID],
+                name:
+                  model[MODEL_FIELDS.NAME] ||
+                  info[MODEL_FIELDS.NAME] ||
+                  model[MODEL_FIELDS.ID],
+                is_thinking: capabilities[MODEL_FIELDS.THINKING] === true,
+                max_context_length:
+                  meta[MODEL_FIELDS.MAX_CONTEXT_LENGTH] ||
+                  DEFAULT_MAX_CONTEXT_LENGTH,
+                is_search: capabilities[MODEL_FIELDS.SEARCH] === true,
+                is_image_upload: capabilities[MODEL_FIELDS.VISION] === true,
                 description:
-                  meta.short_description || meta.description || undefined,
+                  meta[MODEL_FIELDS.SHORT_DESCRIPTION] ||
+                  meta[MODEL_FIELDS.DESCRIPTION] ||
+                  undefined,
               };
             });
         }
@@ -959,13 +1074,6 @@ export class QwenProvider implements Provider {
     // Return empty array if API fetch fails - no hardcoded fallback
     logger.warn('[Qwen] No models available from API');
     return [];
-  }
-
-  // ─── Model Support ──────────────────────────────────────────────────
-
-  isModelSupported(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('qwen') || m.startsWith('qwen-');
   }
 }
 

@@ -20,7 +20,18 @@
 import * as crypto from 'crypto';
 
 // ── Constants ──
-import { BASE_URL, GEMINI_BL } from './gemini.constants';
+import {
+  BASE_URL,
+  GEMINI_BL,
+  SAPISID_HASH_PREFIX,
+  FORM_FIELDS,
+  STREAM_GENERATE_PATH,
+  PAYLOAD_ARRAY_SIZE,
+  MIN_LINE_LENGTH_FOR_PARSE,
+  MIN_INNER_STR_LENGTH,
+  WRB_FR_MARKER,
+  REGEX_PATTERNS,
+} from './gemini.constant';
 
 // ─── Functions ──────────────────────────────────────────────────────────
 
@@ -30,7 +41,7 @@ export function makeSapisidHash(sapisid: string): string {
     .createHash('sha1')
     .update(`${ts} ${sapisid} ${BASE_URL}`)
     .digest('hex');
-  return `SAPISIDHASH ${ts}_${hash}`;
+  return `${SAPISID_HASH_PREFIX}${ts}_${hash}`;
 }
 
 export function getAccountPrefix(authUser?: string): string {
@@ -43,7 +54,7 @@ export function buildPayload(
   modelId: number,
   thinkMode: number,
 ): string {
-  const inner: any[] = new Array(102).fill(null);
+  const inner: any[] = new Array(PAYLOAD_ARRAY_SIZE).fill(null);
   inner[0] = [prompt, 0, null, null, null, null, 0];
   inner[1] = ['en'];
   inner[2] = ['', '', '', null, null, null, null, null, null, ''];
@@ -73,9 +84,9 @@ export function buildRequestBody(
 ): string {
   const fReq = buildPayload(prompt, modelId, thinkMode);
   const params = new URLSearchParams();
-  params.set('f.req', fReq);
+  params.set(FORM_FIELDS.F_REQ, fReq);
   if (xsrfToken) {
-    params.set('at', xsrfToken);
+    params.set(FORM_FIELDS.AT, xsrfToken);
   }
   return params.toString();
 }
@@ -85,17 +96,22 @@ export function getStreamGenerateUrl(authUser?: string): string {
   const prefix = getAccountPrefix(authUser);
   return (
     `${BASE_URL}${prefix}/_/BardChatUi/data/` +
-    `assistant.lamda.BardFrontendService/StreamGenerate` +
+    `${STREAM_GENERATE_PATH}` +
     `?bl=${GEMINI_BL}&hl=en&_reqid=${reqid}&rt=c`
   );
 }
 
 export function extractTextsFromLine(line: string): string[] {
-  if (!line.includes('"wrb.fr"') || line.length < 200) return [];
+  if (!line.includes(WRB_FR_MARKER) || line.length < MIN_LINE_LENGTH_FOR_PARSE)
+    return [];
   try {
     const arr = JSON.parse(line);
     const innerStr = arr[0]?.[2];
-    if (!innerStr || typeof innerStr !== 'string' || innerStr.length < 50)
+    if (
+      !innerStr ||
+      typeof innerStr !== 'string' ||
+      innerStr.length < MIN_INNER_STR_LENGTH
+    )
       return [];
     const inner = JSON.parse(innerStr);
     if (!Array.isArray(inner) || inner.length <= 4 || !inner[4]) return [];
@@ -122,10 +138,7 @@ export function extractTextsFromLine(line: string): string[] {
 
 export function cleanText(text: string): string {
   return text
-    .replace(
-      /```(?:python|javascript|text)\?code_(?:reference|stdout)&code_event_index=\d+\n.*?```\n?/gs,
-      '',
-    )
-    .replace(/http:\/\/googleusercontent\.com\/card_content\/\d+\n?/g, '')
+    .replace(REGEX_PATTERNS.CODE_BLOCK, '')
+    .replace(REGEX_PATTERNS.CARD_CONTENT, '')
     .trim();
 }

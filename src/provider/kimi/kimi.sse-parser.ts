@@ -16,6 +16,19 @@
 import { createLogger } from '../../utils/logger';
 import { StreamingThinkingParser } from '../../utils/thinking-parser';
 
+// ── Types ──
+import { KimiSSEEvent, KimiSSEMetadata } from './kimi.types';
+
+// ── Constants ──
+import {
+  FRAME_PROTOCOL,
+  ENCODINGS,
+  SSE_EVENT_FIELDS,
+  SSE_STAGES,
+  SSE_MESSAGE_STATUSES,
+  SSE_MASKS,
+} from './kimi.constant';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('KimiSSEParser');
 
@@ -24,7 +37,7 @@ const logger = createLogger('KimiSSEParser');
 export interface ParseOptions {
   onContent: (chunk: string) => void;
   onThinking?: (chunk: string) => void;
-  onMetadata?: (meta: any) => void;
+  onMetadata?: (meta: KimiSSEMetadata) => void;
   onError?: (err: Error) => void;
   onRaw?: (data: string) => void;
   conversationId?: string;
@@ -43,7 +56,7 @@ export async function parseKimiSSE(
   stream: NodeJS.ReadableStream,
   options: ParseOptions,
 ): Promise<ParseResult> {
-  const { onContent, onThinking, onMetadata, onError, onRaw } = options;
+  const { onContent, onThinking, onMetadata, onRaw } = options;
 
   let accumulatedContent = '';
   let accumulatedThinking = '';
@@ -68,21 +81,24 @@ export async function parseKimiSSE(
     stream.on('data', (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
 
-      while (buffer.length >= 5) {
-        const frameLen = buffer.readUInt32BE(1);
+      while (buffer.length >= FRAME_PROTOCOL.HEADER_SIZE) {
+        const frameLen = buffer.readUInt32BE(FRAME_PROTOCOL.LENGTH_OFFSET);
 
-        if (buffer.length < 5 + frameLen) {
+        if (buffer.length < FRAME_PROTOCOL.HEADER_SIZE + frameLen) {
           break;
         }
 
-        const frameData = buffer.subarray(5, 5 + frameLen);
-        buffer = buffer.subarray(5 + frameLen);
+        const frameData = buffer.subarray(
+          FRAME_PROTOCOL.HEADER_SIZE,
+          FRAME_PROTOCOL.HEADER_SIZE + frameLen,
+        );
+        buffer = buffer.subarray(FRAME_PROTOCOL.HEADER_SIZE + frameLen);
 
-        const frameStr = frameData.toString('utf8').trim();
+        const frameStr = frameData.toString(ENCODINGS.UTF8).trim();
         if (!frameStr) continue;
 
         try {
-          const event = JSON.parse(frameStr);
+          const event = JSON.parse(frameStr) as KimiSSEEvent;
           processKimiEvent(event);
         } catch (e) {
           logger.warn('[Kimi] Failed to parse SSE frame:', e);
@@ -106,23 +122,25 @@ export async function parseKimiSSE(
       reject(err);
     });
 
-    function processKimiEvent(event: any) {
+    function processKimiEvent(event: KimiSSEEvent) {
       if (onRaw) onRaw(JSON.stringify(event));
 
-      if (event.done !== undefined) {
+      if (event[SSE_EVENT_FIELDS.DONE] !== undefined) {
         isComplete = true;
         return;
       }
 
-      if (event.heartbeat !== undefined) {
+      if (event[SSE_EVENT_FIELDS.HEARTBEAT] !== undefined) {
         return;
       }
 
-      if (event.error) {
+      if (event[SSE_EVENT_FIELDS.ERROR]) {
         const errMsg =
-          event.error.details?.[0]?.debug?.localizedMessage?.message ||
-          event.error.message ||
-          event.error.code ||
+          event[SSE_EVENT_FIELDS.ERROR][SSE_EVENT_FIELDS.DETAILS]?.[0]?.[
+            SSE_EVENT_FIELDS.DEBUG
+          ]?.[SSE_EVENT_FIELDS.LOCALIZED_MESSAGE]?.[SSE_EVENT_FIELDS.MESSAGE] ||
+          event[SSE_EVENT_FIELDS.ERROR][SSE_EVENT_FIELDS.MESSAGE] ||
+          event[SSE_EVENT_FIELDS.ERROR][SSE_EVENT_FIELDS.CODE] ||
           'Kimi API Error';
         logger.warn('[Kimi] Stream Error event:', errMsg);
         streamError = errMsg;
@@ -132,46 +150,70 @@ export async function parseKimiSSE(
         return;
       }
 
-      if (event.chat?.lastRequest?.id) {
-        conversationId = event.chat.lastRequest.id;
+      if (
+        event[SSE_EVENT_FIELDS.CHAT]?.[SSE_EVENT_FIELDS.LAST_REQUEST]?.[
+          SSE_EVENT_FIELDS.ID
+        ]
+      ) {
+        conversationId =
+          event[SSE_EVENT_FIELDS.CHAT][SSE_EVENT_FIELDS.LAST_REQUEST][
+            SSE_EVENT_FIELDS.ID
+          ]!;
         if (onMetadata) {
-          onMetadata({
-            conversation_id: conversationId,
-            conversation_title: event.chat.lastRequest.name || 'New Chat',
-          });
+          onMetadata({ conversation_id: conversationId });
         }
-      } else if (event.chat?.id) {
-        conversationId = event.chat.id;
+      } else if (event[SSE_EVENT_FIELDS.CHAT]?.[SSE_EVENT_FIELDS.ID]) {
+        conversationId = event[SSE_EVENT_FIELDS.CHAT][SSE_EVENT_FIELDS.ID]!;
         if (onMetadata) {
           onMetadata({ conversation_id: conversationId });
         }
       }
 
       const textChunk =
-        event.block?.text?.content ??
-        (event.mask === 'block.text.content' ? event.block?.text?.content : undefined);
+        event[SSE_EVENT_FIELDS.BLOCK]?.[SSE_EVENT_FIELDS.TEXT]?.[
+          SSE_EVENT_FIELDS.CONTENT
+        ] ??
+        (event[SSE_EVENT_FIELDS.MASK] === SSE_MASKS.BLOCK_TEXT_CONTENT
+          ? event[SSE_EVENT_FIELDS.BLOCK]?.[SSE_EVENT_FIELDS.TEXT]?.[
+              SSE_EVENT_FIELDS.CONTENT
+            ]
+          : undefined);
 
       if (textChunk && typeof textChunk === 'string') {
         thinkingParser.feed(textChunk);
       }
 
       const thinkChunk =
-        event.block?.think?.content ??
-        (event.mask === 'block.think.content' ? event.block?.think?.content : undefined);
+        event[SSE_EVENT_FIELDS.BLOCK]?.[SSE_EVENT_FIELDS.THINK]?.[
+          SSE_EVENT_FIELDS.CONTENT
+        ] ??
+        (event[SSE_EVENT_FIELDS.MASK] === SSE_MASKS.BLOCK_THINK_CONTENT
+          ? event[SSE_EVENT_FIELDS.BLOCK]?.[SSE_EVENT_FIELDS.THINK]?.[
+              SSE_EVENT_FIELDS.CONTENT
+            ]
+          : undefined);
 
       if (thinkChunk && typeof thinkChunk === 'string') {
         accumulatedThinking += thinkChunk;
         if (onThinking) onThinking(thinkChunk);
       }
 
-      if (event.block?.multiStage) {
-        const stage = event.block.multiStage;
-        if (stage.stage === 'STAGE_NAME_THINKING' && onMetadata) {
-          onMetadata({ thinking_stage: stage.status });
+      if (event[SSE_EVENT_FIELDS.BLOCK]?.[SSE_EVENT_FIELDS.MULTI_STAGE]) {
+        const stage =
+          event[SSE_EVENT_FIELDS.BLOCK][SSE_EVENT_FIELDS.MULTI_STAGE];
+        if (
+          stage?.[SSE_EVENT_FIELDS.STAGE] === SSE_STAGES.NAME_THINKING &&
+          onMetadata
+        ) {
+          onMetadata({ thinking_stage: stage[SSE_EVENT_FIELDS.STATUS] });
         }
       }
 
-      if (event.message?.status === 'MESSAGE_STATUS_COMPLETED' && onMetadata) {
+      if (
+        event[SSE_EVENT_FIELDS.MESSAGE]?.[SSE_EVENT_FIELDS.STATUS] ===
+          SSE_MESSAGE_STATUSES.COMPLETED &&
+        onMetadata
+      ) {
         onMetadata({ message_status: 'completed' });
       }
     }

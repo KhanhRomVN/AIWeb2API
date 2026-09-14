@@ -20,8 +20,17 @@ import { proxyEvents } from '../../services/proxy.service';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── Types ──
+import { ClaudeLoginTokenPayload } from './claude.types';
+
 // ── Constants ──
-import { CLAUDE_EVENTS } from './claude.constant';
+import {
+  CLAUDE_EVENTS,
+  CLAUDE_HOST,
+  AUTH_PATH_PREFIX,
+  API_FIELDS,
+  HTTP_HEADER_NAMES_LOWERCASE,
+} from './claude.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ClaudeProxy');
@@ -31,10 +40,12 @@ const logger = createLogger('ClaudeProxy');
 export const proxyHandler: ProxyHandler = {
   onRequest: (ctx: any, callback: () => void) => {
     const host = ctx.clientToProxyRequest.headers.host;
-    const url = ctx.clientToProxyRequest.url;
 
-    if (host && host.includes('claude.ai')) {
-      const auth = ctx.clientToProxyRequest.headers['authorization'];
+    if (host && host.includes(CLAUDE_HOST)) {
+      const auth =
+        ctx.clientToProxyRequest.headers[
+          HTTP_HEADER_NAMES_LOWERCASE.AUTHORIZATION
+        ];
 
       if (auth) {
         proxyEvents.emit(CLAUDE_EVENTS.AUTH_HEADER, auth);
@@ -51,12 +62,13 @@ export const proxyHandler: ProxyHandler = {
     const host = ctx.clientToProxyRequest.headers.host;
     const url = ctx.clientToProxyRequest.url;
 
-    if (host && host.includes('claude.ai') && url.includes('/api/auth')) {
+    if (host && host.includes(CLAUDE_HOST) && url.includes(AUTH_PATH_PREFIX)) {
       const bodyStr = chunk.toString();
       try {
-        const json = JSON.parse(bodyStr);
-        if (json.email) {
-          proxyEvents.emit(CLAUDE_EVENTS.LOGIN_EMAIL, { email: json.email });
+        const json = JSON.parse(bodyStr) as Record<string, unknown>;
+        const email = json[API_FIELDS.EMAIL] as string | undefined;
+        if (email) {
+          proxyEvents.emit(CLAUDE_EVENTS.LOGIN_EMAIL, { email });
         }
       } catch (e) {
         logger.warn('[Proxy] Failed to parse Claude auth request body:', e);
@@ -69,11 +81,13 @@ export const proxyHandler: ProxyHandler = {
     const host = ctx.clientToProxyRequest.headers.host;
     const url = ctx.clientToProxyRequest.url;
 
-    if (host && host.includes('claude.ai') && url.includes('/api/auth')) {
+    if (host && host.includes(CLAUDE_HOST) && url.includes(AUTH_PATH_PREFIX)) {
       try {
-        const json = JSON.parse(body);
-        if (json.token) {
-          proxyEvents.emit(CLAUDE_EVENTS.LOGIN_TOKEN, { cookies: json.token });
+        const json = JSON.parse(body) as Record<string, unknown>;
+        const token = json[API_FIELDS.TOKEN] as string | undefined;
+        if (token) {
+          const payload: ClaudeLoginTokenPayload = { cookies: token };
+          proxyEvents.emit(CLAUDE_EVENTS.LOGIN_TOKEN, payload);
         }
       } catch (e) {
         logger.error('[Proxy] Failed to parse Claude Login Response:', e);

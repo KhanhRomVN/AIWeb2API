@@ -32,6 +32,4 @@ router.use('/stats', statsRouter);
 router.use('/proxy', proxyRouter);
 router.use('/uploads', uploadRouter);
 
-providerRegistry.registerAllRoutes(router);
-
 export default router;

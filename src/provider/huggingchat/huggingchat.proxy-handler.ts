@@ -19,7 +19,16 @@ import { proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
 
 // ── Constants ──
-import { HUGGINGCHAT_EVENTS } from './huggingchat.constant';
+import {
+  API_PATHS,
+  COOKIE_NAMES,
+  HOSTS,
+  HUGGINGCHAT_EVENTS,
+  REGEX_PATTERNS,
+} from './huggingchat.constant';
+
+// ── Types ──
+import { HuggingChatUserResponse } from './huggingchat.types';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('HuggingChatProvider');
@@ -30,9 +39,9 @@ export const proxyHandler: ProxyHandler = {
   onRequest: (ctx: any, callback: () => void) => {
     const host = ctx.clientToProxyRequest.headers.host;
 
-    if (host && host.includes('huggingface.co')) {
+    if (host && host.includes(HOSTS.HUGGINGFACE)) {
       const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-      if (reqCookies && reqCookies.includes('token')) {
+      if (reqCookies && reqCookies.includes(COOKIE_NAMES.TOKEN)) {
         proxyEvents.emit(HUGGINGCHAT_EVENTS.COOKIES, reqCookies);
       }
     }
@@ -45,15 +54,15 @@ export const proxyHandler: ProxyHandler = {
 
     if (
       host &&
-      host.includes('huggingface.co') &&
-      url.includes('/chat/login')
+      host.includes(HOSTS.HUGGINGFACE) &&
+      url.includes(API_PATHS.CHAT_LOGIN)
     ) {
       try {
-        const json = JSON.parse(body);
+        const json = JSON.parse(body) as HuggingChatUserResponse;
         if (json.email)
           proxyEvents.emit(HUGGINGCHAT_EVENTS.LOGIN_DATA, json.email);
       } catch (e) {
-        const emailMatch = body.match(/"email":"([^"]+)"/);
+        const emailMatch = body.match(REGEX_PATTERNS.EMAIL_IN_BODY);
         if (emailMatch && emailMatch[1]) {
           proxyEvents.emit(HUGGINGCHAT_EVENTS.LOGIN_DATA, emailMatch[1]);
         }

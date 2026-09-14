@@ -1,6 +1,6 @@
 export { default } from './gemini.provider';
 export { proxyHandler } from './gemini.proxy-handler';
-export { BASE_URL, GEMINI_BL, MODEL_MAP } from './gemini.constants';
+export { BASE_URL, GEMINI_BL, MODEL_MAP } from './gemini.constant';
 export {
   makeSapisidHash,
   getAccountPrefix,
