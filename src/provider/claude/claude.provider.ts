@@ -56,6 +56,8 @@ import {
   MAX_TOKENS,
   MASKED_EMAIL_INDICATOR,
   MASKED_EMAIL_CHAR,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
 } from './claude.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -78,6 +80,8 @@ export class ClaudeProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
   };
 
   // ─── Get Profile ────────────────────────────────────────────────────
@@ -148,7 +152,7 @@ export class ClaudeProvider implements Provider {
           }
 
           if (email) {
-            return { isValid: true, cookies: token, email };
+            return { isValid: true, cookies: JSON.stringify({ secretKey: token }), email };
           }
           logger.warn(
             '[Claude] Login validation failed: could not determine email',

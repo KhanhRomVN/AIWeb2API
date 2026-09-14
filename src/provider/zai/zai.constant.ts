@@ -29,6 +29,8 @@
 
 export const PROVIDER_ID = 'z';
 export const PROVIDER_NAME = 'Z';
+export const PROVIDER_DESCRIPTION = 'GLM series models with enhanced coding and reasoning';
+export const PROVIDER_COLOR = '#7C3AED';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
@@ -45,7 +47,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
     is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'GLM-5.1 - Latest model with enhanced reasoning and coding capabilities',
   },
@@ -57,7 +64,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
     is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'GLM-5 - Fast and efficient model for general purpose tasks',
   },

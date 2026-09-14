@@ -6,7 +6,6 @@
  * Hỗ trợ interactive và non-interactive mode.
  *
  * Main functions:
- * - askUser()   : Hỏi người dùng và nhận input
  * - askYesNo()  : Hỏi yes/no và trả về boolean
  * ------------------------------------------------------------------
  */

@@ -30,6 +30,8 @@
 
 export const PROVIDER_ID = 'kimi';
 export const PROVIDER_NAME = 'Kimi';
+export const PROVIDER_DESCRIPTION = 'Long-context AI with 260K context window and multi-agent capabilities';
+export const PROVIDER_COLOR = '#3B82F6';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://www.kimi.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
@@ -50,6 +52,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi K3 Flagship All-Rounder - Chat & Agent with state-of-the-art reasoning and problem solving.',
   },
@@ -61,6 +69,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi K3 Swarm - Massive search, batch processing, and multi-agent workflow in one go.',
   },
@@ -72,6 +86,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi Instant - Ultra-fast responses for everyday chat queries.',
   },
@@ -83,6 +103,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi K2.6 Thinking delivers deep reasoning, step-by-step logic deduction, and advanced mathematical problem solving.',
   },
@@ -94,6 +120,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi K2.6 Instant provides fast text generation for conversational tasks.',
   },
@@ -105,6 +137,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi K2.6 Agent autonomously performs comprehensive research, slides generation, and document processing.',
   },
@@ -116,6 +154,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kimi K2.6 Agent Swarm coordinates multi-agent workers for large-scale information retrieval.',
   },

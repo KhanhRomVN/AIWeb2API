@@ -32,6 +32,9 @@ import {
   SSE_FIELDS,
 } from './deepseek.constant';
 
+// ── Thinking Parser ──
+import { createDeepSeekThinkingParser } from './deepseek.thinking-parser';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DeepSeekSSE');
 
@@ -82,6 +85,10 @@ export async function parseSSEStream(
   let accumulatedContent = '';
   let snapshotSeenLength = 0;
   let snapshotMode = priorContentLength > 0;
+  let thinkingElapsedSecs: number | undefined;
+  
+  // Initialize thinking parser
+  const thinkingParser = createDeepSeekThinkingParser();
 
   for await (const chunk of responseBody) {
     const chunkStr = chunk.toString();
@@ -230,13 +237,34 @@ export async function parseSSEStream(
             if (fragment.type === SSE_FRAGMENT_TYPES.THINK) {
               currentModeRef.value = SSE_FRAGMENT_TYPES.THINK;
               if (fragment.content) {
-                if (onThinking) onThinking(fragment.content);
+                const normalizedThinking = thinkingParser.feed(fragment.content);
+                console.log('[SSE Parser] 📥 SNAPSHOT THINK fragment:', {
+                  rawLength: fragment.content.length,
+                  normalizedLength: normalizedThinking.length,
+                  normalizedPreview: normalizedThinking.substring(0, 150)
+                });
+                                
+                if (onThinking) onThinking(normalizedThinking);
                 else {
-                  onContent(`[Thinking] ${fragment.content}\n`);
+                  onContent(normalizedThinking);
                   contentChunkCount++;
                 }
               }
             } else if (fragment.type === SSE_FRAGMENT_TYPES.RESPONSE) {
+              // End thinking mode if switching to response
+              if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
+                const closingTag = thinkingParser.end({ elapsed_secs: thinkingElapsedSecs });
+                console.log('[SSE Parser] 📤 SNAPSHOT END thinking:', {
+                  closingTagLength: closingTag.length,
+                  closingTag: closingTag
+                });
+                                
+                if (onThinking) onThinking(closingTag);
+                else {
+                  onContent(closingTag);
+                  contentChunkCount++;
+                }
+              }
               currentModeRef.value = SSE_FRAGMENT_TYPES.RESPONSE;
               if (fragment.content) {
                 emitContentChunk(fragment.content, true);
@@ -255,13 +283,34 @@ export async function parseSSEStream(
             if (fragment.type === SSE_FRAGMENT_TYPES.THINK) {
               currentModeRef.value = SSE_FRAGMENT_TYPES.THINK;
               if (fragment.content) {
-                if (onThinking) onThinking(fragment.content);
+                const normalizedThinking = thinkingParser.feed(fragment.content);
+                console.log('[SSE Parser] 📥 ARRAY THINK fragment:', {
+                  rawLength: fragment.content.length,
+                  normalizedLength: normalizedThinking.length,
+                  normalizedPreview: normalizedThinking.substring(0, 150)
+                });
+                                
+                if (onThinking) onThinking(normalizedThinking);
                 else {
-                  onContent(`[Thinking] ${fragment.content}\n`);
+                  onContent(normalizedThinking);
                   contentChunkCount++;
                 }
               }
             } else if (fragment.type === SSE_FRAGMENT_TYPES.RESPONSE) {
+              // End thinking mode if switching to response
+              if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
+                const closingTag = thinkingParser.end({ elapsed_secs: thinkingElapsedSecs });
+                console.log('[SSE Parser] 📤 ARRAY END thinking:', {
+                  closingTagLength: closingTag.length,
+                  closingTag: closingTag
+                });
+                                
+                if (onThinking) onThinking(closingTag);
+                else {
+                  onContent(closingTag);
+                  contentChunkCount++;
+                }
+              }
               currentModeRef.value = SSE_FRAGMENT_TYPES.RESPONSE;
               if (fragment.content) {
                 emitContentChunk(fragment.content, snapshotMode);
@@ -275,9 +324,16 @@ export async function parseSSEStream(
           if (path?.includes(SSE_FIELDS.THINKING_CONTENT)) {
             currentModeRef.value = SSE_FRAGMENT_TYPES.THINK;
             completionTokensRef.value += countTokens(value);
-            if (onThinking) onThinking(value);
+            const normalizedThinking = thinkingParser.feed(value);
+            console.log('[SSE Parser] 📥 STRING THINK (path includes thinking_content):', {
+              rawLength: value.length,
+              normalizedLength: normalizedThinking.length,
+              normalizedPreview: normalizedThinking.substring(0, 150),
+              path: path
+            });
+            if (onThinking) onThinking(normalizedThinking);
             else {
-              onContent(`[Thinking] ${value}\n`);
+              onContent(normalizedThinking);
               contentChunkCount++;
             }
             if (onMetadata) {
@@ -290,13 +346,27 @@ export async function parseSSEStream(
             path?.endsWith(SSE_FIELDS.CONTENT_SUFFIX)
           ) {
             if (path === SSE_FIELDS.RESPONSE_CONTENT) {
+              // End thinking mode if switching to response
+              if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
+                const closingTag = thinkingParser.end({ elapsed_secs: thinkingElapsedSecs });
+                console.log('[SSE Parser] 📤 STRING END thinking (response_content path):', {
+                  closingTagLength: closingTag.length,
+                  closingTag: closingTag
+                });
+                if (onThinking) onThinking(closingTag);
+                else {
+                  onContent(closingTag);
+                  contentChunkCount++;
+                }
+              }
               currentModeRef.value = SSE_FRAGMENT_TYPES.RESPONSE;
             }
             if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
               completionTokensRef.value += countTokens(value);
-              if (onThinking) onThinking(value);
+              const normalizedThinking = thinkingParser.feed(value);
+              if (onThinking) onThinking(normalizedThinking);
               else {
-                onContent(`[Thinking] ${value}\n`);
+                onContent(normalizedThinking);
                 contentChunkCount++;
               }
               if (onMetadata) {
@@ -310,9 +380,10 @@ export async function parseSSEStream(
           } else if (!path) {
             if (currentModeRef.value === SSE_FRAGMENT_TYPES.THINK) {
               completionTokensRef.value += countTokens(value);
-              if (onThinking) onThinking(value);
+              const normalizedThinking = thinkingParser.feed(value);
+              if (onThinking) onThinking(normalizedThinking);
               else {
-                onContent(`[Thinking] ${value}\n`);
+                onContent(normalizedThinking);
                 contentChunkCount++;
               }
               if (onMetadata) {
@@ -328,6 +399,8 @@ export async function parseSSEStream(
           path?.endsWith(`/${SSE_FIELDS.ELAPSED_SECS}`) ||
           path?.endsWith(SSE_FIELDS.THINKING_ELAPSED_SECS)
         ) {
+          // Capture thinking elapsed time
+          thinkingElapsedSecs = value as number;
           if (onMetadata) {
             onMetadata({ thinking_elapsed: value as number });
           }

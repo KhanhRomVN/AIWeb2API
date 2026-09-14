@@ -211,15 +211,15 @@ export const sendMessage = async (
         onContent: (content: string) => {
           accumulatedResponse += content;
           finalOutputMessage = accumulatedResponse;
+          
           if (stream !== false) {
             if (!firstChunkReceived) {
               firstChunkReceived = true;
               if (streamTimeoutId) clearTimeout(streamTimeoutId);
             }
             if (res.writableEnded) return;
-            res.write(
-              `data: ${JSON.stringify({ content: unescapeHtml(content) })}\n\n`,
-            );
+            const payload = { content: unescapeHtml(content) };
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
           } else {
             accumulatedContent += content;
             finalOutputMessage = accumulatedContent;
@@ -233,6 +233,10 @@ export const sendMessage = async (
           }
         },
         onThinking: (content: string) => {
+          console.log('[Chat Controller] 📤 Emitting thinking chunk:', {
+            length: content.length,
+            preview: content.substring(0, 100)
+          });
           if (stream !== false) {
             res.write(`data: ${JSON.stringify({ thinking: content })}\n\n`);
           }

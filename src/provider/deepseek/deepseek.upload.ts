@@ -7,6 +7,8 @@
  *
  * Main functions:
  * - deepseekUploadFile() : Upload file và trả về file_id + token_usage
+ *
+ * Note: Function này nhận token (string) đã được parse từ credential
  * ------------------------------------------------------------------
  */
 
@@ -51,11 +53,11 @@ const logger = createLogger('DeepSeekUpload');
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function createUploadClient(credential: string): HttpClient {
+function createUploadClient(token: string): HttpClient {
   return new HttpClient({
     baseURL: BASE_URL,
     headers: {
-      [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${credential}`,
+      [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
       [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
       [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
       [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
@@ -74,17 +76,17 @@ function createUploadClient(credential: string): HttpClient {
 // ─── Main Function ─────────────────────────────────────────────────────
 
 export async function deepseekUploadFile(
-  credential: string,
+  token: string,
   file: UploadFileInput,
   getDsHash: () => Promise<DeepSeekHash>,
 ): Promise<UploadResult> {
   const baseHeaders = {
-    [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${credential}`,
+    [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
     [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
     [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
   };
 
-  const client = createUploadClient(credential);
+  const client = createUploadClient(token);
 
   try {
     const challengeRes = await client.post(

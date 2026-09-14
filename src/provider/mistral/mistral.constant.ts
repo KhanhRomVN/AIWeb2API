@@ -27,6 +27,8 @@
 
 export const PROVIDER_ID = 'mistral';
 export const PROVIDER_NAME = 'Mistral';
+export const PROVIDER_DESCRIPTION = 'European AI with efficient models and extended reasoning';
+export const PROVIDER_COLOR = '#F2A93B';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://mistral.ai/';
 export const AUTH_METHOD = ['basic'] as const;

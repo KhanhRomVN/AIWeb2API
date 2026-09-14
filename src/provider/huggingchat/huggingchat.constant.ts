@@ -21,6 +21,8 @@
 
 export const PROVIDER_ID = 'huggingchat';
 export const PROVIDER_NAME = 'HuggingChat';
+export const PROVIDER_DESCRIPTION = 'Open-source AI models from Hugging Face community';
+export const PROVIDER_COLOR = '#FFD21E';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://huggingface.co/';
 export const AUTH_METHOD = ['basic'] as const;

@@ -23,6 +23,8 @@
 
 export const PROVIDER_ID = 'kiro';
 export const PROVIDER_NAME = 'Kiro';
+export const PROVIDER_DESCRIPTION = 'AWS-powered AI coding assistant with OAuth authentication';
+export const PROVIDER_COLOR = '#FF6B6B';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://kiro.dev/';
 export const AUTH_METHOD = ['google', 'github'] as const;
@@ -39,6 +41,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Kiro Default - AI model with OAuth authentication via Google/GitHub',
   },

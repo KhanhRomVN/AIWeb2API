@@ -43,7 +43,7 @@ export interface PoWResponse {
 export interface ChatPayload {
   chat_session_id: string;
   parent_message_id: string | null | undefined;
-  model_type: string;
+  model_type: string | null;
   prompt: string;
   ref_file_ids: string[];
   thinking_enabled: boolean;

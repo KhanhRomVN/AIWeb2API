@@ -270,14 +270,14 @@ export const kimiProxyHandler: ProxyHandler = {
 
         if (
           json[AUTH_FIELDS.USER] &&
-          (json[AUTH_FIELDS.USER][AUTH_FIELDS.NICKNAME] ||
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.NAME] ||
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.EMAIL])
+          (json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.EMAIL])
         ) {
           const name =
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.NICKNAME] ||
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.NAME] ||
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.EMAIL];
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.EMAIL];
           proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, { email: name });
         }
 

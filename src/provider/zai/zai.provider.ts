@@ -46,6 +46,8 @@ import { proxyHandler } from './zai.proxy-handler';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
   IS_ENABLED,
   WEBSITE_URL,
   AUTH_METHOD,
@@ -77,6 +79,8 @@ export class ZAIProvider implements Provider {
   static config = {
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
     is_enabled: IS_ENABLED,
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,

@@ -29,6 +29,8 @@
 
 export const PROVIDER_ID = 'zai-browser';
 export const PROVIDER_NAME = 'Z.AI Browser';
+export const PROVIDER_DESCRIPTION = 'GLM models via browser automation with thinking mode';
+export const PROVIDER_COLOR = '#7C3AED';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
@@ -47,7 +49,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
     is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Z.AI GLM-5.1 - Advanced language model with thinking mode and web search (browser-based)',
   },
@@ -59,7 +66,12 @@ export const MODELS = [
     is_search: true,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
     is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Z.AI GLM-5 - Fast and efficient model with thinking capabilities (browser-based)',
   },

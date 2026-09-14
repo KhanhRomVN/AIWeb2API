@@ -67,6 +67,8 @@ import {
   API_FIELDS,
   GROQ_EVENTS,
   REGEX_PATTERNS,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
 } from './groq.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -88,6 +90,8 @@ export class GroqProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────
@@ -108,7 +112,7 @@ export class GroqProvider implements Provider {
         if (!email) {
           logger.warn('[Groq] Login: no email found in session JWT');
         }
-        return { isValid: true, cookies: data.cookies, email };
+        return { isValid: true, cookies: JSON.stringify({ cookies: data.cookies }), email };
       },
     });
   }

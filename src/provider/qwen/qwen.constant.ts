@@ -35,6 +35,9 @@
 
 export const PROVIDER_ID = 'qwen';
 export const PROVIDER_NAME = 'Qwen';
+export const PROVIDER_DESCRIPTION =
+  'Alibaba AI with extended thinking and multimodal capabilities';
+export const PROVIDER_COLOR = '#5B21B6';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://modelscope.cn/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
@@ -42,44 +45,8 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = true;
 
-export const MODELS = [
-  {
-    id: 'qwen-max',
-    name: 'Qwen Max',
-    is_thinking: true,
-    max_context_length: null,
-    is_search: true,
-    is_image_upload: false,
-    is_video_upload: false,
-    is_larger_content_paste_upload: false,
-    description:
-      'Qwen Max - Most capable model for complex tasks with thinking mode and web search',
-  },
-  {
-    id: 'qwen-plus',
-    name: 'Qwen Plus',
-    is_thinking: false,
-    max_context_length: null,
-    is_search: true,
-    is_image_upload: false,
-    is_video_upload: false,
-    is_larger_content_paste_upload: false,
-    description:
-      'Qwen Plus - Balanced model for general purpose tasks with web search capability',
-  },
-  {
-    id: 'qwen-turbo',
-    name: 'Qwen Turbo',
-    is_thinking: false,
-    max_context_length: null,
-    is_search: false,
-    is_image_upload: false,
-    is_video_upload: false,
-    is_larger_content_paste_upload: false,
-    description:
-      'Qwen Turbo - Fast and cost-effective model for simple tasks',
-  },
-] as const;
+// Note: Models are fetched dynamically from API /api/v2/models/
+// No hardcoded models - all model info comes from the API response
 
 // ─── API Configuration ───────────────────────────────────────────────
 
@@ -116,6 +83,8 @@ export const API_PATHS = {
   MODELS: '/api/v2/models/',
   AUTH_SIGNIN: '/api/v2/auths/signin',
   AUTH_LOGIN: '/auth',
+  FILE_GET_STS_TOKEN: '/api/v2/files/getstsToken',
+  FILE_PARSE_STATUS: '/api/v2/files/parse/status',
 } as const;
 
 export const CHATS_LIST_QUERY = '?page=1&exclude_project=true';
@@ -220,8 +189,7 @@ export const ACCEPT_LANGUAGES = {
 // ─── Sec-CH-UA Values ────────────────────────────────────────────────
 
 export const SEC_CH_UA = {
-  VALUE:
-    '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+  VALUE: '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
   PLATFORM: '"Linux"',
   MOBILE: '?0',
 } as const;
@@ -316,6 +284,7 @@ export const CHAT_PAYLOAD_FIELDS = {
   RESEARCH_MODE: 'research_mode',
   AUTO_THINKING: 'auto_thinking',
   THINKING_MODE: 'thinking_mode',
+  THINKING_FORMAT: 'thinking_format',
   AUTO_SEARCH: 'auto_search',
   EXTRA: 'extra',
   META: 'meta',
@@ -329,10 +298,40 @@ export const SSE_EVENT_FIELDS = {
   CREATED: 'created',
   CHAT_ID: 'chat_id',
   RESPONSE_ID: 'response_id',
+  RESPONSE_INDEX: 'response_index',
   CHOICES: 'choices',
   DELTA: 'delta',
+  PHASE: 'phase',
+  STATUS: 'status',
   REASONING_CONTENT: 'reasoning_content',
   CONTENT: 'content',
+  EXTRA: 'extra',
+  SUMMARY_TITLE: 'summary_title',
+  SUMMARY_THOUGHT: 'summary_thought',
+  FUNCTION_CALL: 'function_call',
+  FUNCTION_ID: 'function_id',
+  DISPLAY_POSITION: 'display_position',
+  TOOL_RESULT: 'tool_result',
+  USAGE: 'usage',
+  INPUT_TOKENS: 'input_tokens',
+  OUTPUT_TOKENS: 'output_tokens',
+  TOTAL_TOKENS: 'total_tokens',
+  REASONING_TOKENS: 'reasoning_tokens',
+  TEXT_TOKENS: 'text_tokens',
+  CACHED_TOKENS: 'cached_tokens',
+} as const;
+
+// ─── SSE Phase Types ─────────────────────────────────────────────────
+
+export const SSE_PHASE_TYPES = {
+  THINKING_SUMMARY: 'thinking_summary',
+  ANSWER: 'answer',
+  WEB_SEARCH: 'web_search',
+} as const;
+
+export const SSE_STATUS_TYPES = {
+  TYPING: 'typing',
+  FINISHED: 'finished',
 } as const;
 
 export const RESPONSE_FIELDS = {
@@ -345,16 +344,42 @@ export const RESPONSE_FIELDS = {
 export const MODEL_FIELDS = {
   INFO: 'info',
   IS_ACTIVE: 'is_active',
+  IS_VISITOR_ACTIVE: 'is_visitor_active',
   META: 'meta',
   CAPABILITIES: 'capabilities',
+  ABILITIES: 'abilities',
   THINKING: 'thinking',
   MAX_CONTEXT_LENGTH: 'max_context_length',
+  MAX_SUMMARY_GENERATION_LENGTH: 'max_summary_generation_length',
+  MAX_THINKING_GENERATION_LENGTH: 'max_thinking_generation_length',
+  MAX_GENERATION_LENGTH: 'max_generation_length',
   SEARCH: 'search',
   VISION: 'vision',
+  DOCUMENT: 'document',
+  VIDEO: 'video',
+  AUDIO: 'audio',
+  CITATIONS: 'citations',
+  MCP: 'mcp',
+  PARSE_URL: 'parse_url',
   SHORT_DESCRIPTION: 'short_description',
   DESCRIPTION: 'description',
+  AUTO_THINKING: 'auto_thinking',
+  AUTO_SEARCH: 'auto_search',
+  THINKING_FORMAT: 'thinking_format',
+  CHAT_TYPE: 'chat_type',
+  MODALITY: 'modality',
+  THINK_SKIP: 'think_skip',
+  ENABLE: 'enable',
   ID: 'id',
   NAME: 'name',
+  OBJECT: 'object',
+  OWNED_BY: 'owned_by',
+  PRESET: 'preset',
+  ACTION_IDS: 'action_ids',
+  // Generator capabilities
+  IS_IMAGE_GENERATOR: 'is_image_generator',
+  IS_VIDEO_GENERATOR: 'is_video_generator',
+  IS_DEEP_RESEARCH: 'is_deep_research',
 } as const;
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -363,12 +388,46 @@ export const CHAT_PAYLOAD_CONSTANTS = {
   STREAM_VERSION: '2.1',
   CHAT_MODE_NORMAL: 'normal',
   CHAT_TYPE_T2T: 't2t',
+  CHAT_TYPE_T2I: 't2i',
+  CHAT_TYPE_T2V: 't2v',
+  CHAT_TYPE_SEARCH: 'search',
+  CHAT_TYPE_DEEP_RESEARCH: 'deep_research',
   OUTPUT_SCHEMA_PHASE: 'phase',
   RESEARCH_MODE_NORMAL: 'normal',
   THINKING_MODE_FAST: 'Fast',
+  THINKING_MODE_THINKING: 'Thinking',
   USER_ACTION_CHAT: 'chat',
+  USER_ACTION_EDIT: 'edit',
   SUB_CHAT_TYPE: 't2t',
+  SUB_CHAT_TYPE_SEARCH: 'search',
   ROLE_ASSISTANT: 'assistant',
+  THINKING_FORMAT_SUMMARY: 'summary',
+} as const;
+
+// ─── MCP Tools ───────────────────────────────────────────────────────
+// TODO: Implement MCP (Model Context Protocol) tools support
+// Qwen models support MCP tools that can be invoked during conversations.
+// These tools are listed in model.info.meta.mcp array from /api/v2/models/
+//
+// Core MCP Tools (from API):
+// - "image-generation": Generate images based on text descriptions
+// - "code-interpreter": Execute and interpret code snippets
+// - "amap": Access map and location services (Amap/高德地图)
+// - "fire-crawl": Web crawling and content extraction
+//
+// Extended MCP Tools (for future implementation):
+// - "deep-research": Deep research mode for comprehensive analysis
+// - "create-video": Generate/create video content
+// - "create-image": Alternative image creation tool
+export const MCP_TOOLS = {
+  IMAGE_GENERATION: 'image-generation',
+  CODE_INTERPRETER: 'code-interpreter',
+  AMAP: 'amap',
+  FIRE_CRAWL: 'fire-crawl',
+  // TODO: Future MCP tools (not yet in API response)
+  DEEP_RESEARCH: 'deep-research',
+  CREATE_VIDEO: 'create-video',
+  CREATE_IMAGE: 'create-image',
 } as const;
 
 export const DEFAULT_MAX_CONTEXT_LENGTH = 1000000;
@@ -377,3 +436,37 @@ export const TIMEZONE_OFFSET = 'GMT+0700';
 export const DB_PROVIDER_ID = 'qwen';
 export const MODEL_PREFIX_QWEN_DASH = 'qwen-';
 export const MODEL_PREFIX_QWEN_3 = 'qwen-3.';
+
+// ─── Upload Configuration ────────────────────────────────────────────
+
+export const UPLOAD_CONFIG = {
+  FORM_BOUNDARY_PREFIX: '----WebKitFormBoundary',
+  BOUNDARY_RANDOM_BYTES: 16,
+  FORM_FIELD_NAME: 'file',
+  CRLF: '\r\n',
+  POLLING_INTERVAL_MS: 1000,
+  POLLING_MAX_ATTEMPTS: 30,
+} as const;
+
+// ─── File Status ─────────────────────────────────────────────────────
+
+export const FILE_STATUS = {
+  SUCCESS: 'success',
+  READY: 'ready',
+  FAIL: 'fail',
+  ERROR: 'error',
+  PROCESSING: 'processing',
+} as const;
+
+// ─── API Fields ──────────────────────────────────────────────────────
+
+export const API_FIELDS = {
+  FILE_IDS: 'file_ids',
+  FILE_ID: 'file_id',
+  STATUS: 'status',
+  TOKEN_USAGE: 'token_usage',
+  SUCCESS: 'success',
+  DATA: 'data',
+  MESSAGE: 'message',
+  CODE: 'code',
+} as const;

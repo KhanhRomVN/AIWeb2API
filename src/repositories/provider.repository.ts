@@ -22,6 +22,8 @@ import { getDb } from '../database';
 export interface ProviderRow {
   id: string;
   title: string;
+  description?: string;
+  color?: string;
   platform?: string;
   connection_type?: string;
   is_enabled?: number;

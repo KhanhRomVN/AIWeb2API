@@ -60,6 +60,8 @@ import {
   PAYLOAD_DEFAULTS,
   STREAM_TYPES,
   THINK_TAGS,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
 } from './huggingchat.constant';
 
 // ── HuggingChat Types ──
@@ -99,6 +101,8 @@ export class HuggingChatProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────

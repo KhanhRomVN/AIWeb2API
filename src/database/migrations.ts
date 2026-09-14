@@ -237,6 +237,24 @@ function migrateProviders(db: Database.Database): void {
         logger.warn('Failed to add browser_extension_folder to providers', e);
       }
     }
+
+    // Add description column
+    if (!providerCols.includes('description')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN description TEXT');
+      } catch (e) {
+        logger.warn('Failed to add description to providers', e);
+      }
+    }
+
+    // Add color column
+    if (!providerCols.includes('color')) {
+      try {
+        db.exec('ALTER TABLE providers ADD COLUMN color TEXT');
+      } catch (e) {
+        logger.warn('Failed to add color to providers', e);
+      }
+    }
   } catch (err) {
     logger.error('Error initializing providers table', err);
   }
@@ -349,6 +367,51 @@ function migrateModels(db: Database.Database): void {
         db.exec('ALTER TABLE models ADD COLUMN description TEXT');
       } catch (e) {
         logger.warn('Failed to add description column to models', e);
+      }
+    }
+
+    // Add is_search
+    if (!modelCols.includes('is_search')) {
+      try {
+        db.exec('ALTER TABLE models ADD COLUMN is_search INTEGER DEFAULT 0');
+      } catch (e) {
+        logger.warn('Failed to add is_search column to models', e);
+      }
+    }
+
+    // Add is_audio_upload
+    if (!modelCols.includes('is_audio_upload')) {
+      try {
+        db.exec(
+          'ALTER TABLE models ADD COLUMN is_audio_upload INTEGER DEFAULT 0',
+        );
+      } catch (e) {
+        logger.warn('Failed to add is_audio_upload column to models', e);
+      }
+    }
+
+    // Add is_file_upload
+    if (!modelCols.includes('is_file_upload')) {
+      try {
+        db.exec(
+          'ALTER TABLE models ADD COLUMN is_file_upload INTEGER DEFAULT 0',
+        );
+      } catch (e) {
+        logger.warn('Failed to add is_file_upload column to models', e);
+      }
+    }
+
+    // Add is_larger_content_paste_upload
+    if (!modelCols.includes('is_larger_content_paste_upload')) {
+      try {
+        db.exec(
+          'ALTER TABLE models ADD COLUMN is_larger_content_paste_upload INTEGER DEFAULT 0',
+        );
+      } catch (e) {
+        logger.warn(
+          'Failed to add is_larger_content_paste_upload column to models',
+          e,
+        );
       }
     }
   } catch (err) {
@@ -502,9 +565,6 @@ function dropUnusedTables(db: Database.Database): void {
       db.exec('ALTER TABLE providers RENAME COLUMN name TO title');
     }
     // Keep platform column - do not drop
-    if (providerCols.includes('description')) {
-      db.exec('ALTER TABLE providers DROP COLUMN description');
-    }
     // Remove conversation_id column from metrics if exists
     const metricsCols = (db.pragma('table_info(metrics)') as any[]).map(
       (c) => c.name,

@@ -29,6 +29,8 @@ import { createLogger } from '../../utils/logger';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
   IS_ENABLED,
   WEBSITE_URL,
   AUTH_METHOD,
@@ -83,6 +85,8 @@ export class KiroProvider implements Provider {
   static config = {
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
     is_enabled: IS_ENABLED,
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,

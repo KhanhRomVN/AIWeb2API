@@ -65,6 +65,8 @@ import {
   MAX_RETRY_ATTEMPTS,
   XSRF_WAIT_MS,
   ERROR_SLICE_LENGTH,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
 } from './gemini.constant';
 import { proxyHandler } from './gemini.proxy-handler';
 import { parseSSEStream } from './gemini.sse-parser';
@@ -95,6 +97,8 @@ export class GeminiProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
   };
 
   // ─── Profile ─────────────────────────────────────────────────────────
@@ -190,9 +194,7 @@ export class GeminiProvider implements Provider {
             const cookie = data.cookies;
             let email = data.email;
 
-            const sapisidMatch = cookie.match(
-              REGEX_PATTERNS.SAPISID_IN_COOKIE,
-            );
+            const sapisidMatch = cookie.match(REGEX_PATTERNS.SAPISID_IN_COOKIE);
             const sapisid = sapisidMatch ? sapisidMatch[1] : '';
 
             if (!email) {

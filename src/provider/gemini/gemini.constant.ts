@@ -34,6 +34,9 @@
 
 export const PROVIDER_ID = 'gemini';
 export const PROVIDER_NAME = 'Gemini';
+export const PROVIDER_DESCRIPTION =
+  'Google most capable AI model with multimodal understanding';
+export const PROVIDER_COLOR = '#4285F4';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://gemini.google.com/';
 export const AUTH_METHOD = ['google'] as const;
@@ -55,6 +58,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Google Gemini 3.5 Flash - Fast and efficient model for everyday tasks, optimized for quick responses',
   },
@@ -66,6 +75,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Google Gemini 3.5 Flash Thinking - Enhanced reasoning with step-by-step thinking process for complex problems',
   },
@@ -77,6 +92,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Google Gemini 3.5 Flash Thinking Lite - Lightweight version with thinking mode, balances speed and depth',
   },
@@ -88,6 +109,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Google Gemini 3.1 Pro - Professional-grade model with advanced capabilities for complex tasks',
   },
@@ -99,6 +126,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Google Gemini Auto - Automatically selects optimal model based on task complexity and requirements',
   },
@@ -110,6 +143,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Google Gemini Flash Lite - Ultra-lightweight model for resource-constrained environments and high throughput',
   },

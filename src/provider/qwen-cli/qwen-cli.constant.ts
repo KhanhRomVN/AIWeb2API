@@ -46,6 +46,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: false,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       'Qwen Coder Model - Specialized for code generation, debugging, and programming assistance',
   },

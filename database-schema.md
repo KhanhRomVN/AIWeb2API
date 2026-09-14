@@ -34,6 +34,8 @@ Danh sách các provider đã được đăng ký trong hệ thống.
 
 - **`id`** (TEXT, PRIMARY KEY) — ID provider (viết thường)
 - **`title`** (TEXT, NOT NULL) — Tên hiển thị của provider
+- **`description`** (TEXT) — Mô tả ngắn về provider
+- **`color`** (TEXT) — Màu sắc đại diện cho provider (hex code, VD: #1E90FF)
 - **`platform`** (TEXT, DEFAULT 'web') — Loại provider: `web`, `cli`, `api`
 - **`connection_type`** (TEXT, DEFAULT 'https') — Loại kết nối: `https` (gọi HTTPS trực tiếp), `browser` (dùng browser thật qua CDP + extension)
 - **`is_enabled`** (INTEGER, DEFAULT 1) — Trạng thái bật/tắt (1 = enabled, 0 = disabled)
@@ -58,7 +60,7 @@ Danh sách các provider đã được đăng ký trong hệ thống.
 
 ## Bảng: `models`
 
-Lưu trữ danh sách model của từng provider (cache từ API provider).
+Lưu trữ danh sách model của từng provider (cache từ API provider để fallback khi API không khả dụng).
 
 ### Columns
 
@@ -68,15 +70,22 @@ Lưu trữ danh sách model của từng provider (cache từ API provider).
 - **`model_name`** (TEXT, NOT NULL) — Tên hiển thị
 - **`is_thinking`** (INTEGER, DEFAULT 0) — Hỗ trợ thinking mode (1 = có, 0 = không)
 - **`max_context_length`** (INTEGER) — Độ dài context tối đa (token)
+- **`is_search`** (INTEGER, DEFAULT 0) — Hỗ trợ web search (1 = có, 0 = không)
 - **`is_image_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload hình ảnh (1 = có, 0 = không)
 - **`is_video_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload video (1 = có, 0 = không)
+- **`is_audio_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload audio (1 = có, 0 = không)
+- **`is_file_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload file/document (1 = có, 0 = không)
+- **`is_larger_content_paste_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ paste nội dung lớn (1 = có, 0 = không)
+- **`is_image_generator`** (INTEGER, DEFAULT 0) — Hỗ trợ tạo hình ảnh (1 = có, 0 = không)
+- **`is_video_generator`** (INTEGER, DEFAULT 0) — Hỗ trợ tạo video (1 = có, 0 = không)
+- **`is_deep_research`** (INTEGER, DEFAULT 0) — Hỗ trợ deep research mode (1 = có, 0 = không)
 - **`updated_at`** (INTEGER, NOT NULL) — Thời gian cập nhật gần nhất (timestamp ms)
 - **`success_rate`** (REAL, DEFAULT NULL) — Tỷ lệ thành công (0-100%), NULL nếu chưa có dữ liệu
 - **`description`** (TEXT) — Mô tả chi tiết về model, khả năng và use cases
 
 **Unique Constraint:** `UNIQUE(provider_id, model_id)`
 
-**Ghi chú:** Các field `is_search`, `is_image_upload`, `is_video_upload` nằm ở model level, không còn ở provider level.
+**Ghi chú:** Các field upload capabilities (`is_search`, `is_image_upload`, `is_video_upload`, `is_audio_upload`, `is_file_upload`, `is_larger_content_paste_upload`) nằm ở model level, không còn ở provider level.
 
 ---
 
@@ -100,31 +109,3 @@ Lưu trữ thống kê sử dụng (request, token, conversation).
 - `idx_metrics_account_time` trên `(account_id, timestamp)`
 - `idx_metrics_provider_model_time` trên `(provider_id, model_id, timestamp)`
 - `idx_metrics_status` trên cột `status`
-
----
-
-
-
-## Ghi chú kỹ thuật
-
-- **Timestamp:** Tất cả các cột timestamp đều lưu dưới dạng `number` (milliseconds since epoch)
-- **WAL mode:** Database được cấu hình `PRAGMA journal_mode = WAL` để cải thiện concurrent access
-- **Migration:** Schema tự động cập nhật qua hàm `runMigrations()` khi khởi động
-- **Encoding:** UTF-8
-- **Models:** Danh sách models được lấy trực tiếp từ API provider mỗi khi cần, và cache vào bảng `models` để fallback
-- **Provider capabilities:** Các khả năng như search, image upload, video upload được định nghĩa ở cấp model, không phải provider
-
-
-
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║    █████╗ ██╗    ██╗███████╗██████╗  █████╗ ██████╗ ██╗      ║
-║   ██╔══██╗██║    ██║██╔═════╝██╔══██╗██╔══██╗██╔══██╗██║      ║
-║   ███████║██║ █╗ ██║█████╗  ██████╔╝███████║██████╔╝██║      ║
-║   ██╔══██║██║███╗██║██╔══╝  ██╔══██╗██╔══██║██╔═══╝ ██║      ║
-║   ██║  ██║╚███╔███╔╝███████╗██████╔╝██║  ██║██║     ██║      ║
-║   ╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝      ║ 
-║                                                              ║
-║              🚀 AI Web to API Gateway v1.2.5                 ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝

@@ -14,8 +14,8 @@
  * - uploadFile()           : Upload file lên DeepSeek
  * - getUserProfile()           : Lấy thông tin user profile
  *
- * Credential format:
- * - token               : Bearer access token (JWT)
+ * Credential format (JSON string hoặc raw token):
+ * - secretKey          : DeepSeek bearer token (không phải JWT)
  * ------------------------------------------------------------------
  */
 
@@ -24,6 +24,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
+import { randomUUID } from 'crypto';
 
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
@@ -53,6 +54,8 @@ import { deepseekUploadFile } from './deepseek.upload';
 import {
   PROVIDER_ID,
   PROVIDER_NAME,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
   IS_ENABLED,
   WEBSITE_URL,
   AUTH_METHOD,
@@ -100,6 +103,8 @@ export class DeepSeekProvider implements Provider {
   static config = {
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
     is_enabled: IS_ENABLED,
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
@@ -109,17 +114,73 @@ export class DeepSeekProvider implements Provider {
     is_memory: IS_MEMORY,
   };
 
+  // ─── Credential Helpers ─────────────────────────────────────────────
+
+  private parseCredential(credential: string): string {
+    logger.debug('[DeepSeek] parseCredential - input:', {
+      type: typeof credential,
+      length: credential?.length,
+      preview: credential?.substring(0, 50),
+      startsWithBrace: credential?.trim().startsWith('{'),
+    });
+
+    // Try parsing as JSON first
+    if (credential.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(credential);
+        logger.debug('[DeepSeek] parseCredential - parsed JSON:', {
+          keys: Object.keys(parsed),
+          hasSecretKey: !!parsed.secretKey,
+          hasAccessToken: !!parsed.accessToken,
+          hasToken: !!parsed.token,
+        });
+        
+        // New format: {secretKey} or fallback: {accessToken, token}
+        const token = parsed.secretKey || parsed.secret_key || parsed.accessToken || parsed.access_token || parsed.token;
+        if (token) {
+          logger.debug('[DeepSeek] parseCredential - extracted token from JSON:', {
+            tokenLength: token.length,
+            tokenPreview: token.substring(0, 20),
+          });
+          return token;
+        }
+      } catch (e) {
+        logger.warn(
+          '[DeepSeek] Credential is not valid JSON, treating as raw token:',
+          e,
+        );
+      }
+    }
+
+    // Fallback: treat as raw token
+    logger.debug('[DeepSeek] parseCredential - using raw token');
+    return credential;
+  }
+
   // ─── Profile ─────────────────────────────────────────────────────────
 
   async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
+    logger.debug('[DeepSeek] getUserProfile - received credential:', {
+      type: typeof credential,
+      length: credential?.length,
+      preview: credential?.substring(0, 50),
+    });
+
+    const token = this.parseCredential(credential);
+
+    logger.debug('[DeepSeek] getUserProfile - parsed token:', {
+      tokenLength: token.length,
+      tokenPreview: token.substring(0, 20),
+    });
+
     try {
       const url = `${BASE_URL}${API_PATHS.USERS_CURRENT}`;
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${credential}`,
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
           [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
           [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
           [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.MACOS_SAFARI,
@@ -156,7 +217,7 @@ export class DeepSeekProvider implements Provider {
         ? GOOGLE_OAUTH_LOGIN_URL
         : `${BASE_URL}/login`;
 
-    return await loginService.captureCredentialsViaCDP({
+    const result = await loginService.captureCredentialsViaCDP({
       providerId: PROVIDER_ID,
       loginUrl,
       partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
@@ -171,6 +232,12 @@ export class DeepSeekProvider implements Provider {
           const token = data.cookies;
           let email = data.email;
 
+          logger.debug('[DeepSeek] Login - captured token:', {
+            tokenLength: token.length,
+            tokenPreview: token.substring(0, 20),
+            email: email,
+          });
+
           // If email is masked (contains ***), fetch real email from profile
           if (
             !email ||
@@ -182,7 +249,13 @@ export class DeepSeekProvider implements Provider {
           }
 
           if (email) {
-            return { isValid: true, cookies: token, email };
+            // Return JSON format credential with secretKey
+            const jsonCredential = JSON.stringify({ secretKey: token });
+            logger.debug('[DeepSeek] Login - returning JSON credential:', {
+              credentialLength: jsonCredential.length,
+              credentialPreview: jsonCredential.substring(0, 50),
+            });
+            return { isValid: true, cookies: jsonCredential, email };
           }
           logger.warn(
             '[DeepSeek] Login validation failed: could not determine email',
@@ -191,6 +264,13 @@ export class DeepSeekProvider implements Provider {
         return { isValid: false };
       },
     });
+
+    logger.info('[DeepSeek] Login completed:', {
+      success: !!result,
+      credentialType: typeof result,
+    });
+
+    return result;
   }
 
   // ─── Initialization ─────────────────────────────────────────────────
@@ -294,9 +374,22 @@ export class DeepSeekProvider implements Provider {
       onSessionCreated,
     } = options;
 
+    logger.debug('[DeepSeek] handleMessage - received credential:', {
+      type: typeof credential,
+      length: credential?.length,
+      preview: credential?.substring(0, 50),
+    });
+
+    const token = this.parseCredential(credential);
+
+    logger.debug('[DeepSeek] handleMessage - parsed token:', {
+      tokenLength: token.length,
+      tokenPreview: token.substring(0, 20),
+    });
+
     const baseHeaders = {
-      [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${credential}`,
-      [HTTP_HEADER_NAMES.AUTHORIZATION]: credential,
+      [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
+      [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
       [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
       [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
       [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
@@ -305,6 +398,8 @@ export class DeepSeekProvider implements Provider {
       [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
       [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
       [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
+      [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]: HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
+      [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]: HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
     };
 
     const client = new HttpClient({
@@ -339,19 +434,43 @@ export class DeepSeekProvider implements Provider {
       }
 
       if (needsNewSession) {
-        const sessionRes = await client.post(API_PATHS.CHAT_SESSION_CREATE, {
+        // Tạo UUID ngẫu nhiên để dùng trong Referer header
+        const newSessionUUID = randomUUID();
+        
+        // Tạo client với Referer header chứa UUID mới
+        const sessionClient = new HttpClient({
+          baseURL: BASE_URL,
+          headers: {
+            ...baseHeaders,
+            [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_SESSION_PREFIX}${newSessionUUID}`,
+          },
+        });
+        
+        const sessionRes = await sessionClient.post(API_PATHS.CHAT_SESSION_CREATE, {
           [API_FIELDS.CHARACTER_ID]: null,
         });
-        if (!sessionRes.ok) {
-          const errText = await sessionRes.text();
-          throw new Error(
-            `Failed to create chat session: ${sessionRes.status} - ${errText}`,
-          );
-        }
+        
         const sessionData = (await sessionRes.json()) as DeepSeekApiEnvelope<{
           chat_session: { id: string };
           id: string;
         }>;
+        
+        // Check for API error code (40003 = authorization failed, etc.)
+        if (sessionData?.[API_FIELDS.CODE] !== SUCCESS_CODE) {
+          const errorMsg = sessionData?.[API_FIELDS.MSG] || 'Unknown error';
+          const errorCode = sessionData?.[API_FIELDS.CODE] || 'unknown';
+          throw new Error(
+            `Failed to create chat session (code: ${errorCode}): ${errorMsg}`,
+          );
+        }
+        
+        if (!sessionRes.ok) {
+          throw new Error(
+            `Failed to create chat session: HTTP ${sessionRes.status}`,
+          );
+        }
+        
+        // Lấy session ID thực từ response body
         sessionId =
           sessionData?.[API_FIELDS.DATA]?.[API_FIELDS.BIZ_DATA]?.[
             API_FIELDS.CHAT_SESSION
@@ -359,11 +478,18 @@ export class DeepSeekProvider implements Provider {
           sessionData?.[API_FIELDS.DATA]?.[API_FIELDS.BIZ_DATA]?.[
             API_FIELDS.ID
           ];
+        
         if (!sessionId) {
           throw new Error(
             `Session ID missing from response: ${JSON.stringify(sessionData)}`,
           );
         }
+        
+        logger.debug('[DeepSeek] Created new session:', {
+          refererUUID: newSessionUUID,
+          actualSessionId: sessionId,
+          responseData: sessionData,
+        });
       }
 
       if (!sessionId) throw new Error('Failed to obtain session ID');
@@ -419,10 +545,15 @@ export class DeepSeekProvider implements Provider {
         }
       }
 
+      // Determine model_type based on conversation state:
+      // - First message (no parent): model_type = null
+      // - Subsequent messages: model_type = "default"
+      const isFirstMessage = !parentMessageId;
+      
       const requestPayload: ChatPayload = {
         chat_session_id: sessionId,
         parent_message_id: parentMessageId || null || undefined,
-        model_type: MODEL_TYPES.DEFAULT,
+        model_type: isFirstMessage ? null : MODEL_TYPES.DEFAULT,
         prompt: messages[messages.length - 1].content,
         ref_file_ids: options.ref_file_ids || [],
         thinking_enabled:
@@ -445,6 +576,22 @@ export class DeepSeekProvider implements Provider {
         API_PATHS.CHAT_COMPLETION,
         requestPayload,
       );
+      
+      logger.debug('[DeepSeek] Completion response:', {
+        status: response.status,
+        ok: response.ok,
+        contentType: response.headers.get('content-type'),
+        contentLength: response.headers.get('content-length'),
+        hasBody: !!response.body,
+      });
+      
+      // If response is JSON instead of SSE, log the error
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        const jsonResponse = await response.text();
+        logger.error('[DeepSeek] Received JSON instead of SSE stream:', jsonResponse);
+        throw new Error(`DeepSeek returned JSON error: ${jsonResponse}`);
+      }
+      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
@@ -606,7 +753,8 @@ export class DeepSeekProvider implements Provider {
   // ─── Stop Stream ────────────────────────────────────────────────────
 
   async stopStream(credential: string, chatId: string, messageId: string) {
-    const client = this.createClient(credential);
+    const token = this.parseCredential(credential);
+    const client = this.createClient(token);
     await client.post(API_PATHS.CHAT_STOP_GENERATION, {
       chat_session_id: chatId,
       current_message_id: messageId,
@@ -619,17 +767,18 @@ export class DeepSeekProvider implements Provider {
     credential: string,
     file: UploadFileInput,
   ): Promise<{ id: string; token_usage: number }> {
-    return deepseekUploadFile(credential, file, () => this.getDsHash());
+    const token = this.parseCredential(credential);
+    return deepseekUploadFile(token, file, () => this.getDsHash());
   }
 
   // ─── HTTP Client ────────────────────────────────────────────────────
 
-  private createClient(credential: string) {
+  private createClient(token: string) {
     return new HttpClient({
       baseURL: BASE_URL,
       headers: {
-        [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${credential}`,
-        [HTTP_HEADER_NAMES.AUTHORIZATION]: credential,
+        [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
         [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.MACOS_SAFARI,
       },
     });

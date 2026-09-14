@@ -35,6 +35,8 @@
 
 export const PROVIDER_ID = 'claude';
 export const PROVIDER_NAME = 'Claude';
+export const PROVIDER_DESCRIPTION = 'Advanced AI assistant from Anthropic with strong reasoning';
+export const PROVIDER_COLOR = '#CC785C';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://claude.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
@@ -51,6 +53,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       "Anthropic's Claude Sonnet 4.5 - Balanced performance for everyday tasks with strong reasoning and image understanding",
   },
@@ -62,6 +70,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       "Anthropic's Claude Haiku 4.5 - Fast, compact model optimized for low-latency responses and efficient processing",
   },
@@ -73,6 +87,12 @@ export const MODELS = [
     is_search: false,
     is_image_upload: true,
     is_video_upload: false,
+    is_audio_upload: false,
+    is_file_upload: false,
+    is_larger_content_paste_upload: false,
+    is_image_generator: false,
+    is_video_generator: false,
+    is_deep_research: false,
     description:
       "Anthropic's Claude Sonnet 4.6 - Enhanced version with improved accuracy and broader knowledge base",
   },

@@ -67,6 +67,7 @@ export interface ChatCompletionMessage {
     research_mode: string;
     auto_thinking: boolean;
     thinking_mode: string;
+    thinking_format?: string;
     auto_search: boolean;
   };
   extra?: {
@@ -105,26 +106,69 @@ export interface QwenUserInfo {
 
 export interface QwenModelCapability {
   thinking?: boolean;
-  max_context_length?: number;
   search?: boolean;
   vision?: boolean;
+  document?: boolean;
+  video?: boolean;
+  audio?: boolean;
+  citations?: boolean;
+}
+
+export interface QwenModelAbilities {
+  vision?: number;
+  document?: number;
+  video?: number;
+  audio?: number;
+  mcp?: number;
+  thinking?: number;
+  parse_url?: number;
+  citations?: number;
 }
 
 export interface QwenModelMeta {
-  short_description?: string;
+  profile_image_url?: string;
   description?: string;
+  short_description?: string;
+  max_context_length?: number;
+  max_summary_generation_length?: number;
+  max_thinking_generation_length?: number;
+  max_generation_length?: number;
+  capabilities?: QwenModelCapability;
+  abilities?: QwenModelAbilities;
+  auto_thinking?: boolean;
+  auto_search?: boolean;
+  thinking_format?: string;
+  chat_type?: string[];
+  // TODO: MCP tools array - lists available MCP tools for this model
+  // Examples: ["image-generation", "code-interpreter", "amap", "fire-crawl"]
+  mcp?: string[];
+  modality?: string[];
+  think_skip?: {
+    enable?: boolean;
+  };
 }
 
 export interface QwenModelInfo {
   id: string;
+  user_id?: string;
+  base_model_id?: string | null;
   name: string;
   is_active: boolean;
+  is_visitor_active?: boolean;
   meta?: QwenModelMeta;
-  capabilities?: QwenModelCapability;
+  access_control?: unknown;
+  updated_at?: number;
+  created_at?: number;
 }
 
 export interface QwenModel {
+  id: string;
+  name: string;
+  object: string;
+  owned_by: string;
   info: QwenModelInfo;
+  preset?: boolean;
+  action_ids?: unknown[];
 }
 
 // ─── Chat Session & Message ───────────────────────────────────────────
@@ -146,17 +190,53 @@ export interface QwenChatMessage {
 
 export interface SSEResponseCreated {
   chat_id?: string;
+  parent_id?: string;
   response_id?: string;
+  response_index?: string;
   created?: number;
 }
 
 export interface SSEDelta {
+  role?: string;
   reasoning_content?: string;
   content?: string;
+  phase?: string;
+  status?: string;
+  extra?: {
+    summary_title?: {
+      content?: string[];
+    };
+    summary_thought?: {
+      content?: string[];
+    };
+    display_position?: string;
+  };
+  function_call?: {
+    name?: string;
+    arguments?: string;
+  };
+  function_id?: string;
+  name?: string;
 }
 
 export interface SSEChoice {
   delta?: SSEDelta;
+}
+
+export interface SSEUsageDetails {
+  text_tokens?: number;
+  reasoning_tokens?: number;
+  cached_tokens?: number;
+}
+
+export interface SSEUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  characters?: number;
+  input_tokens_details?: SSEUsageDetails;
+  output_tokens_details?: SSEUsageDetails;
+  prompt_tokens_details?: SSEUsageDetails;
 }
 
 export interface SSEEventPayload {
@@ -165,6 +245,9 @@ export interface SSEEventPayload {
     created?: SSEResponseCreated;
   };
   choices?: SSEChoice[];
+  response_id?: string;
+  usage?: SSEUsage;
+  timestamp?: number;
 }
 
 // ─── Auth Response ────────────────────────────────────────────────────
@@ -179,4 +262,49 @@ export interface AuthResponseData {
   bxUa?: string;
   bxUmidToken?: string;
   userAgent?: string;
+}
+
+// ─── File Upload ──────────────────────────────────────────────────────
+
+export interface UploadFileInput {
+  originalname: string;
+  mimetype: string;
+  buffer: Buffer;
+}
+
+export interface UploadResult {
+  id: string;
+  token_usage: number;
+}
+
+export interface STSTokenData {
+  access_key_id: string;
+  access_key_secret: string;
+  security_token: string;
+  file_url: string;
+  file_path: string;
+  file_id: string;
+  bucketname: string;
+  region: string;
+  endpoint: string;
+}
+
+export interface STSTokenResponse {
+  success: boolean;
+  request_id?: string;
+  message?: string;
+  data?: STSTokenData;
+}
+
+export interface FileStatusData {
+  file_id: string;
+  status: string;
+  token_usage?: number;
+}
+
+export interface FileParseStatusResponse {
+  success: boolean;
+  request_id?: string;
+  message?: string;
+  data?: FileStatusData[];
 }

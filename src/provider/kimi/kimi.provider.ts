@@ -94,6 +94,8 @@ import {
   DEFAULT_EMAIL,
   DEFAULT_TIMEZONE,
   LOGIN_PARTITION_PREFIX,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
 } from './kimi.constant';
 import { parseKimiSSE } from './kimi.sse-parser';
 import { kimiProxyHandler } from './kimi.proxy-handler';
@@ -118,6 +120,8 @@ export class KimiProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
   };
 
   // ─── Credential Parser ─────────────────────────────────────────────
@@ -336,9 +340,9 @@ export class KimiProvider implements Provider {
         const json = (await res.json()) as KimiUserResponse;
         if (
           json[AUTH_FIELDS.USER] &&
-          (json[AUTH_FIELDS.USER][AUTH_FIELDS.ID] ||
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.NICKNAME] ||
-            json[AUTH_FIELDS.USER][AUTH_FIELDS.NAME])
+          (json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.ID] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NAME])
         ) {
           let email: string | null = null;
 
@@ -603,7 +607,7 @@ export class KimiProvider implements Provider {
       [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
       [HTTP_HEADER_NAMES.USER_AGENT]: cred.userAgent || USER_AGENT,
       [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
-      [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERERR_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
       ...MSH_HEADERS,
       [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
     };
