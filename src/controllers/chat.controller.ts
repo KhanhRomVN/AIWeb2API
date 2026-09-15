@@ -211,7 +211,7 @@ export const sendMessage = async (
         onContent: (content: string) => {
           accumulatedResponse += content;
           finalOutputMessage = accumulatedResponse;
-          
+
           if (stream !== false) {
             if (!firstChunkReceived) {
               firstChunkReceived = true;
@@ -233,10 +233,6 @@ export const sendMessage = async (
           }
         },
         onThinking: (content: string) => {
-          console.log('[Chat Controller] 📤 Emitting thinking chunk:', {
-            length: content.length,
-            preview: content.substring(0, 100)
-          });
           if (stream !== false) {
             res.write(`data: ${JSON.stringify({ thinking: content })}\n\n`);
           }

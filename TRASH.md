@@ -1,213 +1,1782 @@
-[
-  {
-    "status": 200,
-    "type": "xhr",
-    "host": "chat.deepseek.com",
-    "path": "/api/v0/chat_session/create",
-    "method": "POST",
-    "protocol": "https",
-    "requestHeaders": {
-      "x-client-locale": "en_US",
-      "sec-ch-ua-platform": "\"Linux\"",
-      "authorization": "Bearer FfwUu0onAODSqzE9zaLXZDmSU/ceYiXW9HWydSJa2eQojJVNlNZNgBoR8eGr048w",
-      "x-client-bundle-id": "com.deepseek.chat",
-      "Referer": "https://chat.deepseek.com/a/chat/s/68b33850-cc93-4cb2-8f11-ef6c86801857",
-      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
-      "sec-ch-ua-mobile": "?0",
-      "x-client-timezone-offset": "25200",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-      "x-client-version": "2.4.0",
-      "accept": "*/*",
-      "content-type": "application/json",
-      "x-client-platform": "web"
-    },
-    "responseHeaders": {
-      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-      "x-ds-trace-id": "d9c0779a0ae1ecd682176248bb07d372",
-      "x-ds-served-by": "chat",
-      "Connection": "keep-alive",
-      "access-control-allow-credentials": "true",
-      "X-Content-Type-Options": "nosniff",
-      "Via": "1.1 42be2f5c4171ea6403329c96869121be.cloudfront.net (CloudFront)",
-      "X-Cache": "Miss from cloudfront",
-      "Content-Length": "348",
-      "X-Amz-Cf-Id": "PcR6niZ8OHBV6wUImCCytSyP4Dt6XIMH3eOaCgMvzAb-yvt_bwAsaw==",
-      "Date": "Sat, 05 Sep 2026 02:20:59 GMT",
-      "Content-Type": "application/json",
-      "X-Amz-Cf-Pop": "SGN50-P2",
-      "Server": "elb"
-    },
-    "requestBody": "{}",
-    "responseBody": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"3cccd342-2806-4608-947a-8fb375a73743\",\"seq_id\":210738059,\"agent\":\"chat\",\"model_type\":\"default\",\"title\":null,\"title_type\":\"WIP\",\"version\":0,\"current_message_id\":null,\"pinned\":false,\"inserted_at\":1788574859.322,\"updated_at\":1788574859.322},\"ttl_seconds\":259200}}}",
-    "securityIssues": []
-  },
-  {
-    "status": 200,
-    "type": "xhr",
-    "host": "chat.deepseek.com",
-    "path": "/api/v0/chat/completion",
-    "method": "POST",
-    "protocol": "https",
-    "requestHeaders": {
-      "x-client-locale": "en_US",
-      "sec-ch-ua-platform": "\"Linux\"",
-      "authorization": "Bearer FfwUu0onAODSqzE9zaLXZDmSU/ceYiXW9HWydSJa2eQojJVNlNZNgBoR8eGr048w",
-      "x-client-bundle-id": "com.deepseek.chat",
-      "Referer": "https://chat.deepseek.com/a/chat/s/68b33850-cc93-4cb2-8f11-ef6c86801857",
-      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
-      "sec-ch-ua-mobile": "?0",
-      "x-ds-pow-response": "eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6Ijc0MGZiNDI0ZmE5OTEwMzg0ZmMzODg3OTE2NWE2ZWVjN2IzNDgxMWI4OGRiYWI1YzUwZGJiN2M1YmI3OWU4MTgiLCJzYWx0IjoiNTIwYzk0YmFiOGQxMzkwNzNmOTAiLCJhbnN3ZXIiOjY0ODIzLCJzaWduYXR1cmUiOiIyNzhkMWUxODE0OGYwZDBhNWRkYjNjMDk4NjYzNjQ3NjE4YzRjYWQzZTcwYjExZjZlMzQwOWEwMjlmZmRhYzA2IiwidGFyZ2V0X3BhdGgiOiIvYXBpL3YwL2NoYXQvY29tcGxldGlvbiJ9",
-      "x-hif-leim": "sXgXkX6n08HA0aM/trcW0F4TrJJQK73scXixiFm+HCK0fJ0R6HLs80U=.Yf452LXYe+YEcCrZ",
-      "x-client-timezone-offset": "25200",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-      "x-client-version": "2.4.0",
-      "accept": "*/*",
-      "content-type": "application/json",
-      "x-client-platform": "web"
-    },
-    "responseHeaders": {
-      "Transfer-Encoding": "chunked",
-      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-      "x-ds-trace-id": "2189a08c05a2654ac06bb528bfe95fa5",
-      "cache-control": "no-cache",
-      "Connection": "keep-alive",
-      "X-Content-Type-Options": "nosniff",
-      "x-ds-sse-heartbeat-timeout-secs": "8",
-      "Via": "1.1 1df8cfd85a11fdd417b85f505d55100e.cloudfront.net (CloudFront)",
-      "X-Cache": "Miss from cloudfront",
-      "X-Amz-Cf-Id": "aQzZ-AtLAkW2UWgm5Bxr3Q4fJIwz8NofX5ECCY2eHU8Nlt-gs54RrQ==",
-      "Date": "Sat, 05 Sep 2026 02:20:59 GMT",
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "X-Amz-Cf-Pop": "SGN50-P3",
-      "Server": "elb"
-    },
-    "requestBody": "{\"chat_session_id\":\"68b33850-cc93-4cb2-8f11-ef6c86801857\",\"parent_message_id\":null,\"model_type\":\"default\",\"prompt\":\"xem file. ko cần phân tích sâu\",\"ref_file_ids\":[\"file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5\"],\"thinking_enabled\":false,\"search_enabled\":true,\"action\":null,\"preempt\":false}",
-    "responseBody": "event: ready\ndata: {\"request_message_id\":1,\"response_message_id\":2,\"model_type\":\"default\"}\n\nevent: update_file\ndata: {\"id\":\"file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5\",\"status\":\"SUCCESS\",\"file_name\":\"!doctype html.txt\",\"from_share\":false,\"file_size\":212145,\"model_kind\":\"NORMAL\",\"token_usage\":60002,\"error_code\":null,\"inserted_at\":1788574859.298693,\"updated_at\":1788574859.2986932,\"signed_path\":\"/file?file_id=e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5&state=6BvrOSUgcaoqGdshntzUn7Kzr%2FIL7Dgh9i010%2BRiMm8M7GkpBfZMy3a4erz06AMHvqj%2BDy4%2FvBdHBgg1xKfl30LX0GAB9QAuxKT3yh9jsBTCgWGR04YaLHye3nQvnxXCwwjyfWpRGij9bMfBjGPSNYX2sekFIDojSP31xPXW1NnrhtPApX9fBrhsqcX98ghIlC9TTgFDlGyAO5fh6a5T7FsjMQ5aAtmRDHuVALjzWOENHdrk5BJjOmHqcb%2FfOSxlDq%2FGq8lymx5Y56CQsm56Fe8Kp1tjUVouO1pYZrrRU2yXxcE9tySvs7HjHyA%2F5%2F6gNlfkDcjnJFY2F1itsB%2FqQ7AZ4STOSF64h3kzhwWHkxQVUj%2FamUXJ8ax1\",\"is_image\":false,\"audit_result\":null}\n\nevent: update_session\ndata: {\"updated_at\":1788574861.253016}\n\ndata: {\"v\":{\"response\":{\"message_id\":2,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":false,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"WIP\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"feedback\":null,\"inserted_at\":1788574861.237201,\"search_enabled\":true,\"fragments\":[{\"id\":2,\"type\":\"RESPONSE\",\"content\":\"T\",\"references\":[],\"stage_id\":1}],\"conversation_mode\":\"DEFAULT\",\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false}}}\n\ndata: {\"p\":\"response/fragments/-1/content\",\"o\":\"APPEND\",\"v\":\"ôi\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ã\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"em\"}\n\ndata: {\"v\":\" file\"}\n\ndata: {\"v\":\" HTML\"}\n\ndata: {\"v\":\" này\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Đ\"}\n\ndata: {\"v\":\"ây\"}\n\ndata: {\"v\":\" là\"}\n\ndata: {\"v\":\" một\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"g\"}\n\ndata: {\"v\":\"iao\"}\n\ndata: {\"v\":\" di\"}\n\ndata: {\"v\":\"ện\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ảng\"}\n\ndata: {\"v\":\" đi\"}\n\ndata: {\"v\":\"ều\"}\n\ndata: {\"v\":\" khi\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Proxy\"}\n\ndata: {\"v\":\" Console\"}\n\ndata: {\"v\":\")**\"}\n\ndata: {\"v\":\" kh\"}\n\ndata: {\"v\":\"á\"}\n\ndata: {\"v\":\" ho\"}\n\ndata: {\"v\":\"àn\"}\n\ndata: {\"v\":\" chỉ\"}\n\ndata: {\"v\":\"nh\"}\n\ndata: {\"v\":\" và\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"uyên\"}\n\ndata: {\"v\":\" nghi\"}\n\ndata: {\"v\":\"ệ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" với\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ên\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"ọi\"}\n\ndata: {\"v\":\" \\\"\"}\n\ndata: {\"v\":\"Flow\"}\n\ndata: {\"v\":\"\\\".\\n\\n\"}\n\ndata: {\"v\":\"##\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ổ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" quan\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\"T\"}\n\ndata: {\"v\":\"ên\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ự\"}\n\ndata: {\"v\":\" án\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Flow\"}\n\ndata: {\"v\":\" —\"}\n\ndata: {\"v\":\" Proxy\"}\n\ndata: {\"v\":\" Console\"}\n\ndata: {\"v\":\"  \\n\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\"Th\"}\n\ndata: {\"v\":\"ương\"}\n\ndata: {\"v\":\" hi\"}\n\ndata: {\"v\":\"ệu\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Zent\"}\n\ndata: {\"v\":\"ri\"}\n\ndata: {\"v\":\"  \\n\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\"Ng\"}\n\ndata: {\"v\":\"ôn\"}\n\ndata: {\"v\":\" ng\"}\n\ndata: {\"v\":\"ữ\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"iao\"}\n\ndata: {\"v\":\" di\"}\n\ndata: {\"v\":\"ện\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Ti\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" Vi\"}\n\ndata: {\"v\":\"ệt\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"##\"}\n\ndata: {\"v\":\" C\"}\n\ndata: {\"v\":\"ác\"}\n\ndata: {\"v\":\" tính\"}\n\ndata: {\"v\":\" n\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ính\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"1\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Đ\"}\n\ndata: {\"v\":\"i\"}\n\ndata: {\"v\":\"ều\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ướ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" và\"}\n\ndata: {\"v\":\" B\"}\n\ndata: {\"v\":\"ố\"}\n\ndata: {\"v\":\" cụ\"}\n\ndata: {\"v\":\"c\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Than\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" trên\"}\n\ndata: {\"v\":\" cùng\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Header\"}\n\ndata: {\"v\":\"bar\"}\n\ndata: {\"v\":\"):\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\" Ch\"}\n\ndata: {\"v\":\"uy\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ổi\"}\n\ndata: {\"v\":\" gi\"}\n\ndata: {\"v\":\"ữ\"}\n\ndata: {\"v\":\"a\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"4\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"em\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\" Qu\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Ph\"}\n\ndata: {\"v\":\"ân\"}\n\ndata: {\"v\":\" tích\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" L\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Nh\"}\n\ndata: {\"v\":\"ật\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Side\"}\n\ndata: {\"v\":\"bar\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" C\"}\n\ndata: {\"v\":\"ác\"}\n\ndata: {\"v\":\" menu\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ính\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Dashboard\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Em\"}\n\ndata: {\"v\":\"ails\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" For\"}\n\ndata: {\"v\":\"ge\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Filter\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Work\"}\n\ndata: {\"v\":\"flow\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Proxy\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Device\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" Settings\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"B\"}\n\ndata: {\"v\":\"ảng\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ọc\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Filter\"}\n\ndata: {\"v\":\" Panel\"}\n\ndata: {\"v\":\"):\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\" L\"}\n\ndata: {\"v\":\"ọc\"}\n\ndata: {\"v\":\" theo\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ại\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"iao\"}\n\ndata: {\"v\":\" thức\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"ố\"}\n\ndata: {\"v\":\"c\"}\n\ndata: {\"v\":\" gia\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"à\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ung\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ấ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"óm\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" dụng\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" tags\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Than\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ướ\"}\n\ndata: {\"v\":\"i\"}\n\ndata: {\"v\":\" cùng\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Hi\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" n\"}\n\ndata: {\"v\":\"ối\"}\n\ndata: {\"v\":\" và\"}\n\ndata: {\"v\":\" số\"}\n\ndata: {\"v\":\" lượng\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"2\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Ch\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" Qu\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Manager\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"B\"}\n\ndata: {\"v\":\"ảng\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ảng\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Hi\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ầ\"}\n\ndata: {\"v\":\"y\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ủ\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\" tin\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"IP\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" port\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ại\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"ố\"}\n\ndata: {\"v\":\"c\"}\n\ndata: {\"v\":\" gia\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ễ\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" upt\"}\n\ndata: {\"v\":\"ime\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" thi\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"óm\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" ng\"}\n\ndata: {\"v\":\"ày\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ạn\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Than\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" công\"}\n\ndata: {\"v\":\" cụ\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ìm\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\"m\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"êm\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" hà\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ạt\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ắ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"ếp\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ù\"}\n\ndata: {\"v\":\"y\"}\n\ndata: {\"v\":\" chỉ\"}\n\ndata: {\"v\":\"nh\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ột\"}\n\ndata: {\"v\":\" hi\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Ch\"}\n\ndata: {\"v\":\"ọn\"}\n\ndata: {\"v\":\" hà\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ạt\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Batch\"}\n\ndata: {\"v\":\" Bar\"}\n\ndata: {\"v\":\"):\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\" Ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"án\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"óm\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"ắ\"}\n\ndata: {\"v\":\"n\"}\n\ndata: {\"v\":\" tag\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" xu\"}\n\ndata: {\"v\":\"ất\"}\n\ndata: {\"v\":\" dan\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ách\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"óa\"}\n\ndata: {\"v\":\" hà\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ạt\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"H\"}\n\ndata: {\"v\":\"ành\"}\n\ndata: {\"v\":\" động\"}\n\ndata: {\"v\":\" n\"}\n\ndata: {\"v\":\"han\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" ng\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"óa\"}\n\ndata: {\"v\":\" từ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"3\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Ch\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" Ph\"}\n\ndata: {\"v\":\"ân\"}\n\ndata: {\"v\":\" tích\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Anal\"}\n\ndata: {\"v\":\"ytics\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Th\"}\n\ndata: {\"v\":\"ống\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ê\"}\n\ndata: {\"v\":\" tổ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" quan\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ổ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" tỷ\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ệ\"}\n\ndata: {\"v\":\" số\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ễ\"}\n\ndata: {\"v\":\" TB\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" upt\"}\n\ndata: {\"v\":\"ime\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ắ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ạn\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" black\"}\n\ndata: {\"v\":\"list\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Bi\"}\n\ndata: {\"v\":\"ểu\"}\n\ndata: {\"v\":\" đồ\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" L\"}\n\ndata: {\"v\":\"ượ\"}\n\ndata: {\"v\":\"t\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" &\"}\n\ndata: {\"v\":\" tỷ\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ệ\"}\n\ndata: {\"v\":\" số\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"24\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" phân\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ố\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"don\"}\n\ndata: {\"v\":\"ut\"}\n\ndata: {\"v\":\" chart\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"B\"}\n\ndata: {\"v\":\"ảng\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"ếp\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Top\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ễ\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ấ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\"/c\"}\n\ndata: {\"v\":\"ao\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" top\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" ti\"}\n\ndata: {\"v\":\"êu\"}\n\ndata: {\"v\":\" tố\"}\n\ndata: {\"v\":\"n\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Black\"}\n\ndata: {\"v\":\"list\"}\n\ndata: {\"v\":\" monitoring\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" các\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ơ\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ở\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ữ\"}\n\ndata: {\"v\":\" li\"}\n\ndata: {\"v\":\"ệu\"}\n\ndata: {\"v\":\" black\"}\n\ndata: {\"v\":\"list\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"B\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" đồ\"}\n\ndata: {\"v\":\" nhi\"}\n\ndata: {\"v\":\"ệt\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Heat\"}\n\ndata: {\"v\":\"map\"}\n\ndata: {\"v\":\"):\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"7\"}\n\ndata: {\"v\":\" ng\"}\n\ndata: {\"v\":\"ày\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"24\"}\n\ndata: {\"v\":\" gi\"}\n\ndata: {\"v\":\"ờ\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" dụng\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"C\"}\n\ndata: {\"v\":\"ả\"}\n\ndata: {\"v\":\"nh\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"áo\"}\n\ndata: {\"v\":\" &\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ắ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ạn\"}\n\ndata: {\"v\":\"**\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"4\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" L\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" &\"}\n\ndata: {\"v\":\" X\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Th\"}\n\ndata: {\"v\":\"ống\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ê\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Proxy\"}\n\ndata: {\"v\":\" có\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" tự\"}\n\ndata: {\"v\":\" động\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" trong\"}\n\ndata: {\"v\":\" gi\"}\n\ndata: {\"v\":\"ờ\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ới\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"L\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" bi\"}\n\ndata: {\"v\":\"ểu\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" X\"}\n\ndata: {\"v\":\"em\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\" theo\"}\n\ndata: {\"v\":\" tu\"}\n\ndata: {\"v\":\"ần\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Qu\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" định\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ỳ\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" B\"}\n\ndata: {\"v\":\"ật\"}\n\ndata: {\"v\":\"/t\"}\n\ndata: {\"v\":\"ắt\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"em\"}\n\ndata: {\"v\":\" chu\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ỳ\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"5\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Nh\"}\n\ndata: {\"v\":\"ật\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"Log\"}\n\ndata: {\"v\":\"s\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Đ\"}\n\ndata: {\"v\":\"ang\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ực\"}\n\ndata: {\"v\":\" tiếp\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Hi\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"á\"}\n\ndata: {\"v\":\" trình\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" real\"}\n\ndata: {\"v\":\"time\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"L\"}\n\ndata: {\"v\":\"ọc\"}\n\ndata: {\"v\":\" log\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ất\"}\n\ndata: {\"v\":\" cả\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" thành\"}\n\ndata: {\"v\":\" công\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ất\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ại\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" cả\"}\n\ndata: {\"v\":\"nh\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"áo\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ang\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"B\"}\n\ndata: {\"v\":\"ảng\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"ật\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\" chi\"}\n\ndata: {\"v\":\" ti\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Tr\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ái\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ại\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" thi\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"/k\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ời\"}\n\ndata: {\"v\":\" lượng\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ời\"}\n\ndata: {\"v\":\" gian\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"hi\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ú\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"6\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Modal\"}\n\ndata: {\"v\":\" chi\"}\n\ndata: {\"v\":\" ti\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" Proxy\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"K\"}\n\ndata: {\"v\":\"hi\"}\n\ndata: {\"v\":\" click\"}\n\ndata: {\"v\":\" vào\"}\n\ndata: {\"v\":\" một\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" sẽ\"}\n\ndata: {\"v\":\" hi\"}\n\ndata: {\"v\":\"ển\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\" modal\"}\n\ndata: {\"v\":\" với\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"9\"}\n\ndata: {\"v\":\" tab\"}\n\ndata: {\"v\":\":\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"T\"}\n\ndata: {\"v\":\"ổ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" quan\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Tags\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\" tin\"}\n\ndata: {\"v\":\" chi\"}\n\ndata: {\"v\":\" ti\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" chỉ\"}\n\ndata: {\"v\":\" số\"}\n\ndata: {\"v\":\" hi\"}\n\ndata: {\"v\":\"ệu\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"ả\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"upt\"}\n\ndata: {\"v\":\"ime\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" tỷ\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ệ\"}\n\ndata: {\"v\":\" thành\"}\n\ndata: {\"v\":\" công\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\"),\"}\n\ndata: {\"v\":\" black\"}\n\ndata: {\"v\":\"list\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" cả\"}\n\ndata: {\"v\":\"nh\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"áo\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Ph\"}\n\ndata: {\"v\":\"ân\"}\n\ndata: {\"v\":\" tích\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Bi\"}\n\ndata: {\"v\":\"ểu\"}\n\ndata: {\"v\":\" đồ\"}\n\ndata: {\"v\":\" độ\"}\n\ndata: {\"v\":\" tr\"}\n\ndata: {\"v\":\"ễ\"}\n\ndata: {\"v\":\" &\"}\n\ndata: {\"v\":\" upt\"}\n\ndata: {\"v\":\"ime\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" phân\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ố\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ỗ\"}\n\ndata: {\"v\":\"i\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Th\"}\n\ndata: {\"v\":\"i\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Dan\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ách\"}\n\ndata: {\"v\":\" thi\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ang\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ùng\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"án\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"êm\"}\n\ndata: {\"v\":\" thi\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"K\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Work\"}\n\ndata: {\"v\":\"flow\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ang\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" dụng\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Website\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" C\"}\n\ndata: {\"v\":\"ác\"}\n\ndata: {\"v\":\" website\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ã\"}\n\ndata: {\"v\":\" tru\"}\n\ndata: {\"v\":\"y\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" qua\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Email\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ài\"}\n\ndata: {\"v\":\" kho\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" email\"}\n\ndata: {\"v\":\" li\"}\n\ndata: {\"v\":\"ên\"}\n\ndata: {\"v\":\" k\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"X\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" C\"}\n\ndata: {\"v\":\"ấ\"}\n\ndata: {\"v\":\"u\"}\n\ndata: {\"v\":\" hình\"}\n\ndata: {\"v\":\" tự\"}\n\ndata: {\"v\":\" động\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" x\"}\n\ndata: {\"v\":\"o\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"L\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ạ\"}\n\ndata: {\"v\":\"y\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" L\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" ki\"}\n\ndata: {\"v\":\"ểm\"}\n\ndata: {\"v\":\" tra\"}\n\ndata: {\"v\":\" &\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" dụng\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"G\"}\n\ndata: {\"v\":\"hi\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ú\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" G\"}\n\ndata: {\"v\":\"hi\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ú\"}\n\ndata: {\"v\":\" và\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ị\"}\n\ndata: {\"v\":\"ch\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ử\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ay\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ổi\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"###\"}\n\ndata: {\"v\":\" \"}\n\ndata: {\"v\":\"7\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Th\"}\n\ndata: {\"v\":\"êm\"}\n\ndata: {\"v\":\" &\"}\n\ndata: {\"v\":\" Nh\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Th\"}\n\ndata: {\"v\":\"êm\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ủ\"}\n\ndata: {\"v\":\" công\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Ch\"}\n\ndata: {\"v\":\"ọn\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ại\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" g\"}\n\ndata: {\"v\":\"iao\"}\n\ndata: {\"v\":\" thức\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" IP\"}\n\ndata: {\"v\":\"/\"}\n\ndata: {\"v\":\"port\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" username\"}\n\ndata: {\"v\":\"/p\"}\n\ndata: {\"v\":\"assword\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"ố\"}\n\ndata: {\"v\":\"c\"}\n\ndata: {\"v\":\" gia\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"à\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ung\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ấ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" ISP\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" nh\"}\n\ndata: {\"v\":\"óm\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" gi\"}\n\ndata: {\"v\":\"ới\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ạn\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" ng\"}\n\ndata: {\"v\":\"ày\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ết\"}\n\ndata: {\"v\":\" h\"}\n\ndata: {\"v\":\"ạn\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"Nh\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" hà\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" lo\"}\n\ndata: {\"v\":\"ạt\"}\n\ndata: {\"v\":\":**\"}\n\ndata: {\"v\":\" Nh\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" dan\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" s\"}\n\ndata: {\"v\":\"ách\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"ip\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\"port\"}\n\ndata: {\"v\":\" ho\"}\n\ndata: {\"v\":\"ặc\"}\n\ndata: {\"v\":\" ip\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\"port\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\"user\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\"pass\"}\n\ndata: {\"v\":\"),\"}\n\ndata: {\"v\":\" á\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\" dụng\"}\n\ndata: {\"v\":\" c\"}\n\ndata: {\"v\":\"ấ\"}\n\ndata: {\"v\":\"u\"}\n\ndata: {\"v\":\" hình\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ung\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"##\"}\n\ndata: {\"v\":\" Đ\"}\n\ndata: {\"v\":\"án\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" giá\"}\n\ndata: {\"v\":\"\\n\\n\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\"Ư\"}\n\ndata: {\"v\":\"u\"}\n\ndata: {\"v\":\" điểm\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\"**\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" G\"}\n\ndata: {\"v\":\"iao\"}\n\ndata: {\"v\":\" di\"}\n\ndata: {\"v\":\"ện\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ẹ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" hi\"}\n\ndata: {\"v\":\"ện\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ại\"}\n\ndata: {\"v\":\" với\"}\n\ndata: {\"v\":\" dark\"}\n\ndata: {\"v\":\" theme\"}\n\ndata: {\"v\":\" và\"}\n\ndata: {\"v\":\" hi\"}\n\ndata: {\"v\":\"ệu\"}\n\ndata: {\"v\":\" ứng\"}\n\ndata: {\"v\":\" m\"}\n\ndata: {\"v\":\"ượ\"}\n\ndata: {\"v\":\"t\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" R\"}\n\ndata: {\"v\":\"ất\"}\n\ndata: {\"v\":\" nhi\"}\n\ndata: {\"v\":\"ều\"}\n\ndata: {\"v\":\" tính\"}\n\ndata: {\"v\":\" n\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"uyên\"}\n\ndata: {\"v\":\" nghi\"}\n\ndata: {\"v\":\"ệ\"}\n\ndata: {\"v\":\"p\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" D\"}\n\ndata: {\"v\":\"ữ\"}\n\ndata: {\"v\":\" li\"}\n\ndata: {\"v\":\"ệu\"}\n\ndata: {\"v\":\" mock\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"a\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ạng\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" sinh\"}\n\ndata: {\"v\":\" động\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" T\"}\n\ndata: {\"v\":\"ương\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ác\"}\n\ndata: {\"v\":\" ph\"}\n\ndata: {\"v\":\"ong\"}\n\ndata: {\"v\":\" ph\"}\n\ndata: {\"v\":\"ú\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"modal\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" dropdown\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" toggle\"}\n\ndata: {\"v\":\",\"}\n\ndata: {\"v\":\" batch\"}\n\ndata: {\"v\":\" actions\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" Respons\"}\n\ndata: {\"v\":\"ive\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"c\"}\n\ndata: {\"v\":\"ó\"}\n\ndata: {\"v\":\" media\"}\n\ndata: {\"v\":\" queries\"}\n\ndata: {\"v\":\")\\n\\n\"}\n\ndata: {\"v\":\"**\"}\n\ndata: {\"v\":\"L\"}\n\ndata: {\"v\":\"ư\"}\n\ndata: {\"v\":\"u\"}\n\ndata: {\"v\":\" ý\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\"**\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" Đ\"}\n\ndata: {\"v\":\"ây\"}\n\ndata: {\"v\":\" là\"}\n\ndata: {\"v\":\" file\"}\n\ndata: {\"v\":\" HTML\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ĩ\"}\n\ndata: {\"v\":\"nh\"}\n\ndata: {\"v\":\" với\"}\n\ndata: {\"v\":\" d\"}\n\ndata: {\"v\":\"ữ\"}\n\ndata: {\"v\":\" li\"}\n\ndata: {\"v\":\"ệu\"}\n\ndata: {\"v\":\" mock\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"sin\"}\n\ndata: {\"v\":\"h\"}\n\ndata: {\"v\":\" ng\"}\n\ndata: {\"v\":\"ẫ\"}\n\ndata: {\"v\":\"u\"}\n\ndata: {\"v\":\" nhi\"}\n\ndata: {\"v\":\"ên\"}\n\ndata: {\"v\":\")\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" C\"}\n\ndata: {\"v\":\"ần\"}\n\ndata: {\"v\":\" tích\"}\n\ndata: {\"v\":\" hợp\"}\n\ndata: {\"v\":\" backend\"}\n\ndata: {\"v\":\" để\"}\n\ndata: {\"v\":\" ho\"}\n\ndata: {\"v\":\"ạt\"}\n\ndata: {\"v\":\" động\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ực\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\"\\n\"}\n\ndata: {\"v\":\"-\"}\n\ndata: {\"v\":\" M\"}\n\ndata: {\"v\":\"ột\"}\n\ndata: {\"v\":\" số\"}\n\ndata: {\"v\":\" ch\"}\n\ndata: {\"v\":\"ức\"}\n\ndata: {\"v\":\" n\"}\n\ndata: {\"v\":\"ăng\"}\n\ndata: {\"v\":\" chỉ\"}\n\ndata: {\"v\":\" là\"}\n\ndata: {\"v\":\" gi\"}\n\ndata: {\"v\":\"ả\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ập\"}\n\ndata: {\"v\":\" (\"}\n\ndata: {\"v\":\"to\"}\n\ndata: {\"v\":\"ast\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ông\"}\n\ndata: {\"v\":\" b\"}\n\ndata: {\"v\":\"áo\"}\n\ndata: {\"v\":\")\\n\\n\"}\n\ndata: {\"v\":\"T\"}\n\ndata: {\"v\":\"ổ\"}\n\ndata: {\"v\":\"ng\"}\n\ndata: {\"v\":\" thể\"}\n\ndata: {\"v\":\" đ\"}\n\ndata: {\"v\":\"ây\"}\n\ndata: {\"v\":\" là\"}\n\ndata: {\"v\":\" một\"}\n\ndata: {\"v\":\" **\"}\n\ndata: {\"v\":\"g\"}\n\ndata: {\"v\":\"iao\"}\n\ndata: {\"v\":\" di\"}\n\ndata: {\"v\":\"ện\"}\n\ndata: {\"v\":\" qu\"}\n\ndata: {\"v\":\"ản\"}\n\ndata: {\"v\":\" l\"}\n\ndata: {\"v\":\"ý\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" r\"}\n\ndata: {\"v\":\"ất\"}\n\ndata: {\"v\":\" chất\"}\n\ndata: {\"v\":\" lượng\"}\n\ndata: {\"v\":\"**,\"}\n\ndata: {\"v\":\" ph\"}\n\ndata: {\"v\":\"ù\"}\n\ndata: {\"v\":\" hợp\"}\n\ndata: {\"v\":\" để\"}\n\ndata: {\"v\":\" làm\"}\n\ndata: {\"v\":\" base\"}\n\ndata: {\"v\":\" cho\"}\n\ndata: {\"v\":\" một\"}\n\ndata: {\"v\":\" hệ\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ống\"}\n\ndata: {\"v\":\" proxy\"}\n\ndata: {\"v\":\" management\"}\n\ndata: {\"v\":\" th\"}\n\ndata: {\"v\":\"ực\"}\n\ndata: {\"v\":\" t\"}\n\ndata: {\"v\":\"ế\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"p\":\"response\",\"o\":\"BATCH\",\"v\":[{\"p\":\"accumulated_token_usage\",\"v\":61487},{\"p\":\"quasi_status\",\"v\":\"FINISHED\"}]}\n\ndata: {\"p\":\"response/status\",\"o\":\"SET\",\"v\":\"FINISHED\"}\n\nevent: update_session\ndata: {\"updated_at\":1788574872.666481}\n\nevent: title\ndata: {\"content\":\"Proxy Console UI\"}\n\nevent: close\ndata: {\"click_behavior\":\"none\",\"auto_resume\":false}\n\n",
-    "securityIssues": []
-  },
-  {
-    "status": 200,
-    "type": "xhr",
-    "host": "chat.deepseek.com",
-    "path": "/api/v0/file/fetch_files?file_ids=file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5",
-    "method": "GET",
-    "protocol": "https",
-    "requestHeaders": {
-      "x-client-locale": "en_US",
-      "sec-ch-ua-platform": "\"Linux\"",
-      "authorization": "Bearer FfwUu0onAODSqzE9zaLXZDmSU/ceYiXW9HWydSJa2eQojJVNlNZNgBoR8eGr048w",
-      "x-client-bundle-id": "com.deepseek.chat",
-      "Referer": "https://chat.deepseek.com/",
-      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
-      "sec-ch-ua-mobile": "?0",
-      "x-client-timezone-offset": "25200",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-      "x-client-version": "2.4.0",
-      "accept": "*/*",
-      "x-client-platform": "web"
-    },
-    "responseHeaders": {
-      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-      "x-ds-trace-id": "872ea8d65d868c82ac42b6717ff484d6",
-      "Connection": "keep-alive",
-      "X-Content-Type-Options": "nosniff",
-      "Via": "1.1 1df8cfd85a11fdd417b85f505d55100e.cloudfront.net (CloudFront)",
-      "X-Cache": "Miss from cloudfront",
-      "Content-Length": "795",
-      "x-server-time": "1788574683827",
-      "Date": "Sat, 05 Sep 2026 02:18:03 GMT",
-      "Content-Type": "application/json",
-      "X-Amz-Cf-Pop": "SGN50-P3",
-      "Server": "elb",
-      "X-Amz-Cf-Id": "WHIUQ23NYcJat2goda9SZjgaLv-y-cCa7sr59S28Cld4h4L3je7F0w=="
-    },
-    "requestBody": "",
-    "responseBody": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"files\":[{\"id\":\"file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5\",\"status\":\"SUCCESS\",\"file_name\":\"!doctype html.txt\",\"from_share\":false,\"file_size\":212145,\"model_kind\":\"NORMAL\",\"token_usage\":60002,\"error_code\":null,\"inserted_at\":1788574679.972,\"updated_at\":1788574683.0,\"signed_path\":\"/file?file_id=e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5&state=SFXUwddbd%2F9cQoK4oikY%2F%2FTjg6d8WG7SNJnSW3QTqvaIpdrsxH8T0jtKsgXXM0ZW7HB3oQy47pbsZYNb9mFiEIOx%2BPWjPzVwu4d%2BJZlvpqJVuMBPC9%2BkmdlVBpKoexMccKWeXvtTW9g6m0KZ5BkvogB5ziizgoPXL17SoEDKPQYR7C0l7ZlkpuSdQ6m5gbJBHsn%2BODpVJjEV9L2MxsccX3lqrQnAFJmdH0pl2A380qVlVkOIK5vdY6AbEmmTVZrudmDn0JJlYAxUc5xOtZnPRDhyKIjc%2FjF3y6JMmFtzxMc2zsWxBKNXcGs4L1vef8QaPvgt%2BeLtWzc%3D\",\"is_image\":false,\"audit_result\":null}]}}}",
-    "securityIssues": []
-  },
-  {
-    "status": 200,
-    "type": "xhr",
-    "host": "chat.deepseek.com",
-    "path": "/api/v0/file/fetch_files?file_ids=file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5",
-    "method": "GET",
-    "protocol": "https",
-    "requestHeaders": {
-      "x-client-locale": "en_US",
-      "sec-ch-ua-platform": "\"Linux\"",
-      "authorization": "Bearer FfwUu0onAODSqzE9zaLXZDmSU/ceYiXW9HWydSJa2eQojJVNlNZNgBoR8eGr048w",
-      "x-client-bundle-id": "com.deepseek.chat",
-      "Referer": "https://chat.deepseek.com/",
-      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
-      "sec-ch-ua-mobile": "?0",
-      "x-client-timezone-offset": "25200",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-      "x-client-version": "2.4.0",
-      "accept": "*/*",
-      "x-client-platform": "web"
-    },
-    "responseHeaders": {
-      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-      "x-ds-trace-id": "cf3ec14a021ec78f7fdacf980c0cbe9c",
-      "Connection": "keep-alive",
-      "X-Content-Type-Options": "nosniff",
-      "Via": "1.1 1df8cfd85a11fdd417b85f505d55100e.cloudfront.net (CloudFront)",
-      "X-Cache": "Miss from cloudfront",
-      "Content-Length": "369",
-      "x-server-time": "1788574680496",
-      "Date": "Sat, 05 Sep 2026 02:18:00 GMT",
-      "Content-Type": "application/json",
-      "X-Amz-Cf-Pop": "SGN50-P3",
-      "Server": "elb",
-      "X-Amz-Cf-Id": "dOkL0HpxMBvD2C4W_kxLD67-RckRN9Q4XKzaKhyqQxyl6AGSMiyNRQ=="
-    },
-    "requestBody": "",
-    "responseBody": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"files\":[{\"id\":\"file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5\",\"status\":\"PARSING\",\"file_name\":\"!doctype html.txt\",\"from_share\":false,\"file_size\":212145,\"model_kind\":\"NORMAL\",\"token_usage\":null,\"error_code\":null,\"inserted_at\":1788574679.972,\"updated_at\":1788574680.25,\"is_image\":false,\"audit_result\":null}]}}}",
-    "securityIssues": []
-  },
-  {
-    "status": 200,
-    "type": "xhr",
-    "host": "chat.deepseek.com",
-    "path": "/api/v0/file/upload_file",
-    "method": "POST",
-    "protocol": "https",
-    "requestHeaders": {
-      "sec-ch-ua-platform": "\"Linux\"",
-      "authorization": "Bearer FfwUu0onAODSqzE9zaLXZDmSU/ceYiXW9HWydSJa2eQojJVNlNZNgBoR8eGr048w",
-      "x-client-bundle-id": "com.deepseek.chat",
-      "x-file-size": "212145",
-      "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
-      "sec-ch-ua-mobile": "?0",
-      "x-ds-pow-response": "eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6IjVkMTVlNDdmMTNlZjViYmM5MzgxZWEzZWZhOGM5M2UwODIzYzM0NGEwZDhkYmNkYWFjYzcyODE3ZDEzNTBmZDIiLCJzYWx0IjoiZjQ1NDVlNWJlOGZlMmM0MjhiYTMiLCJhbnN3ZXIiOjk3NzQ0LCJzaWduYXR1cmUiOiI0NDVmY2IxMjdlOGQxODI5Yzk2ZTM0OTQ2MDU3YTZhYTVhYjJmN2E1ZGUzZjI2YWJkNzFkNzI5NDU5MWJiMGUxIiwidGFyZ2V0X3BhdGgiOiIvYXBpL3YwL2ZpbGUvdXBsb2FkX2ZpbGUifQ==",
-      "accept": "*/*",
-      "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryUxO9mrng5x4WO7qT",
-      "x-thinking-enabled": "0",
-      "x-client-locale": "en_US",
-      "Referer": "https://chat.deepseek.com/",
-      "x-model-type": "default",
-      "x-client-timezone-offset": "25200",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-      "x-client-version": "2.4.0",
-      "x-client-platform": "web"
-    },
-    "responseHeaders": {
-      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-      "x-ds-trace-id": "cf81b64bfb73a67313072b70651c3c46",
-      "Connection": "keep-alive",
-      "X-Content-Type-Options": "nosniff",
-      "Via": "1.1 1df8cfd85a11fdd417b85f505d55100e.cloudfront.net (CloudFront)",
-      "X-Cache": "Miss from cloudfront",
-      "Content-Length": "358",
-      "x-server-time": "1788574679984",
-      "Date": "Sat, 05 Sep 2026 02:18:00 GMT",
-      "Content-Type": "application/json",
-      "X-Amz-Cf-Pop": "SGN50-P3",
-      "Server": "elb",
-      "X-Amz-Cf-Id": "qNfbH3-W_pNzd04KlqPPQmEbjZPtLpc6OEYo0QEqws6axSNLrKMZrA=="
-    },
-    "requestBody": "",
-    "responseBody": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"id\":\"file-e2cbd0e8-2159-4bf9-93b8-aa6c79a6b0c5\",\"status\":\"PENDING\",\"file_name\":\"!doctype html.txt\",\"from_share\":false,\"file_size\":212145,\"model_kind\":\"NORMAL\",\"token_usage\":null,\"error_code\":null,\"inserted_at\":1788574679.972,\"updated_at\":1788574679.972,\"is_image\":false,\"audit_result\":null}}}",
-    "securityIssues": []
+(base) khanhromvn@UbuntuLTS:~/Documents/Coding/AIWeb2API & Zen/AIWeb2API$ npm run start
+
+> AIWeb2API@1.2.5 start
+> ts-node --transpile-only -r tsconfig-paths/register -r dotenv/config src/index.ts
+
+(node:32018) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[INFO] [src/provider/qwen/qwen.upload.ts:113] [Qwen Upload] Requesting STS token {"filename":"image.png","filesize":325617,"filetype":"image"}
+[INFO] [src/provider/qwen/qwen.upload.ts:151] [Qwen Upload] STS token received {"file_id":"6d919d9a-1a41-4d12-bbfa-2772a029a4c2","file_path":"5b51329c-3691-4101-8f2c-4e5c2edeb21f/6d919d9a-1a41-4d12-bbfa-2772a029a4c2_image.png","endpoint":"oss-accelerate.aliyuncs.com"}
+[INFO] [src/provider/qwen/qwen.upload.ts:159] [Qwen Upload] Uploading to OSS with SDK {"bucket":"qwen-webui-prod","file_path":"5b51329c-3691-4101-8f2c-4e5c2edeb21f/6d919d9a-1a41-4d12-bbfa-2772a029a4c2_image.png","endpoint":"oss-accelerate.aliyuncs.com","region":"oss-ap-southeast-1"}
+It's recommended to set 'refreshSTSToken' and 'refreshSTSTokenInterval' to refresh stsToken、accessKeyId、accessKeySecret automatically when sts token has expired
+[INFO] [src/provider/qwen/qwen.upload.ts:181] [Qwen Upload] Upload to OSS successful {"file_id":"6d919d9a-1a41-4d12-bbfa-2772a029a4c2"}
+[INFO] [src/provider/qwen/qwen.upload.ts:191] [Qwen Upload] Image file - no parsing needed {"file_id":"6d919d9a-1a41-4d12-bbfa-2772a029a4c2"}
+[ERROR] [src/provider/qwen/qwen.provider.ts:1181] [Qwen] handleMessage error: [Qwen] ref_file_ids contains string "6d919d9a-1a41-4d12-bbfa-2772a029a4c2". Must send object { file_id, url, ... } to build valid file object.
+[ERROR] [src/controllers/chat.controller.ts:317] [Transaction Error] provider_id=qwen model_id=qwen3.7-plus account_id=e1d8a9d1-2a67-4088-af64-606db6085a98 conversation_id=none input_token=10185 output_token=0 error=[Qwen] ref_file_ids contains string "6d919d9a-1a41-4d12-bbfa-2772a029a4c2". Must send object { file_id, url, ... } to build valid file object. {"stack":"Error: [Qwen] ref_file_ids contains string \"6d919d9a-1a41-4d12-bbfa-2772a029a4c2\". Must send object { file_id, url, ... } to build valid file object.\n    at /home/khanhromvn/Documents/Coding/AIWeb2API & Zen/AIWeb2API/src/provider/qwen/qwen.provider.ts:750:23\n    at Array.map (<anonymous>)\n    at QwenProvider.handleMessage (/home/khanhromvn/Documents/Coding/AIWeb2API & Zen/AIWeb2API/src/provider/qwen/qwen.provider.ts:748:71)\n    at processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async sendMessage (/home/khanhromvn/Documents/Coding/AIWeb2API & Zen/AIWeb2API/src/services/chat.service.ts:105:12)\n    at async sendMessage (/home/khanhromvn/Documents/Coding/AIWeb2API & Zen/AIWeb2API/src/controllers/chat.controller.ts:199:7)"}
+[WARN] [src/services/metrics.service.ts:78] Recorded error metric for qwen/qwen3.7-plus: [Qwen] ref_file_ids contains string "6d919d9a-1a41-4d12-bbfa-2772a029a4c2". Must send object { file_id, url, ... } to build valid file object.
+
+
+src/provider/qwen/qwen.upload.ts:
+```
+/**
+ * ------------------------------------------------------------------
+ * Qwen File Upload
+ * ------------------------------------------------------------------
+ * Upload file lên Qwen API. Hỗ trợ:
+ * - Lấy STS token từ Aliyun OSS
+ * - Upload file lên OSS với multipart/form-data
+ * - Polling để chờ file được parse
+ *
+ * Main functions:
+ * - qwenUploadFile() : Upload file và trả về file_id + token_usage
+ * ------------------------------------------------------------------
+ */
+
+// ─── Imports ────────────────────────────────────────────────────────────
+// ── External ──
+import OSS from 'ali-oss';
+
+// ── Utils ──
+import { HttpClient } from '../../utils/http-client';
+import { createLogger } from '../../utils/logger';
+
+// ── Types ──
+import {
+  UploadFileInput,
+  UploadResult,
+  STSTokenResponse,
+  FileParseStatusResponse,
+} from './qwen.types';
+
+// ── Qwen Imports ──
+import {
+  BASE_URL,
+  API_PATHS,
+  USER_AGENTS,
+  COOKIE_CONFIG,
+  HTTP_HEADER_NAMES,
+  CONTENT_TYPES,
+  ACCEPT_VALUES,
+  SUCCESS_CODE,
+  UPLOAD_CONFIG,
+  FILE_STATUS,
+  API_FIELDS,
+} from './qwen.constant';
+
+// ─── Constants ──────────────────────────────────────────────────────────
+const logger = createLogger('QwenUpload');
+
+// ─── Helpers ────────────────────────────────────────────────────────────
+
+interface ParsedCredential {
+  token: string | null;
+  bxUa: string;
+  bxUmidToken: string;
+  userAgent: string;
+}
+
+function createUploadClient(cred: ParsedCredential): HttpClient {
+  const headers: Record<string, string> = {
+    [HTTP_HEADER_NAMES.USER_AGENT]: cred.userAgent || USER_AGENTS.LINUX_CHROME,
+    [HTTP_HEADER_NAMES.REFERER]: BASE_URL,
+    [HTTP_HEADER_NAMES.ACCEPT]: ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+    [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+    [HTTP_HEADER_NAMES.SOURCE]: 'web',
+    [HTTP_HEADER_NAMES.VERSION]: '0.2.91',
+    [HTTP_HEADER_NAMES.BX_V]: '2.5.37',
+  };
+
+  if (cred.token) {
+    headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+      `${COOKIE_CONFIG.BEARER_PREFIX}${cred.token}`;
   }
-]
+  if (cred.bxUa) {
+    headers[HTTP_HEADER_NAMES.BX_UA] = cred.bxUa;
+  }
+  if (cred.bxUmidToken) {
+    headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = cred.bxUmidToken;
+  }
+
+  return new HttpClient({
+    baseURL: BASE_URL,
+    headers,
+  });
+}
+
+/**
+ * Xác định file type dựa trên mimetype
+ */
+function getFileType(mimetype: string): string {
+  if (mimetype.startsWith('image/')) return 'image';
+  if (mimetype.startsWith('video/')) return 'video';
+  if (mimetype.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+
+// ─── Main Function ─────────────────────────────────────────────────────
+
+export async function qwenUploadFile(
+  credential: ParsedCredential,
+  file: UploadFileInput,
+): Promise<UploadResult> {
+  const client = createUploadClient(credential);
+
+  try {
+    // Step 1: Get STS token
+    const fileType = getFileType(file.mimetype);
+    const stsPayload = {
+      filename: file.originalname,
+      filesize: file.buffer.length.toString(),
+      filetype: fileType,
+    };
+
+    logger.info('[Qwen Upload] Requesting STS token', {
+      filename: file.originalname,
+      filesize: file.buffer.length,
+      filetype: fileType,
+    });
+
+    const stsRes = await client.post(API_PATHS.FILE_GET_STS_TOKEN, stsPayload);
+
+    if (!stsRes.ok) {
+      const errorText = await stsRes.text();
+      logger.error(
+        `[Qwen Upload] Failed to get STS token | status=${stsRes.status} | error=${errorText}`,
+      );
+      throw new Error(
+        `Failed to get STS token: ${stsRes.status} - ${errorText}`,
+      );
+    }
+
+    const stsResult = (await stsRes.json()) as STSTokenResponse;
+
+    if (!stsResult.success || !stsResult.data) {
+      const errorMsg = stsResult.message || 'Unknown error';
+      logger.error(`[Qwen Upload] STS token request failed | msg=${errorMsg}`);
+      throw new Error(`STS token request failed: ${errorMsg}`);
+    }
+
+    const {
+      access_key_id,
+      access_key_secret,
+      security_token,
+      file_url,
+      file_id,
+      file_path,
+      bucketname,
+      region,
+      endpoint,
+    } = stsResult.data;
+
+    logger.info('[Qwen Upload] STS token received', {
+      file_id,
+      file_path,
+      endpoint,
+    });
+
+    // Step 2: Upload file to OSS với SDK ali-oss
+    // SDK tự xử lý SigV4 đúng theo chuẩn Alibaba OSS4
+    logger.info('[Qwen Upload] Uploading to OSS with SDK', {
+      bucket: bucketname,
+      file_path,
+      endpoint,
+      region,
+    });
+
+    try {
+      const ossClient = new OSS({
+        region: region.replace(/^oss-/, ''), // Strip "oss-" prefix
+        accessKeyId: access_key_id,
+        accessKeySecret: access_key_secret,
+        stsToken: security_token,
+        bucket: bucketname,
+        endpoint,
+        secure: true,
+      });
+
+      await ossClient.put(file_path, file.buffer, {
+        headers: { 'Content-Type': file.mimetype },
+      });
+
+      logger.info('[Qwen Upload] Upload to OSS successful', { file_id });
+    } catch (error: any) {
+      const errorText = error.message;
+      logger.error(`[Qwen Upload] OSS upload failed | error=${errorText}`);
+      throw new Error(`OSS upload failed: ${errorText}`);
+    }
+
+    // Step 3: Poll for file parse status (chỉ cần cho file document - PDF, DOC, etc.)
+    // File ảnh thường không cần parse, trả về ngay
+    if (fileType === 'image') {
+      logger.info('[Qwen Upload] Image file - no parsing needed', { file_id });
+      return {
+        id: file_id,
+        url: file_url,
+        token_usage: 0,
+      };
+    }
+
+    // Poll parse status cho file document
+    let attempts = 0;
+    const maxAttempts = UPLOAD_CONFIG.POLLING_MAX_ATTEMPTS;
+
+    while (attempts < maxAttempts) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, UPLOAD_CONFIG.POLLING_INTERVAL_MS),
+      );
+      attempts++;
+
+      try {
+        const statusRes = await client.post(API_PATHS.FILE_PARSE_STATUS, {
+          [API_FIELDS.FILE_IDS]: [file_id],
+        });
+
+        if (statusRes.ok) {
+          const statusData =
+            (await statusRes.json()) as FileParseStatusResponse;
+
+          // Debug: log raw response
+          logger.debug('[Qwen Upload] Parse status response', {
+            success: statusData.success,
+            hasData: !!statusData.data,
+            dataLength: statusData.data?.length || 0,
+            rawData: statusData.data,
+            message: statusData.message,
+          });
+
+          if (
+            statusData.success &&
+            statusData.data &&
+            statusData.data.length > 0
+          ) {
+            const fileStatus = statusData.data[0];
+            const status = fileStatus.status;
+
+            if (
+              status === FILE_STATUS.SUCCESS ||
+              status === FILE_STATUS.READY
+            ) {
+              logger.info('[Qwen Upload] File processing completed', {
+                file_id,
+                token_usage: fileStatus.token_usage,
+              });
+              return {
+                id: file_id,
+                url: file_url,
+                token_usage: fileStatus.token_usage || 0,
+              };
+            }
+
+            if (status === FILE_STATUS.FAIL || status === FILE_STATUS.ERROR) {
+              logger.error(
+                `[Qwen Upload] File processing failed | fileId=${file_id} | status=${status}`,
+              );
+              throw new Error(`File processing failed: ${status}`);
+            }
+
+            // Status is still processing, continue polling
+            logger.debug('[Qwen Upload] File still processing', {
+              file_id,
+              status,
+              attempt: attempts,
+            });
+          } else {
+            logger.warn(
+              `[Qwen Upload] No file status data in response | attempt=${attempts}`,
+            );
+          }
+        } else {
+          logger.warn(
+            `[Qwen Upload] Failed to fetch file status | status=${statusRes.status} | attempt=${attempts}`,
+          );
+        }
+      } catch (e) {
+        const err = e as Error;
+        logger.error(
+          `[Qwen Upload] Failed to check file status | fileId=${file_id} | attempt=${attempts}`,
+          {
+            error: err.message,
+            stack: err.stack,
+            fileId: file_id,
+            attempt: attempts,
+          },
+        );
+      }
+    }
+
+    // Max attempts reached, return with 0 token usage
+    logger.warn(
+      `[Qwen Upload] Max polling attempts reached | fileId=${file_id} | attempts=${attempts}`,
+    );
+    return { id: file_id, url: file_url, token_usage: 0 };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('[Qwen Upload] Unhandled error', {
+      error: err.message,
+      stack: err.stack,
+      filename: file.originalname,
+    });
+    throw error;
+  }
+}
+
+```
+
+---
+
+src/provider/qwen/qwen.provider.ts:
+```
+/**
+ * ------------------------------------------------------------------
+ * Qwen Provider
+ * ------------------------------------------------------------------
+ * Provider implementation cho Qwen AI (Alibaba Cloud).
+ * Hỗ trợ login qua browser, chat completion với streaming,
+ * thinking mode, search, và token auto-refresh.
+ *
+ * Main features:
+ * - login()                : Đăng nhập qua browser
+ * - handleMessage()        : Gửi tin nhắn với streaming response
+ * - refreshToken()         : Tự động refresh token khi hết hạn
+ * - getModels()            : Lấy danh sách models từ API hoặc fallback
+ * - getUserProfile()           : Lấy thông tin user profile
+ * - Session locking        : Ngăn concurrent requests trên cùng session
+ * - Parent ID caching      : Cache parent_id để tránh lỗi sibling
+ *
+ * Credential format (JSON string hoặc raw JWT):
+ * - accessToken         : JWT access token (tự động refresh qua API)
+ *
+ * Note: Qwen CHỈ dùng accessToken qua Authorization header.
+ *       KHÔNG dùng Cookie hay User-Agent.
+ *       Token được refresh bằng cách gửi accessToken hiện tại lên /api/v1/auths/
+ * ------------------------------------------------------------------
+ */
+
+// ─── Imports ────────────────────────────────────────────────────────────
+// ── External ──
+import * as crypto from 'crypto';
+import fetch from 'node-fetch';
+
+// ── Types ──
+import { Provider, SendMessageOptions } from '../../types';
+
+// ── Services ──
+import { loginService } from '../../services/login.service';
+import { proxyEvents } from '../../services/proxy.service';
+
+// ── Database ──
+import { getDb } from '../../database';
+import { updateAccountCredential } from '../../repositories/account.repository';
+
+// ── Utils ──
+import { createLogger } from '../../utils/logger';
+import {
+  getJwtExpiry,
+  isJwtExpired,
+  isJwtExpiringSoon,
+  coordinateTokenRefresh,
+  DEFAULT_REFRESH_THRESHOLD_SEC,
+} from '../../utils/jwt-helper';
+
+// ── Qwen Imports ──
+import { proxyHandler } from './qwen.proxy-handler';
+import { qwenUploadFile } from './qwen.upload';
+
+import { QwenStreamingThinkingParser } from './qwen.sse-parser';
+import { createQwenThinkingParser } from './qwen.thinking-parser';
+import type { QwenCredential } from './qwen.types';
+import {
+  PROVIDER_ID,
+  PROVIDER_NAME,
+  IS_ENABLED,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
+  IS_PAUSABLE,
+  IS_MEMORY,
+  BASE_URL,
+  QWEN_EVENTS,
+  API_VERSION,
+  BX_VERSION,
+  USER_AGENT,
+  API_PATHS,
+  REFERER_PATHS,
+  HTTP_HEADER_NAMES,
+  HTTP_HEADER_NAMES_LOWERCASE,
+  CONTENT_TYPES,
+  ACCEPT_VALUES,
+  ACCEPT_LANGUAGES,
+  SEC_CH_UA,
+  AUTH_PREFIXES,
+  TOKEN_COOKIE_KEY,
+  REGEX_PATTERNS,
+  SSE_PROTOCOL,
+  AUTH_FIELDS,
+  CREATE_CHAT_FIELDS,
+  CHAT_PAYLOAD_FIELDS,
+  SSE_EVENT_FIELDS,
+  RESPONSE_FIELDS,
+  MODEL_FIELDS,
+  CHAT_PAYLOAD_CONSTANTS,
+  SSE_PHASE_TYPES,
+  DEFAULT_MAX_CONTEXT_LENGTH,
+  DEFAULT_TIMEOUT_MS,
+  TIMEZONE_OFFSET,
+  DB_PROVIDER_ID,
+  MODEL_PREFIX_QWEN_DASH,
+  MODEL_PREFIX_QWEN_3,
+  CHATS_LIST_QUERY,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
+} from './qwen.constant';
+
+// ─── Constants ──────────────────────────────────────────────────────────
+const logger = createLogger('QwenProvider');
+
+// ─── Session Lock ──────────────────────────────────────────────────────
+
+const sessionLocks = new Map<string, Promise<void>>();
+
+function acquireLock(key: string): {
+  promise: Promise<void>;
+  release: () => void;
+} {
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = sessionLocks.get(key) ?? Promise.resolve();
+  sessionLocks.set(
+    key,
+    previous.then(() => next),
+  );
+  return { promise: previous, release };
+}
+
+// ─── Parent ID Cache ───────────────────────────────────────────────────
+
+const lastParentIdCache = new Map<string, string>();
+
+// ─── Provider Class ────────────────────────────────────────────────────
+
+export class QwenProvider implements Provider {
+  name = PROVIDER_NAME;
+  proxyHandler = proxyHandler;
+
+  // ─── Provider Configuration ────────────────────────────────────────
+  static config = {
+    provider_id: PROVIDER_ID,
+    provider_name: PROVIDER_NAME,
+    is_enabled: IS_ENABLED,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
+    is_pausable: IS_PAUSABLE,
+    is_memory: IS_MEMORY,
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
+  };
+
+  // ─── Token Helpers ─────────────────────────────────────────────────
+
+  private parseCredential(credential: string): {
+    token: string | null;
+    cookieValue: string;
+    bxUa: string;
+    bxUmidToken: string;
+    userAgent: string;
+  } {
+    // Try parsing as JSON first
+    if (credential.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(credential);
+
+        // New format: {accessToken, ...} or old format: {token, bxUa, ...}
+        const token =
+          parsed[AUTH_FIELDS.ACCESS_TOKEN] ||
+          parsed[AUTH_FIELDS.ACCESS_TOKEN_SNAKE] ||
+          parsed[AUTH_FIELDS.TOKEN] ||
+          null;
+
+        return {
+          token,
+          cookieValue: token ? `${TOKEN_COOKIE_KEY}=${token}` : '',
+          bxUa: parsed[AUTH_FIELDS.BX_UA] || '',
+          bxUmidToken: parsed[AUTH_FIELDS.BX_UMIDTOKEN] || '',
+          userAgent: parsed[AUTH_FIELDS.USER_AGENT] || USER_AGENT,
+        };
+      } catch {
+        logger.warn(
+          '[Qwen] Credential is not valid JSON, treating as raw token',
+        );
+      }
+    }
+
+    // Check if raw JWT token
+    if (credential.trim().startsWith(AUTH_PREFIXES.JWT)) {
+      const token = credential.trim();
+      return {
+        token,
+        cookieValue: `${TOKEN_COOKIE_KEY}=${token}`,
+        bxUa: '',
+        bxUmidToken: '',
+        userAgent: USER_AGENT,
+      };
+    }
+
+    // Try extracting from cookie format: token=eyJ...
+    const m = credential.match(REGEX_PATTERNS.COOKIE_TOKEN);
+    if (m && m[1]) {
+      return {
+        token: m[1],
+        cookieValue: credential,
+        bxUa: '',
+        bxUmidToken: '',
+        userAgent: USER_AGENT,
+      };
+    }
+
+    // Fallback: treat as raw token
+    return {
+      token: credential,
+      cookieValue: `${TOKEN_COOKIE_KEY}=${credential}`,
+      bxUa: '',
+      bxUmidToken: '',
+      userAgent: USER_AGENT,
+    };
+  }
+
+  private extractToken(credential: string): string | null {
+    return this.parseCredential(credential).token;
+  }
+
+  // JWT helpers are now in shared utils/jwt-helper.ts
+
+  private async performTokenRefresh(
+    credential: string,
+  ): Promise<string | null> {
+    const accessToken = this.extractToken(credential);
+    if (!accessToken) return null;
+
+    try {
+      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
+        method: 'GET',
+        headers: {
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+          [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+          [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+            ACCEPT_LANGUAGES.EN_US_Q09,
+          [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+          [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+        },
+      });
+
+      if (!response.ok) {
+        logger.warn(`[Qwen] Token refresh failed: HTTP ${response.status}`);
+        return null;
+      }
+
+      const json: any = await response.json();
+      const userData = json.data ?? json;
+      const newAccessToken: string | undefined = userData?.token;
+
+      if (!newAccessToken) {
+        logger.warn('[Qwen] Token refresh response had no token field');
+        return null;
+      }
+
+      if (newAccessToken === accessToken) {
+        return JSON.stringify({ accessToken: newAccessToken });
+      }
+
+      const email: string | undefined = userData?.email;
+      if (email) {
+        try {
+          const db = getDb();
+          const accounts = db
+            .prepare(
+              'SELECT * FROM accounts WHERE LOWER(provider_id) = ? AND LOWER(email) = ?',
+            )
+            .all(DB_PROVIDER_ID, email.toLowerCase()) as any[];
+          for (const acc of accounts) {
+            updateAccountCredential(
+              acc.id,
+              JSON.stringify({ accessToken: newAccessToken }),
+            );
+          }
+        } catch (e) {
+          logger.error('[Qwen] Failed to persist refreshed token to DB:', e);
+        }
+      }
+
+      return JSON.stringify({ accessToken: newAccessToken });
+    } catch (e) {
+      logger.error('[Qwen] Token refresh error:', e);
+      return null;
+    }
+  }
+
+  async refreshToken(credential: string): Promise<string | null> {
+    const accessToken = this.extractToken(credential);
+    if (!accessToken) return null;
+
+    // Use coordinated refresh to prevent duplicate refresh operations
+    return coordinateTokenRefresh('qwen', accessToken, () =>
+      this.performTokenRefresh(credential),
+    );
+  }
+
+  private async getFreshCredential(credential: string): Promise<string> {
+    const accessToken = this.extractToken(credential);
+    if (!accessToken) return credential;
+
+    // Check if token is already expired
+    if (isJwtExpired(accessToken)) {
+      logger.error('[Qwen] Token has already expired. Please login again.');
+      throw new Error('Token has expired. Please login again to Qwen.');
+    }
+
+    // Check if token is expiring soon (within 5 minutes by default)
+    if (!isJwtExpiringSoon(accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
+      return credential;
+    }
+
+    const newAccessToken = await this.refreshToken(credential);
+    if (!newAccessToken) {
+      logger.error(
+        '[Qwen] Token refresh failed - token may be expired. Please login again.',
+      );
+      throw new Error('Token refresh failed. Please login again to Qwen.');
+    }
+
+    return newAccessToken;
+  }
+
+  // ─── Login ──────────────────────────────────────────────────────────
+
+  async login() {
+    let capturedHeaders: Record<string, string> = {};
+    const self = this;
+
+    const onHeaders = (headers: Record<string, string>) => {
+      capturedHeaders = { ...capturedHeaders, ...headers };
+    };
+
+    proxyEvents.on(QWEN_EVENTS.HEADERS, onHeaders);
+
+    try {
+      return await loginService.captureCredentialsViaCDP({
+        providerId: PROVIDER_ID,
+        loginUrl: `${BASE_URL}${API_PATHS.AUTH_LOGIN}`,
+        partition: `${PROVIDER_ID}-${Date.now()}`,
+        cookieEvent: QWEN_EVENTS.LOGIN_TOKEN,
+        infoEvent: QWEN_EVENTS.LOGIN_EMAIL,
+        extraEvents: [QWEN_EVENTS.HEADERS, QWEN_EVENTS.COOKIES],
+        validate: async (data: {
+          cookies: string;
+          headers?: any;
+          email?: string;
+        }) => {
+          if (!data.cookies) return { isValid: false };
+
+          // Extract access token
+          const accessToken = data.cookies.trim().startsWith(AUTH_PREFIXES.JWT)
+            ? data.cookies.trim()
+            : (data.cookies.match(REGEX_PATTERNS.RAW_TOKEN) || [])[1] ||
+              data.cookies;
+
+          if (!accessToken || !accessToken.startsWith(AUTH_PREFIXES.JWT)) {
+            logger.warn('[Qwen] Login validation failed: invalid token format');
+            return { isValid: false };
+          }
+
+          let email = data.email || null;
+
+          // Try fetching profile to get email
+          if (!email) {
+            try {
+              const profile = await this.getUserProfile(
+                accessToken,
+                capturedHeaders,
+              );
+              if (profile.email) {
+                email = profile.email;
+              }
+            } catch (e) {
+              logger.warn('[Qwen] Login profile fetch failed:', e);
+            }
+          }
+
+          return {
+            isValid: true,
+            cookies: JSON.stringify({ accessToken }), // Return JSON format
+            email,
+            headers: capturedHeaders,
+          };
+        },
+      });
+    } finally {
+      proxyEvents.off(QWEN_EVENTS.HEADERS, onHeaders);
+    }
+  }
+
+  // ─── List Chats ─────────────────────────────────────────────────────
+
+  private async fetchListChats(credential: string): Promise<void> {
+    try {
+      const accessToken = this.extractToken(credential);
+
+      if (!accessToken) {
+        logger.warn('[Qwen] Cannot fetch list chats: no token found');
+        return;
+      }
+
+      const headers: Record<string, string> = {
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+          ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+        [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+        [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+        [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+        [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+      };
+
+      const response = await fetch(
+        `${BASE_URL}${API_PATHS.CHATS}${CHATS_LIST_QUERY}`,
+        { headers },
+      );
+
+      if (response.ok) {
+      } else {
+        logger.warn(`[Qwen] Failed to fetch list chats: ${response.status}`);
+      }
+    } catch (error) {
+      logger.error('[Qwen] Error fetching list chats:', error);
+      throw error;
+    }
+  }
+
+  // ─── Profile ────────────────────────────────────────────────────────
+
+  async getUserProfile(
+    credential: string,
+    extraHeaders?: any,
+  ): Promise<{ email: string | null; name?: string; id?: string }> {
+    try {
+      const accessToken = this.extractToken(credential);
+
+      if (!accessToken) {
+        logger.warn('[Qwen] Cannot get profile: no token found');
+        return { email: null };
+      }
+
+      const headers: Record<string, string> = {
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+          ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+        [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      };
+
+      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
+        headers,
+      });
+
+      if (response.ok) {
+        const json: any = await response.json();
+        const userData = json[AUTH_FIELDS.DATA] ?? json;
+        if (!userData?.[AUTH_FIELDS.EMAIL]) {
+          logger.warn('[Qwen] Get Profile response missing email field');
+        }
+        return {
+          email: userData?.[AUTH_FIELDS.EMAIL] || null,
+          name: userData?.[AUTH_FIELDS.NAME],
+          id: userData?.[AUTH_FIELDS.ID],
+        };
+      }
+      logger.warn(`[Qwen] Get Profile returned status ${response.status}`);
+      return { email: null };
+    } catch (e) {
+      logger.error('[Qwen] Get Profile Error:', e);
+      return { email: null };
+    }
+  }
+
+  // ─── Create Chat ────────────────────────────────────────────────────
+
+  private async createChat(credential: string, model: string): Promise<string> {
+    const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
+      this.parseCredential(credential);
+
+    if (!token) {
+      throw new Error('[Qwen] Cannot create chat: no token found');
+    }
+
+    const headers: Record<string, string> = {
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+      [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES.COOKIE]: cookieValue || `${TOKEN_COOKIE_KEY}=${token}`,
+      [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+      [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.NEW_CHAT}`,
+      [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+      [HTTP_HEADER_NAMES.TIMEZONE]:
+        new Date().toDateString() +
+        ' ' +
+        new Date().toTimeString().split(' ')[0] +
+        ' ' +
+        TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+    };
+
+    if (token)
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+        `${AUTH_PREFIXES.BEARER}${token}`;
+    if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+    if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
+
+    const response = await fetch(`${BASE_URL}${API_PATHS.CHATS_NEW}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        [CREATE_CHAT_FIELDS.CHAT_ID]: '',
+        [CREATE_CHAT_FIELDS.MODELS]: [model],
+        [CREATE_CHAT_FIELDS.PROJECT_ID]: '',
+        [CREATE_CHAT_FIELDS.TIMESTAMP]: Date.now(),
+        [CREATE_CHAT_FIELDS.CHAT_TYPE]: CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2T,
+        [CREATE_CHAT_FIELDS.CHAT_MODE]: CHAT_PAYLOAD_CONSTANTS.CHAT_MODE_NORMAL,
+      }),
+    });
+
+    const actualStatusCode = response.headers.get(
+      HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE,
+    );
+    if (actualStatusCode && actualStatusCode !== '200') {
+      const errorText = await response.text();
+      throw new Error(`Create chat failed: ${actualStatusCode} - ${errorText}`);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Create chat failed: ${response.status} - ${errorText}`);
+    }
+
+    const json = await response.json();
+
+    // Check if response indicates error (even with 200 status)
+    if (json[CREATE_CHAT_FIELDS.SUCCESS] === false) {
+      const errorCode =
+        json[CREATE_CHAT_FIELDS.DATA]?.[CREATE_CHAT_FIELDS.CODE] || 'unknown';
+      const errorDetails =
+        json[CREATE_CHAT_FIELDS.DATA]?.[CREATE_CHAT_FIELDS.DETAILS] ||
+        JSON.stringify(json);
+      throw new Error(`Create chat failed: ${errorCode} - ${errorDetails}`);
+    }
+
+    const chatId =
+      json[CREATE_CHAT_FIELDS.DATA]?.[CREATE_CHAT_FIELDS.ID] ||
+      json[CREATE_CHAT_FIELDS.ID];
+
+    if (!chatId) {
+      throw new Error(`No chat_id in response: ${JSON.stringify(json)}`);
+    }
+
+    return chatId;
+  }
+
+  // ─── Get Last Message ID ────────────────────────────────────────────
+
+  private async getLastMessageId(
+    conversationId: string,
+    credential: string,
+  ): Promise<string | null> {
+    const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
+      this.parseCredential(credential);
+
+    const headers: Record<string, string> = {
+      [HTTP_HEADER_NAMES.COOKIE]: cookieValue || `${TOKEN_COOKIE_KEY}=${token}`,
+      [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+      [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+      [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+      [HTTP_HEADER_NAMES.TIMEZONE]:
+        new Date().toDateString() +
+        ' ' +
+        new Date().toTimeString().split(' ')[0] +
+        ' ' +
+        TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+    };
+
+    if (token)
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+        `${AUTH_PREFIXES.BEARER}${token}`;
+    if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+    if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
+
+    const response = await fetch(
+      `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/`,
+      { headers },
+    );
+    if (!response.ok) {
+      logger.warn(
+        `[Qwen] Failed to fetch last message ID: HTTP ${response.status}`,
+      );
+      return null;
+    }
+
+    const json = await response.json();
+    const messages =
+      json[RESPONSE_FIELDS.MESSAGES] || json[RESPONSE_FIELDS.DATA] || [];
+    if (messages.length > 0) {
+      const lastAssistant = [...messages]
+        .reverse()
+        .find(
+          (m: any) =>
+            m[CHAT_PAYLOAD_FIELDS.ROLE] ===
+            CHAT_PAYLOAD_CONSTANTS.ROLE_ASSISTANT,
+        );
+      return lastAssistant?.[CHAT_PAYLOAD_FIELDS.ID] || null;
+    }
+    return null;
+  }
+
+  // ─── Handle Message ─────────────────────────────────────────────────
+
+  async handleMessage(options: SendMessageOptions): Promise<void> {
+    const { messages, onContent, onThinking, onMetadata, onDone, onError } =
+      options;
+    const onSessionCreated = options.onSessionCreated;
+    let { conversationId } = options;
+
+    let modelToUse = options.model;
+    if (modelToUse.includes('/')) {
+      modelToUse = modelToUse.split('/').pop() || modelToUse;
+    }
+    modelToUse = modelToUse.trim();
+
+    if (modelToUse.startsWith(MODEL_PREFIX_QWEN_3)) {
+      modelToUse = modelToUse.replace(
+        MODEL_PREFIX_QWEN_DASH,
+        MODEL_PREFIX_QWEN_DASH.slice(0, -1),
+      );
+    }
+
+    const lockKey = conversationId || options.accountId || 'qwen_default';
+    const { promise: previousLock, release } = acquireLock(lockKey);
+
+    try {
+      await previousLock;
+
+      const credential = await this.getFreshCredential(options.credential);
+      const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
+        this.parseCredential(credential);
+
+      if (!token) {
+        throw new Error('[Qwen] No access token found');
+      }
+
+      const isNewChat = !conversationId;
+
+      if (isNewChat) {
+        conversationId = await this.createChat(credential, modelToUse);
+        if (onSessionCreated) onSessionCreated(conversationId);
+        if (onMetadata) onMetadata({ conversation_id: conversationId });
+      }
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      const requestId = crypto.randomUUID();
+      const timezone = `${new Date().toDateString()} ${new Date().toTimeString().split(' ')[0]} GMT+0700`;
+
+      const lastMsg = messages[messages.length - 1];
+      const msgFid = options.edit_message_id || crypto.randomUUID();
+      const userAction =
+        options.user_action || CHAT_PAYLOAD_CONSTANTS.USER_ACTION_CHAT;
+
+      // Khi edit message, cần lấy childrenIds từ message cũ
+      let childrenIds: string[] = [];
+      if (
+        userAction === CHAT_PAYLOAD_CONSTANTS.USER_ACTION_EDIT &&
+        conversationId &&
+        msgFid
+      ) {
+        try {
+          const response = await fetch(
+            `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/`,
+            {
+              headers: {
+                [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${token}`,
+                [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+                [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+                [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+              },
+            },
+          );
+          if (response.ok) {
+            const json = await response.json();
+            const messages =
+              json[RESPONSE_FIELDS.MESSAGES] ||
+              json[RESPONSE_FIELDS.DATA] ||
+              [];
+            const oldMessage = messages.find(
+              (m: any) => m[CHAT_PAYLOAD_FIELDS.FID] === msgFid,
+            );
+            if (oldMessage && oldMessage[CHAT_PAYLOAD_FIELDS.CHILDREN_IDS]) {
+              childrenIds = oldMessage[CHAT_PAYLOAD_FIELDS.CHILDREN_IDS];
+            }
+          }
+        } catch (e) {
+          logger.warn(
+            '[Qwen] Failed to fetch childrenIds for edit message:',
+            e,
+          );
+        }
+      }
+
+      let parentId: string | null = options.parent_message_id ?? null;
+
+      if (!parentId && conversationId && !isNewChat) {
+        const cached = lastParentIdCache.get(conversationId);
+        if (cached) {
+          parentId = cached;
+        } else {
+          try {
+            parentId = await this.getLastMessageId(conversationId, credential);
+          } catch (e) {
+            logger.warn('[Qwen] Failed to fetch last message ID');
+          }
+        }
+      }
+
+      const payload = {
+        [CHAT_PAYLOAD_FIELDS.STREAM]: true,
+        [CHAT_PAYLOAD_FIELDS.VERSION]: CHAT_PAYLOAD_CONSTANTS.STREAM_VERSION,
+        [CHAT_PAYLOAD_FIELDS.INCREMENTAL_OUTPUT]: true,
+        [CHAT_PAYLOAD_FIELDS.CHAT_ID]: conversationId || '',
+        [CHAT_PAYLOAD_FIELDS.PARENT_ID]: parentId || '',
+        ...(conversationId && {
+          [CHAT_PAYLOAD_FIELDS.CHAT_ID_SNAKE]: conversationId,
+        }),
+        [CHAT_PAYLOAD_FIELDS.CHAT_MODE]:
+          CHAT_PAYLOAD_CONSTANTS.CHAT_MODE_NORMAL,
+        [CHAT_PAYLOAD_FIELDS.MODEL]: modelToUse,
+        [CHAT_PAYLOAD_FIELDS.PARENT_ID_SNAKE]: parentId as string | null,
+        [CHAT_PAYLOAD_FIELDS.MESSAGES]: [
+          {
+            [CHAT_PAYLOAD_FIELDS.ID]: null,
+            [CHAT_PAYLOAD_FIELDS.FID]: msgFid,
+            [CHAT_PAYLOAD_FIELDS.PARENT_ID]: parentId as string | null,
+            [CHAT_PAYLOAD_FIELDS.CHILDREN_IDS]: childrenIds,
+            [CHAT_PAYLOAD_FIELDS.ROLE]: lastMsg.role,
+            [CHAT_PAYLOAD_FIELDS.CONTENT]: lastMsg.content,
+            [CHAT_PAYLOAD_FIELDS.USER_ACTION]: userAction,
+            [CHAT_PAYLOAD_FIELDS.FILES]: (options.ref_file_ids || []).map(
+              (item: any) => {
+                if (typeof item === 'string') {
+                  throw new Error(
+                    `[Qwen] ref_file_ids contains string "${item}". ` +
+                      `Must send object { file_id, url, ... } to build valid file object.`,
+                  );
+                }
+                if (!item.file_id) {
+                  throw new Error(`[Qwen] ref_file_ids[].file_id is required.`);
+                }
+                if (!item.url) {
+                  throw new Error(
+                    `[Qwen] ref_file_ids[].url is missing (file_id=${item.file_id}). ` +
+                      `Check if upload API response includes "url" field.`,
+                  );
+                }
+                return {
+                  type: item.type || 'image',
+                  id: item.file_id,
+                  url: item.url,
+                  name: item.name || 'file',
+                  status: 'uploaded',
+                  file_type: item.file_type || 'image/png',
+                  showType: item.showType || 'image',
+                  file_class: item.file_class || 'vision',
+                };
+              },
+            ),
+            [CHAT_PAYLOAD_FIELDS.TIMESTAMP]: nowSec,
+            [CHAT_PAYLOAD_FIELDS.MODELS]: [modelToUse],
+            [CHAT_PAYLOAD_FIELDS.MODEL]: '',
+            [CHAT_PAYLOAD_FIELDS.CHAT_TYPE]:
+              CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2T,
+            [CHAT_PAYLOAD_FIELDS.FEATURE_CONFIG]: {
+              [CHAT_PAYLOAD_FIELDS.THINKING_ENABLED]: options.thinking ?? false,
+              [CHAT_PAYLOAD_FIELDS.OUTPUT_SCHEMA]:
+                CHAT_PAYLOAD_CONSTANTS.OUTPUT_SCHEMA_PHASE,
+              [CHAT_PAYLOAD_FIELDS.RESEARCH_MODE]:
+                CHAT_PAYLOAD_CONSTANTS.RESEARCH_MODE_NORMAL,
+              [CHAT_PAYLOAD_FIELDS.AUTO_THINKING]: false,
+              [CHAT_PAYLOAD_FIELDS.THINKING_MODE]: options.thinking
+                ? CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_THINKING
+                : CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_FAST,
+              ...(options.thinking && {
+                [CHAT_PAYLOAD_FIELDS.THINKING_FORMAT]:
+                  CHAT_PAYLOAD_CONSTANTS.THINKING_FORMAT_SUMMARY,
+              }),
+              [CHAT_PAYLOAD_FIELDS.AUTO_SEARCH]: true,
+            },
+            [CHAT_PAYLOAD_FIELDS.EXTRA]: {
+              [CHAT_PAYLOAD_FIELDS.META]: {
+                [CHAT_PAYLOAD_FIELDS.SUB_CHAT_TYPE]:
+                  CHAT_PAYLOAD_CONSTANTS.SUB_CHAT_TYPE,
+              },
+            },
+            [CHAT_PAYLOAD_FIELDS.SUB_CHAT_TYPE_SNAKE]:
+              CHAT_PAYLOAD_CONSTANTS.SUB_CHAT_TYPE,
+            [CHAT_PAYLOAD_FIELDS.PARENT_ID_SNAKE]: parentId as string | null,
+          },
+        ],
+        [CHAT_PAYLOAD_FIELDS.TIMESTAMP]: nowSec,
+      };
+
+      const headers: Record<string, string> = {
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+        [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+        [HTTP_HEADER_NAMES.COOKIE]:
+          cookieValue || `${TOKEN_COOKIE_KEY}=${token}`,
+        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: conversationId
+          ? `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`
+          : BASE_URL,
+        [HTTP_HEADER_NAMES.X_ACCEL_BUFFERING]: 'no',
+        [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: requestId,
+        [HTTP_HEADER_NAMES.X_REQUEST_ID]: requestId,
+        [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+        [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+        [HTTP_HEADER_NAMES_LOWERCASE.TIMEZONE]: timezone,
+        [HTTP_HEADER_NAMES.TIMEZONE]: timezone,
+        [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+          ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+        [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+        [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+        [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      };
+
+      if (token)
+        headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+          `${AUTH_PREFIXES.BEARER}${token}`;
+      if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+      if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
+
+      const url = conversationId
+        ? `${BASE_URL}${API_PATHS.CHAT_COMPLETIONS}?chat_id=${conversationId}`
+        : `${BASE_URL}${API_PATHS.CHAT_COMPLETIONS}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const actualStatusCode = response.headers.get(
+        HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE,
+      );
+      if (actualStatusCode && actualStatusCode !== '200') {
+        const errText = await response.text();
+        logger.error(
+          `[Qwen] API returned error via x-actual-status-code=${actualStatusCode}:`,
+          errText.slice(0, 500),
+        );
+        throw new Error(
+          `Qwen API Error ${actualStatusCode}: ${errText.slice(0, 500)}`,
+        );
+      }
+
+      if (!response.ok) {
+        const errText = await response.text();
+        logger.error(
+          `[Qwen] API returned HTTP error ${response.status}:`,
+          errText.slice(0, 500),
+        );
+        throw new Error(
+          `Qwen API Error ${response.status}: ${errText.slice(0, 500)}`,
+        );
+      }
+
+      if (!response.body) {
+        logger.error('[Qwen] Response body is null/undefined');
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+      let conversationIdCaptured = false;
+      let parentIdCaptured = false;
+      let capturedParentId: string | null = null;
+      const thinkingParser = new QwenStreamingThinkingParser(
+        onContent,
+        onThinking,
+      );
+      const normalizedThinkingParser = createQwenThinkingParser();
+      let totalContentReceived = 0;
+      let totalChunksProcessed = 0;
+      let chunkCounter = 0;
+      let seenResponseIds = new Set<string>();
+      let currentResponseId: string | null = null;
+      let firstResponseId: string | null = null; // Response đầu tiên để select
+      let isInThinkingPhase = false;
+
+      for await (const chunk of response.body as any) {
+        chunkCounter++;
+        const chunkStr = chunk.toString();
+
+        buffer += chunkStr;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let jsonStr = trimmed;
+          if (trimmed.startsWith(SSE_PROTOCOL.DATA_PREFIX)) {
+            jsonStr = trimmed.slice(SSE_PROTOCOL.DATA_PREFIX_LENGTH).trim();
+          } else if (trimmed.startsWith(SSE_PROTOCOL.DATA_PREFIX_SHORT)) {
+            jsonStr = trimmed
+              .slice(SSE_PROTOCOL.DATA_PREFIX_SHORT_LENGTH)
+              .trim();
+          } else {
+            continue;
+          }
+
+          if (jsonStr === SSE_PROTOCOL.DONE) {
+            thinkingParser.flush();
+            onDone();
+            return;
+          }
+
+          try {
+            const json = JSON.parse(jsonStr);
+            totalChunksProcessed++;
+
+            let responseCreated = null;
+            if (json[SSE_EVENT_FIELDS.RESPONSE_CREATED_KEY]) {
+              responseCreated = json[SSE_EVENT_FIELDS.RESPONSE_CREATED_KEY];
+            } else if (
+              json[SSE_EVENT_FIELDS.RESPONSE] &&
+              json[SSE_EVENT_FIELDS.RESPONSE][SSE_EVENT_FIELDS.CREATED]
+            ) {
+              responseCreated =
+                json[SSE_EVENT_FIELDS.RESPONSE][SSE_EVENT_FIELDS.CREATED];
+            }
+
+            if (responseCreated) {
+              // Track response_id to detect multiple responses
+              const responseId = responseCreated[SSE_EVENT_FIELDS.RESPONSE_ID];
+              if (responseId) {
+                if (!seenResponseIds.has(responseId)) {
+                  seenResponseIds.add(responseId);
+
+                  // Lưu response đầu tiên để select sau
+                  if (!firstResponseId) {
+                    firstResponseId = responseId;
+                    currentResponseId = responseId;
+                  }
+
+                  // Nếu có nhiều response, chỉ stream response đầu tiên
+                  if (seenResponseIds.size > 1) {
+                  }
+                }
+              }
+
+              if (
+                isNewChat &&
+                !conversationIdCaptured &&
+                responseCreated[SSE_EVENT_FIELDS.CHAT_ID]
+              ) {
+                conversationIdCaptured = true;
+                if (onSessionCreated)
+                  onSessionCreated(responseCreated[SSE_EVENT_FIELDS.CHAT_ID]);
+                if (onMetadata)
+                  onMetadata({
+                    conversation_id: responseCreated[SSE_EVENT_FIELDS.CHAT_ID],
+                  });
+              }
+
+              if (
+                !parentIdCaptured &&
+                responseCreated[SSE_EVENT_FIELDS.RESPONSE_ID]
+              ) {
+                parentIdCaptured = true;
+                capturedParentId =
+                  responseCreated[SSE_EVENT_FIELDS.RESPONSE_ID];
+                const chatIdForCache =
+                  responseCreated[SSE_EVENT_FIELDS.CHAT_ID] || conversationId;
+                if (chatIdForCache && capturedParentId) {
+                  lastParentIdCache.set(chatIdForCache, capturedParentId);
+                }
+                if (onMetadata)
+                  onMetadata({ parent_message_id: capturedParentId });
+              }
+            }
+
+            const delta =
+              json[SSE_EVENT_FIELDS.CHOICES]?.[0]?.[SSE_EVENT_FIELDS.DELTA];
+
+            // Check if this content belongs to current response
+            const eventResponseId = json[SSE_EVENT_FIELDS.RESPONSE_ID];
+            if (
+              eventResponseId &&
+              currentResponseId &&
+              eventResponseId !== currentResponseId
+            ) {
+              continue;
+            }
+
+            if (delta) {
+              const phase = delta[SSE_EVENT_FIELDS.PHASE];
+              const content = delta[SSE_EVENT_FIELDS.CONTENT];
+              const extra = delta[SSE_EVENT_FIELDS.EXTRA];
+              const status = delta[SSE_EVENT_FIELDS.STATUS];
+              const reasoningContent =
+                delta[SSE_EVENT_FIELDS.REASONING_CONTENT];
+
+              // Handle thinking summary phase (when phase = "thinking_summary")
+              if (phase === SSE_PHASE_TYPES.THINKING_SUMMARY) {
+                isInThinkingPhase = true;
+
+                if (extra) {
+                  const summaryTitle = extra[SSE_EVENT_FIELDS.SUMMARY_TITLE];
+                  const summaryThought =
+                    extra[SSE_EVENT_FIELDS.SUMMARY_THOUGHT];
+
+                  // Feed to normalized parser
+                  const normalizedThinking =
+                    normalizedThinkingParser.feedSummary({
+                      title: summaryTitle?.content,
+                      thought: summaryThought?.content,
+                    });
+
+                  if (normalizedThinking && onThinking) {
+                    onThinking(normalizedThinking);
+                  }
+                }
+
+                // End thinking phase when status is "finished"
+                if (status === 'finished') {
+                  const closingTag = normalizedThinkingParser.end();
+                  if (closingTag && onThinking) {
+                    onThinking(closingTag);
+                  }
+                  isInThinkingPhase = false;
+                }
+              }
+
+              // Handle reasoning_content field (backward compatibility)
+              if (reasoningContent && onThinking) {
+                if (!isInThinkingPhase) {
+                  isInThinkingPhase = true;
+                }
+                const normalizedThinking =
+                  normalizedThinkingParser.feed(reasoningContent);
+                if (normalizedThinking) {
+                  onThinking(normalizedThinking);
+                }
+              }
+
+              // Handle regular content (answer phase)
+              if (content) {
+                // End thinking phase if we were in it and now in answer phase
+                if (isInThinkingPhase && phase === SSE_PHASE_TYPES.ANSWER) {
+                  const closingTag = normalizedThinkingParser.end();
+                  if (closingTag && onThinking) {
+                    onThinking(closingTag);
+                  }
+                  isInThinkingPhase = false;
+                }
+
+                totalContentReceived += content.length;
+                thinkingParser.feed(content);
+              }
+            }
+          } catch (e) {
+            logger.warn(
+              '[Qwen] Failed to parse SSE line:',
+              e,
+              'Line:',
+              trimmed.substring(0, 100),
+            );
+          }
+        }
+      }
+
+      // If we have remaining buffer content and no chunks were processed, it might be an error response
+      if (buffer.length > 0 && totalChunksProcessed === 0) {
+        logger.error(
+          `[Qwen] Received non-streaming response (possible error):`,
+          buffer,
+        );
+        try {
+          const errorJson = JSON.parse(buffer);
+          const errorMessage =
+            errorJson.message ||
+            errorJson.error ||
+            errorJson.data?.message ||
+            JSON.stringify(errorJson);
+          throw new Error(`Qwen API returned error: ${errorMessage}`);
+        } catch (parseErr) {
+          // If not JSON, log raw content
+          logger.error(`[Qwen] Raw response content:`, buffer.slice(0, 1000));
+          throw new Error(
+            `Qwen API returned non-streaming response: ${buffer.slice(0, 200)}`,
+          );
+        }
+      }
+
+      if (seenResponseIds.size > 1) {
+        logger.warn(
+          `[Qwen] MULTIPLE RESPONSES DETECTED: ${seenResponseIds.size} responses for ${isNewChat ? 'new chat' : 'existing chat'}. Response IDs: ${Array.from(seenResponseIds).join(', ')}`,
+        );
+      }
+
+      thinkingParser.flush();
+
+      // Log summary before completing
+      if (totalContentReceived === 0) {
+        logger.warn(
+          `[Qwen] No content received from API for model=${modelToUse}, conversationId=${conversationId}`,
+        );
+      }
+
+      // Nếu có nhiều response, tự động gọi select API để chọn response đầu tiên
+      if (seenResponseIds.size > 1 && firstResponseId && conversationId) {
+        try {
+          const selectHeaders: Record<string, string> = {
+            [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+            [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]:
+              ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+            [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
+            [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+            [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`,
+            [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+            [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+            [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+            [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+            [HTTP_HEADER_NAMES.X_REQUEST_ID]: crypto.randomUUID(),
+            [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+            [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+            [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+            [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US_Q09,
+            [HTTP_HEADER_NAMES.TIMEZONE]:
+              new Date().toDateString() +
+              ' ' +
+              new Date().toTimeString().split(' ')[0] +
+              ' ' +
+              TIMEZONE_OFFSET,
+          };
+
+          if (token)
+            selectHeaders[HTTP_HEADER_NAMES.AUTHORIZATION] =
+              `${AUTH_PREFIXES.BEARER}${token}`;
+          if (bxUa) selectHeaders[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+          if (bxUmidToken)
+            selectHeaders[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
+
+          const selectResponse = await fetch(
+            `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/select`,
+            {
+              method: 'POST',
+              headers: selectHeaders,
+              body: JSON.stringify({ ids: [firstResponseId] }),
+            },
+          );
+
+          if (selectResponse.ok) {
+            const selectJson: any = await selectResponse.json();
+            if (selectJson.success) {
+            } else {
+              logger.warn(`[Qwen] Select response API returned success=false`);
+            }
+          } else {
+            logger.warn(
+              `[Qwen] Failed to select response: HTTP ${selectResponse.status}`,
+            );
+          }
+        } catch (selectErr: any) {
+          logger.warn(`[Qwen] Error calling select API:`, selectErr.message);
+        }
+      }
+
+      if (capturedParentId && onMetadata) {
+        onMetadata({ last_parent_id: capturedParentId });
+      }
+      onDone();
+    } catch (err: any) {
+      logger.error('[Qwen] handleMessage error:', err);
+      onError(err);
+    } finally {
+      release();
+    }
+  }
+
+  // ─── Continue Message ───────────────────────────────────────────────
+
+  async continueMessage(options: SendMessageOptions): Promise<void> {
+    return this.handleMessage(options);
+  }
+
+  // ─── Upload File ────────────────────────────────────────────────────
+
+  async uploadFile(
+    credential: string,
+    file: Express.Multer.File,
+  ): Promise<{ id: string; url: string; token_usage: number }> {
+    const parsedCred = this.parseCredential(credential);
+
+    const uploadInput = {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      buffer: file.buffer,
+    };
+
+    return await qwenUploadFile(
+      {
+        token: parsedCred.token,
+        bxUa: parsedCred.bxUa,
+        bxUmidToken: parsedCred.bxUmidToken,
+        userAgent: parsedCred.userAgent,
+      },
+      uploadInput,
+    );
+  }
+
+  // ─── Get Models ─────────────────────────────────────────────────────
+
+  async getModels(credential: string): Promise<any[]> {
+    const { token, cookieValue, bxUa, bxUmidToken, userAgent } =
+      this.parseCredential(credential);
+
+    const headers: Record<string, string> = {
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+      [HTTP_HEADER_NAMES_LOWERCASE.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES_LOWERCASE.COOKIE]: cookieValue
+        ? cookieValue
+        : token
+          ? `${TOKEN_COOKIE_KEY}=${token}`
+          : '',
+      [HTTP_HEADER_NAMES_LOWERCASE.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES_LOWERCASE.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES_LOWERCASE.USER_AGENT]: userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES_LOWERCASE.X_REQUEST_ID]: crypto.randomUUID(),
+      [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: SEC_CH_UA.PLATFORM,
+      [HTTP_HEADER_NAMES.SEC_CH_UA]: SEC_CH_UA.VALUE,
+      [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
+      [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+      [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+      [HTTP_HEADER_NAMES_LOWERCASE.BX_V]: BX_VERSION,
+      [HTTP_HEADER_NAMES_LOWERCASE.TIMEZONE]:
+        new Date().toDateString() +
+        ' ' +
+        new Date().toTimeString().split(' ')[0] +
+        ' ' +
+        TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]: ACCEPT_LANGUAGES.EN_US,
+    };
+
+    if (token)
+      headers[HTTP_HEADER_NAMES_LOWERCASE.AUTHORIZATION] =
+        `${AUTH_PREFIXES.BEARER}${token}`;
+    if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
+    if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
+
+    try {
+      const response = await fetch(`${BASE_URL}${API_PATHS.MODELS}`, {
+        headers,
+        timeout: DEFAULT_TIMEOUT_MS,
+      } as any);
+
+      if (response.ok) {
+        const json: any = await response.json();
+
+        // Parse structure: {"success": true, "data": {"data": [...]}}
+        const modelList =
+          json?.[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.DATA] ||
+          json?.[AUTH_FIELDS.DATA] ||
+          (Array.isArray(json) ? json : null);
+
+        if (modelList && Array.isArray(modelList) && modelList.length > 0) {
+          return modelList
+            .filter((model: any) => {
+              // Filter active models only
+              const info = model[MODEL_FIELDS.INFO] || {};
+              return info[MODEL_FIELDS.IS_ACTIVE] === true;
+            })
+            .map((model: any) => {
+              const info = model[MODEL_FIELDS.INFO] || {};
+              const meta = info[MODEL_FIELDS.META] || {};
+              const capabilities = meta[MODEL_FIELDS.CAPABILITIES] || {};
+              const chatType = meta[MODEL_FIELDS.CHAT_TYPE] || [];
+
+              // Check chat_type array for generator capabilities
+              const isImageGenerator =
+                Array.isArray(chatType) &&
+                chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2I);
+              const isVideoGenerator =
+                Array.isArray(chatType) &&
+                chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2V);
+              const isDeepResearch =
+                Array.isArray(chatType) &&
+                chatType.includes(
+                  CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_DEEP_RESEARCH,
+                );
+
+              return {
+                id: model[MODEL_FIELDS.ID] || info[MODEL_FIELDS.ID],
+                name:
+                  model[MODEL_FIELDS.NAME] ||
+                  info[MODEL_FIELDS.NAME] ||
+                  model[MODEL_FIELDS.ID],
+                is_thinking: capabilities[MODEL_FIELDS.THINKING] === true,
+                max_context_length:
+                  meta[MODEL_FIELDS.MAX_CONTEXT_LENGTH] ||
+                  DEFAULT_MAX_CONTEXT_LENGTH,
+                is_search: capabilities[MODEL_FIELDS.SEARCH] === true,
+                is_image_upload: capabilities[MODEL_FIELDS.VISION] === true,
+                is_image_generator: isImageGenerator,
+                is_video_generator: isVideoGenerator,
+                is_deep_research: isDeepResearch,
+                description:
+                  meta[MODEL_FIELDS.SHORT_DESCRIPTION] ||
+                  meta[MODEL_FIELDS.DESCRIPTION] ||
+                  undefined,
+              };
+            });
+        }
+      } else {
+        logger.warn(
+          `[Qwen] Failed to fetch models from API: HTTP ${response.status}`,
+        );
+      }
+    } catch (e) {
+      logger.warn('[Qwen] Failed to fetch models from API:', e);
+    }
+
+    // Return empty array if API fetch fails - no hardcoded fallback
+    logger.warn('[Qwen] No models available from API');
+    return [];
+  }
+}
+
+export default new QwenProvider();
+
+```
+
+---
+
+src/services/upload.service.ts:
+```
+/**
+ * ------------------------------------------------------------------
+ * Upload Service
+ * ------------------------------------------------------------------
+ * Business logic upload file lên provider AI.
+ *
+ * Main functions:
+ * - uploadFileToProvider() : Upload file qua provider
+ * ------------------------------------------------------------------
+ */
+
+// ─── Imports ────────────────────────────────────────────────────────────
+// ── Providers ──
+import { providerRegistry } from '../provider/registry';
+
+// ── Utils ──
+import { createLogger } from '../utils/logger';
+
+// ─── Constants ──────────────────────────────────────────────────────────
+const logger = createLogger('UploadService');
+
+// ─── Interfaces ─────────────────────────────────────────────────────────
+export interface UploadResult {
+  file_id?: string;
+  url?: string;
+  token_usage?: number;
+  raw?: any;
+}
+
+// ─── Service Functions ──────────────────────────────────────────────────
+
+/**
+ * Upload file qua provider
+ */
+export async function uploadFileToProvider(
+  providerId: string,
+  credential: string,
+  file: Express.Multer.File,
+): Promise<UploadResult> {
+  const provider = providerRegistry.getProvider(providerId);
+
+  if (!provider) {
+    logger.error(
+      `[UploadService] Provider not found | providerId=${providerId}`,
+    );
+    throw new Error(`Provider ${providerId} not supported`);
+  }
+
+  if (!provider.uploadFile) {
+    logger.error(
+      `[UploadService] Provider does not support upload | providerId=${providerId}`,
+    );
+    throw new Error(`Provider ${providerId} does not support file upload`);
+  }
+
+  try {
+    const result = await provider.uploadFile(credential, file);
+
+    // Normalize result format
+    if (typeof result === 'string') {
+      return { file_id: result };
+    } else if (result && typeof result === 'object' && 'id' in result) {
+      return {
+        file_id: result.id,
+        url: (result as any).url,
+        token_usage: (result as any).token_usage,
+      };
+    } else {
+      logger.warn(
+        `[UploadService] Result format unexpected | providerId=${providerId} | resultType=${typeof result}`,
+      );
+      return { raw: result };
+    }
+  } catch (error: any) {
+    logger.error(
+      `[UploadService] Upload failed | providerId=${providerId} | filename=${file.originalname}`,
+      {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+      },
+    );
+    throw error;
+  }
+}
+
+```
+<-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=->
+
+sao vẫn lỗi

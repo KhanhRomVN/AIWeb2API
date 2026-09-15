@@ -16,7 +16,8 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import { Router } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ── Types ──
 import { Provider } from '../types/index';
@@ -45,16 +46,6 @@ class ProviderRegistry {
 
     if (key.includes('.')) {
       aliases.push(key.split('.')[0]);
-    }
-
-    // Special alias for Z.AI Browser
-    if (key === 'z.ai browser') {
-      aliases.push('zai-browser', 'zai');
-    }
-
-    // Special alias for Kimi
-    if (key === 'kimi') {
-      aliases.push('moonshot', 'moonshotai');
     }
 
     // General: remove dots, spaces, replace with dash
@@ -97,58 +88,54 @@ class ProviderRegistry {
   // ─── Load Providers ────────────────────────────────────────────────
   async loadProviders() {
     try {
-      const { default: ClaudeProvider } = require('./claude');
-      const { default: HuggingChatProvider } = require('./huggingchat');
-      const { default: MistralProvider } = require('./mistral');
-      const { default: DeepSeekProvider } = require('./deepseek');
-      const { default: GroqProvider } = require('./groq');
-      const { default: QwenProvider } = require('./qwen');
-      const { default: QwenCliProvider } = require('./qwen-cli');
-      const { default: GeminiCliProvider } = require('./gemini-cli');
+      const providersDir = __dirname;
 
-      const { default: CodexCliProvider } = require('./codex-cli');
-      const { default: ZAIProvider } = require('./zai');
-      const { default: ZaiBrowserProvider } = require('./zai-browser');
-      const { default: CerebrasCloudProvider } = require('./cerebras-cloud');
-      const { default: GeminiProvider } = require('./gemini');
-      const { default: KimiProvider } = require('./kimi');
-      const { default: KiroProvider } = require('./kiro');
-      const { default: FreebuffProvider } = require('./freebuff');
+      // Đọc tất cả các folder trong thư mục provider
+      const entries = fs.readdirSync(providersDir, { withFileTypes: true });
 
-      const providers = [
-        ClaudeProvider,
-        HuggingChatProvider,
-        MistralProvider,
-        DeepSeekProvider,
-        GroqProvider,
-        QwenProvider,
-        QwenCliProvider,
-        GeminiCliProvider,
-        CodexCliProvider,
-        ZAIProvider,
-        ZaiBrowserProvider,
-        CerebrasCloudProvider,
-        GeminiProvider,
-        KimiProvider,
-        KiroProvider,
-        FreebuffProvider,
-      ];
-      for (const p of providers) {
-        if (p && p.name) {
-          this.register(p);
-        } else {
-          logger.warn(`[Registry] Invalid provider: ${p}`);
+      const providerFolders = entries.filter(
+        (entry) => entry.isDirectory() && !entry.name.startsWith('.'),
+      );
+
+      const loadedProviders: Provider[] = [];
+
+      for (const folder of providerFolders) {
+        const folderName = folder.name;
+        const indexPath = path.join(providersDir, folderName, 'index.ts');
+        const indexJsPath = path.join(providersDir, folderName, 'index.js');
+
+        // Check if index file exists (either .ts or .js)
+        const hasIndex = fs.existsSync(indexPath) || fs.existsSync(indexJsPath);
+
+        if (!hasIndex) {
+          continue;
+        }
+
+        try {
+          // Dynamically require the provider
+          const providerModule = require(`./${folderName}`);
+          const provider = providerModule.default;
+
+          if (provider && provider.name) {
+            loadedProviders.push(provider);
+            logger.debug(`[Registry] Loaded provider: ${provider.name}`);
+          } else {
+            logger.warn(`[Registry] Invalid provider in folder: ${folderName}`);
+          }
+        } catch (error) {
+          logger.warn(
+            `[Registry] Failed to load provider from ${folderName}:`,
+            error,
+          );
         }
       }
 
-      // Aliases for Kimi / Moonshot
-      for (const alias of ['moonshotai', 'moonshot', 'kimi']) {
-        if (!this.providers.has(alias) && KimiProvider) {
-          this.providers.set(alias, KimiProvider);
-        }
+      // Register all loaded providers
+      for (const provider of loadedProviders) {
+        this.register(provider);
       }
     } catch (error) {
-      logger.error('Failed to load providers', error);
+      logger.error('[Registry] Failed to load providers:', error);
     }
   }
 }

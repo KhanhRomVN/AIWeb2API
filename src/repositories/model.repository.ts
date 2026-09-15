@@ -27,6 +27,8 @@ export interface ModelRow {
   max_context_length?: number | null;
   is_image_upload?: number;
   is_video_upload?: number;
+  is_audio_upload?: number;
+  is_file_upload?: number;
   updated_at: number;
   success_rate?: number | null;
   description?: string | null;
@@ -50,21 +52,25 @@ export const upsertModel = (
   updatedAt: number,
   isImageUpload?: boolean,
   isVideoUpload?: boolean,
+  isAudioUpload?: boolean,
+  isFileUpload?: boolean,
   description?: string | null,
 ): void => {
   const db = getDb();
   db.prepare(
     `INSERT INTO models (
        provider_id, model_id, model_name, is_thinking,
-       max_context_length, is_image_upload, is_video_upload, updated_at, description
+       max_context_length, is_image_upload, is_video_upload, is_audio_upload, is_file_upload, updated_at, description
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(provider_id, model_id) DO UPDATE SET
        model_name = excluded.model_name,
        is_thinking = excluded.is_thinking,
        max_context_length = excluded.max_context_length,
        is_image_upload = excluded.is_image_upload,
        is_video_upload = excluded.is_video_upload,
+       is_audio_upload = excluded.is_audio_upload,
+       is_file_upload = excluded.is_file_upload,
        updated_at = excluded.updated_at,
        description = excluded.description`,
   ).run(
@@ -75,6 +81,8 @@ export const upsertModel = (
     maxContextLength ?? null,
     isImageUpload ? 1 : 0,
     isVideoUpload ? 1 : 0,
+    isAudioUpload ? 1 : 0,
+    isFileUpload ? 1 : 0,
     updatedAt,
     description ?? null,
   );

@@ -50,7 +50,6 @@ import {
   DEFAULT_REFRESH_THRESHOLD_SEC,
 } from '../../utils/jwt-helper';
 
-
 // ── Qwen Imports ──
 import { proxyHandler } from './qwen.proxy-handler';
 import { qwenUploadFile } from './qwen.upload';
@@ -272,7 +271,10 @@ export class QwenProvider implements Provider {
             )
             .all(DB_PROVIDER_ID, email.toLowerCase()) as any[];
           for (const acc of accounts) {
-            updateAccountCredential(acc.id, JSON.stringify({ accessToken: newAccessToken }));
+            updateAccountCredential(
+              acc.id,
+              JSON.stringify({ accessToken: newAccessToken }),
+            );
           }
         } catch (e) {
           logger.error('[Qwen] Failed to persist refreshed token to DB:', e);
@@ -678,11 +680,16 @@ export class QwenProvider implements Provider {
 
       const lastMsg = messages[messages.length - 1];
       const msgFid = options.edit_message_id || crypto.randomUUID();
-      const userAction = options.user_action || CHAT_PAYLOAD_CONSTANTS.USER_ACTION_CHAT;
+      const userAction =
+        options.user_action || CHAT_PAYLOAD_CONSTANTS.USER_ACTION_CHAT;
 
       // Khi edit message, cần lấy childrenIds từ message cũ
       let childrenIds: string[] = [];
-      if (userAction === CHAT_PAYLOAD_CONSTANTS.USER_ACTION_EDIT && conversationId && msgFid) {
+      if (
+        userAction === CHAT_PAYLOAD_CONSTANTS.USER_ACTION_EDIT &&
+        conversationId &&
+        msgFid
+      ) {
         try {
           const response = await fetch(
             `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/`,
@@ -697,14 +704,22 @@ export class QwenProvider implements Provider {
           );
           if (response.ok) {
             const json = await response.json();
-            const messages = json[RESPONSE_FIELDS.MESSAGES] || json[RESPONSE_FIELDS.DATA] || [];
-            const oldMessage = messages.find((m: any) => m[CHAT_PAYLOAD_FIELDS.FID] === msgFid);
+            const messages =
+              json[RESPONSE_FIELDS.MESSAGES] ||
+              json[RESPONSE_FIELDS.DATA] ||
+              [];
+            const oldMessage = messages.find(
+              (m: any) => m[CHAT_PAYLOAD_FIELDS.FID] === msgFid,
+            );
             if (oldMessage && oldMessage[CHAT_PAYLOAD_FIELDS.CHILDREN_IDS]) {
               childrenIds = oldMessage[CHAT_PAYLOAD_FIELDS.CHILDREN_IDS];
             }
           }
         } catch (e) {
-          logger.warn('[Qwen] Failed to fetch childrenIds for edit message:', e);
+          logger.warn(
+            '[Qwen] Failed to fetch childrenIds for edit message:',
+            e,
+          );
         }
       }
 
@@ -745,24 +760,50 @@ export class QwenProvider implements Provider {
             [CHAT_PAYLOAD_FIELDS.ROLE]: lastMsg.role,
             [CHAT_PAYLOAD_FIELDS.CONTENT]: lastMsg.content,
             [CHAT_PAYLOAD_FIELDS.USER_ACTION]: userAction,
-            [CHAT_PAYLOAD_FIELDS.FILES]: [],
+            [CHAT_PAYLOAD_FIELDS.FILES]: (options.ref_file_ids || []).map(
+              (item: any) => {
+                if (typeof item === 'string') {
+                  throw new Error(
+                    `[Qwen] ref_file_ids contains string "${item}". ` +
+                      `Must send object { file_id, url, ... } to build valid file object.`,
+                  );
+                }
+                if (!item.file_id) {
+                  throw new Error(`[Qwen] ref_file_ids[].file_id is required.`);
+                }
+                if (!item.url) {
+                  throw new Error(
+                    `[Qwen] ref_file_ids[].url is missing (file_id=${item.file_id}). ` +
+                      `Check if upload API response includes "url" field.`,
+                  );
+                }
+                return {
+                  type: item.type || 'image',
+                  id: item.file_id,
+                  url: item.url,
+                  name: item.name || 'file',
+                  status: 'uploaded',
+                  file_type: item.file_type || 'image/png',
+                  showType: item.showType || 'image',
+                  file_class: item.file_class || 'vision',
+                };
+              },
+            ),
             [CHAT_PAYLOAD_FIELDS.TIMESTAMP]: nowSec,
             [CHAT_PAYLOAD_FIELDS.MODELS]: [modelToUse],
             [CHAT_PAYLOAD_FIELDS.MODEL]: '',
             [CHAT_PAYLOAD_FIELDS.CHAT_TYPE]:
               CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2T,
             [CHAT_PAYLOAD_FIELDS.FEATURE_CONFIG]: {
-              [CHAT_PAYLOAD_FIELDS.THINKING_ENABLED]:
-                options.thinking ?? false,
+              [CHAT_PAYLOAD_FIELDS.THINKING_ENABLED]: options.thinking ?? false,
               [CHAT_PAYLOAD_FIELDS.OUTPUT_SCHEMA]:
                 CHAT_PAYLOAD_CONSTANTS.OUTPUT_SCHEMA_PHASE,
               [CHAT_PAYLOAD_FIELDS.RESEARCH_MODE]:
                 CHAT_PAYLOAD_CONSTANTS.RESEARCH_MODE_NORMAL,
               [CHAT_PAYLOAD_FIELDS.AUTO_THINKING]: false,
-              [CHAT_PAYLOAD_FIELDS.THINKING_MODE]:
-                options.thinking
-                  ? CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_THINKING
-                  : CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_FAST,
+              [CHAT_PAYLOAD_FIELDS.THINKING_MODE]: options.thinking
+                ? CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_THINKING
+                : CHAT_PAYLOAD_CONSTANTS.THINKING_MODE_FAST,
               ...(options.thinking && {
                 [CHAT_PAYLOAD_FIELDS.THINKING_FORMAT]:
                   CHAT_PAYLOAD_CONSTANTS.THINKING_FORMAT_SUMMARY,
@@ -859,7 +900,10 @@ export class QwenProvider implements Provider {
       let conversationIdCaptured = false;
       let parentIdCaptured = false;
       let capturedParentId: string | null = null;
-      const thinkingParser = new QwenStreamingThinkingParser(onContent, onThinking);
+      const thinkingParser = new QwenStreamingThinkingParser(
+        onContent,
+        onThinking,
+      );
       const normalizedThinkingParser = createQwenThinkingParser();
       let totalContentReceived = 0;
       let totalChunksProcessed = 0;
@@ -981,22 +1025,25 @@ export class QwenProvider implements Provider {
               const content = delta[SSE_EVENT_FIELDS.CONTENT];
               const extra = delta[SSE_EVENT_FIELDS.EXTRA];
               const status = delta[SSE_EVENT_FIELDS.STATUS];
-              const reasoningContent = delta[SSE_EVENT_FIELDS.REASONING_CONTENT];
+              const reasoningContent =
+                delta[SSE_EVENT_FIELDS.REASONING_CONTENT];
 
               // Handle thinking summary phase (when phase = "thinking_summary")
               if (phase === SSE_PHASE_TYPES.THINKING_SUMMARY) {
                 isInThinkingPhase = true;
-                
+
                 if (extra) {
                   const summaryTitle = extra[SSE_EVENT_FIELDS.SUMMARY_TITLE];
-                  const summaryThought = extra[SSE_EVENT_FIELDS.SUMMARY_THOUGHT];
-                  
+                  const summaryThought =
+                    extra[SSE_EVENT_FIELDS.SUMMARY_THOUGHT];
+
                   // Feed to normalized parser
-                  const normalizedThinking = normalizedThinkingParser.feedSummary({
-                    title: summaryTitle?.content,
-                    thought: summaryThought?.content,
-                  });
-                  
+                  const normalizedThinking =
+                    normalizedThinkingParser.feedSummary({
+                      title: summaryTitle?.content,
+                      thought: summaryThought?.content,
+                    });
+
                   if (normalizedThinking && onThinking) {
                     onThinking(normalizedThinking);
                   }
@@ -1017,7 +1064,8 @@ export class QwenProvider implements Provider {
                 if (!isInThinkingPhase) {
                   isInThinkingPhase = true;
                 }
-                const normalizedThinking = normalizedThinkingParser.feed(reasoningContent);
+                const normalizedThinking =
+                  normalizedThinkingParser.feed(reasoningContent);
                 if (normalizedThinking) {
                   onThinking(normalizedThinking);
                 }
@@ -1033,7 +1081,7 @@ export class QwenProvider implements Provider {
                   }
                   isInThinkingPhase = false;
                 }
-                
+
                 totalContentReceived += content.length;
                 thinkingParser.feed(content);
               }
@@ -1092,7 +1140,8 @@ export class QwenProvider implements Provider {
         try {
           const selectHeaders: Record<string, string> = {
             [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-            [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
+            [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]:
+              ACCEPT_VALUES.JSON_TEXT_PLAIN_ANY,
             [HTTP_HEADER_NAMES.USER_AGENT]: userAgent || USER_AGENT,
             [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
             [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`,
@@ -1168,7 +1217,7 @@ export class QwenProvider implements Provider {
   async uploadFile(
     credential: string,
     file: Express.Multer.File,
-  ): Promise<{ id: string; token_usage: number }> {
+  ): Promise<{ id: string; url: string; token_usage: number }> {
     const parsedCred = this.parseCredential(credential);
 
     const uploadInput = {
@@ -1256,9 +1305,17 @@ export class QwenProvider implements Provider {
               const chatType = meta[MODEL_FIELDS.CHAT_TYPE] || [];
 
               // Check chat_type array for generator capabilities
-              const isImageGenerator = Array.isArray(chatType) && chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2I);
-              const isVideoGenerator = Array.isArray(chatType) && chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2V);
-              const isDeepResearch = Array.isArray(chatType) && chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_DEEP_RESEARCH);
+              const isImageGenerator =
+                Array.isArray(chatType) &&
+                chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2I);
+              const isVideoGenerator =
+                Array.isArray(chatType) &&
+                chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2V);
+              const isDeepResearch =
+                Array.isArray(chatType) &&
+                chatType.includes(
+                  CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_DEEP_RESEARCH,
+                );
 
               return {
                 id: model[MODEL_FIELDS.ID] || info[MODEL_FIELDS.ID],
@@ -1272,6 +1329,9 @@ export class QwenProvider implements Provider {
                   DEFAULT_MAX_CONTEXT_LENGTH,
                 is_search: capabilities[MODEL_FIELDS.SEARCH] === true,
                 is_image_upload: capabilities[MODEL_FIELDS.VISION] === true,
+                is_video_upload: capabilities[MODEL_FIELDS.VIDEO] === true,
+                is_audio_upload: capabilities[MODEL_FIELDS.AUDIO] === true,
+                is_file_upload: capabilities[MODEL_FIELDS.DOCUMENT] === true,
                 is_image_generator: isImageGenerator,
                 is_video_generator: isVideoGenerator,
                 is_deep_research: isDeepResearch,

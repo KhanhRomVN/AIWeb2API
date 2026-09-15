@@ -10,7 +10,15 @@ export interface SendMessageOptions {
   conversationId?: string;
   parent_message_id?: string;
   search?: boolean;
-  ref_file_ids?: string[];
+  ref_file_ids?: Array<string | { 
+    file_id: string; 
+    url: string;
+    type?: string;
+    name?: string;
+    file_type?: string;
+    showType?: string;
+    file_class?: string;
+  }>;
   thinking?: boolean;
   stream?: boolean;
   temperature?: number;

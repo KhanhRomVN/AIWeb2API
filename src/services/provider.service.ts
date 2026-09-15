@@ -18,7 +18,7 @@
 import { providerRegistry } from '../provider/registry';
 
 // ── Repositories ──
-import { findAllProviders as findAllProviderRows } from '../repositories/provider.repository';
+import { findAllProviders as findAllProviderRows, upsertProvider } from '../repositories/provider.repository';
 import { findAllModels, upsertModel } from '../repositories/model.repository';
 import { findFirstAccountByProvider } from '../repositories/account.repository';
 
@@ -53,7 +53,8 @@ export interface Provider {
     is_search?: boolean;
     is_image_upload?: boolean;
     is_video_upload?: boolean;
-    is_upload?: boolean;
+    is_audio_upload?: boolean;
+    is_file_upload?: boolean;
   }[];
   is_pausable?: boolean;
   is_memory?: boolean;
@@ -104,8 +105,10 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
         model.is_thinking || false,
         model.max_context_length ?? model.context_length ?? null,
         now,
-        model.is_image_upload ?? model.is_upload ?? false,
+        model.is_image_upload ?? false,
         model.is_video_upload ?? false,
+        model.is_audio_upload ?? false,
+        model.is_file_upload ?? false,
       );
     }
     return models;
@@ -143,6 +146,8 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       max_context_length: model.max_context_length,
       is_image_upload: model.is_image_upload === 1,
       is_video_upload: model.is_video_upload === 1,
+      is_audio_upload: model.is_audio_upload === 1,
+      is_file_upload: model.is_file_upload === 1,
       success_rate: model.success_rate ?? null,
     });
   });
@@ -155,6 +160,22 @@ export const getAllProviders = async (): Promise<Provider[]> => {
     const pid = p.provider_id.toLowerCase();
     if (seenIds.has(pid)) continue;
     seenIds.add(pid);
+
+    // Upsert provider metadata to database
+    upsertProvider({
+      id: p.provider_id,
+      title: p.provider_name || p.provider_id,
+      description: p.description,
+      color: p.color,
+      platform: p.platform,
+      connection_type: p.connection_type,
+      is_enabled: p.is_enabled !== false ? 1 : 0,
+      website_url: p.website_url,
+      auth_method: Array.isArray(p.auth_method) ? JSON.stringify(p.auth_method) : (p.auth_method ?? null),
+      is_pausable: p.is_pausable ? 1 : 0,
+      is_memory: p.is_memory ? 1 : 0,
+      browser_extension_folder: p.browser_extension_folder,
+    });
 
     let models: any[] | undefined = p.models;
 
@@ -192,20 +213,10 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,
-        is_image_upload:
-          m.is_image_upload !== undefined
-            ? m.is_image_upload
-            : m.is_upload !== undefined
-              ? m.is_upload
-              : false,
-        is_video_upload:
-          m.is_video_upload !== undefined ? m.is_video_upload : false,
-        is_upload:
-          m.is_image_upload !== undefined
-            ? m.is_image_upload
-            : m.is_upload !== undefined
-              ? m.is_upload
-              : false,
+        is_image_upload: m.is_image_upload !== undefined ? m.is_image_upload : false,
+        is_video_upload: m.is_video_upload !== undefined ? m.is_video_upload : false,
+        is_audio_upload: m.is_audio_upload !== undefined ? m.is_audio_upload : false,
+        is_file_upload: m.is_file_upload !== undefined ? m.is_file_upload : false,
         max_context_length: m.max_context_length ?? m.context_length ?? null,
         context_length: m.max_context_length ?? m.context_length ?? null,
         success_rate: dbModelSuccessRateMap.has(m.id?.toLowerCase())
@@ -294,7 +305,7 @@ export interface ModelWithProvider {
   is_thinking?: boolean;
   context_length?: number | null;
   is_search?: boolean;
-  is_upload?: boolean;
+  is_image_upload?: boolean;
   success_rate?: number | null;
 }
 
@@ -363,10 +374,7 @@ export const getAllModelsFromEnabledProviders = async (): Promise<
           model.is_search !== undefined
             ? model.is_search
             : (provider.is_search ?? false),
-        is_upload:
-          model.is_upload !== undefined
-            ? model.is_upload
-            : (provider.is_upload ?? false),
+        is_image_upload: model.is_image_upload ?? false,
         success_rate:
           model.success_rate !== undefined ? model.success_rate : null,
       });

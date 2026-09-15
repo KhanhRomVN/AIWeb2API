@@ -14,8 +14,7 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import fetch from 'node-fetch';
-import * as crypto from 'crypto';
+import OSS from 'ali-oss';
 
 // ── Utils ──
 import { HttpClient } from '../../utils/http-client';
@@ -68,7 +67,8 @@ function createUploadClient(cred: ParsedCredential): HttpClient {
   };
 
   if (cred.token) {
-    headers[HTTP_HEADER_NAMES.AUTHORIZATION] = `${COOKIE_CONFIG.BEARER_PREFIX}${cred.token}`;
+    headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+      `${COOKIE_CONFIG.BEARER_PREFIX}${cred.token}`;
   }
   if (cred.bxUa) {
     headers[HTTP_HEADER_NAMES.BX_UA] = cred.bxUa;
@@ -110,12 +110,6 @@ export async function qwenUploadFile(
       filetype: fileType,
     };
 
-    logger.info('[Qwen Upload] Requesting STS token', {
-      filename: file.originalname,
-      filesize: file.buffer.length,
-      filetype: fileType,
-    });
-
     const stsRes = await client.post(API_PATHS.FILE_GET_STS_TOKEN, stsPayload);
 
     if (!stsRes.ok) {
@@ -129,12 +123,10 @@ export async function qwenUploadFile(
     }
 
     const stsResult = (await stsRes.json()) as STSTokenResponse;
-    
+
     if (!stsResult.success || !stsResult.data) {
       const errorMsg = stsResult.message || 'Unknown error';
-      logger.error(
-        `[Qwen Upload] STS token request failed | msg=${errorMsg}`,
-      );
+      logger.error(`[Qwen Upload] STS token request failed | msg=${errorMsg}`);
       throw new Error(`STS token request failed: ${errorMsg}`);
     }
 
@@ -150,52 +142,37 @@ export async function qwenUploadFile(
       endpoint,
     } = stsResult.data;
 
-    logger.info('[Qwen Upload] STS token received', {
-      file_id,
-      file_path,
-      endpoint,
-    });
+    try {
+      const ossClient = new OSS({
+        region: region.replace(/^oss-/, ''), // Strip "oss-" prefix
+        accessKeyId: access_key_id,
+        accessKeySecret: access_key_secret,
+        stsToken: security_token,
+        bucket: bucketname,
+        endpoint,
+        secure: true,
+      });
 
-    // Step 2: Upload file to OSS
-    const boundary =
-      UPLOAD_CONFIG.FORM_BOUNDARY_PREFIX +
-      crypto.randomBytes(UPLOAD_CONFIG.BOUNDARY_RANDOM_BYTES).toString('hex');
-    const crlf = UPLOAD_CONFIG.CRLF;
-
-    // Build multipart form data
-    const header = `--${boundary}${crlf}Content-Disposition: form-data; name="file"; filename="${file.originalname}"${crlf}Content-Type: ${file.mimetype}${crlf}${crlf}`;
-    const footer = `${crlf}--${boundary}--${crlf}`;
-    const payloadBuffer = Buffer.concat([
-      Buffer.from(header),
-      file.buffer,
-      Buffer.from(footer),
-    ]);
-
-    // Upload to OSS
-    logger.info('[Qwen Upload] Uploading to OSS', {
-      url: file_url,
-      size: payloadBuffer.length,
-    });
-
-    const uploadRes = await fetch(file_url, {
-      method: 'PUT',
-      headers: {
-        [HTTP_HEADER_NAMES.CONTENT_TYPE]: `multipart/form-data; boundary=${boundary}`,
-      },
-      body: payloadBuffer,
-    });
-
-    if (!uploadRes.ok) {
-      const errorText = await uploadRes.text();
-      logger.error(
-        `[Qwen Upload] OSS upload failed | status=${uploadRes.status} | error=${errorText}`,
-      );
-      throw new Error(`OSS upload failed: ${uploadRes.status} - ${errorText}`);
+      await ossClient.put(file_path, file.buffer, {
+        headers: { 'Content-Type': file.mimetype },
+      });
+    } catch (error: any) {
+      const errorText = error.message;
+      logger.error(`[Qwen Upload] OSS upload failed | error=${errorText}`);
+      throw new Error(`OSS upload failed: ${errorText}`);
     }
 
-    logger.info('[Qwen Upload] Upload to OSS successful', { file_id });
+    // Step 3: Poll for file parse status (chỉ cần cho file document - PDF, DOC, etc.)
+    // File ảnh thường không cần parse, trả về ngay
+    if (fileType === 'image') {
+      return {
+        id: file_id,
+        url: file_url,
+        token_usage: 0,
+      };
+    }
 
-    // Step 3: Poll for file parse status
+    // Poll parse status cho file document
     let attempts = 0;
     const maxAttempts = UPLOAD_CONFIG.POLLING_MAX_ATTEMPTS;
 
@@ -214,6 +191,15 @@ export async function qwenUploadFile(
           const statusData =
             (await statusRes.json()) as FileParseStatusResponse;
 
+          // Debug: log raw response
+          logger.debug('[Qwen Upload] Parse status response', {
+            success: statusData.success,
+            hasData: !!statusData.data,
+            dataLength: statusData.data?.length || 0,
+            rawData: statusData.data,
+            message: statusData.message,
+          });
+
           if (
             statusData.success &&
             statusData.data &&
@@ -222,13 +208,13 @@ export async function qwenUploadFile(
             const fileStatus = statusData.data[0];
             const status = fileStatus.status;
 
-            if (status === FILE_STATUS.SUCCESS || status === FILE_STATUS.READY) {
-              logger.info('[Qwen Upload] File processing completed', {
-                file_id,
-                token_usage: fileStatus.token_usage,
-              });
+            if (
+              status === FILE_STATUS.SUCCESS ||
+              status === FILE_STATUS.READY
+            ) {
               return {
                 id: file_id,
+                url: file_url,
                 token_usage: fileStatus.token_usage || 0,
               };
             }
@@ -274,7 +260,7 @@ export async function qwenUploadFile(
     logger.warn(
       `[Qwen Upload] Max polling attempts reached | fileId=${file_id} | attempts=${attempts}`,
     );
-    return { id: file_id, token_usage: 0 };
+    return { id: file_id, url: file_url, token_usage: 0 };
   } catch (error) {
     const err = error as Error;
     logger.error('[Qwen Upload] Unhandled error', {

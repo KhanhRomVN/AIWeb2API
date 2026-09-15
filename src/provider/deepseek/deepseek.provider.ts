@@ -134,14 +134,22 @@ export class DeepSeekProvider implements Provider {
           hasAccessToken: !!parsed.accessToken,
           hasToken: !!parsed.token,
         });
-        
+
         // New format: {secretKey} or fallback: {accessToken, token}
-        const token = parsed.secretKey || parsed.secret_key || parsed.accessToken || parsed.access_token || parsed.token;
+        const token =
+          parsed.secretKey ||
+          parsed.secret_key ||
+          parsed.accessToken ||
+          parsed.access_token ||
+          parsed.token;
         if (token) {
-          logger.debug('[DeepSeek] parseCredential - extracted token from JSON:', {
-            tokenLength: token.length,
-            tokenPreview: token.substring(0, 20),
-          });
+          logger.debug(
+            '[DeepSeek] parseCredential - extracted token from JSON:',
+            {
+              tokenLength: token.length,
+              tokenPreview: token.substring(0, 20),
+            },
+          );
           return token;
         }
       } catch (e) {
@@ -264,12 +272,6 @@ export class DeepSeekProvider implements Provider {
         return { isValid: false };
       },
     });
-
-    logger.info('[DeepSeek] Login completed:', {
-      success: !!result,
-      credentialType: typeof result,
-    });
-
     return result;
   }
 
@@ -399,7 +401,8 @@ export class DeepSeekProvider implements Provider {
       [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
       [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
       [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]: HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
-      [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]: HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
+      [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
+        HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
     };
 
     const client = new HttpClient({
@@ -436,7 +439,7 @@ export class DeepSeekProvider implements Provider {
       if (needsNewSession) {
         // Tạo UUID ngẫu nhiên để dùng trong Referer header
         const newSessionUUID = randomUUID();
-        
+
         // Tạo client với Referer header chứa UUID mới
         const sessionClient = new HttpClient({
           baseURL: BASE_URL,
@@ -445,16 +448,19 @@ export class DeepSeekProvider implements Provider {
             [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_SESSION_PREFIX}${newSessionUUID}`,
           },
         });
-        
-        const sessionRes = await sessionClient.post(API_PATHS.CHAT_SESSION_CREATE, {
-          [API_FIELDS.CHARACTER_ID]: null,
-        });
-        
+
+        const sessionRes = await sessionClient.post(
+          API_PATHS.CHAT_SESSION_CREATE,
+          {
+            [API_FIELDS.CHARACTER_ID]: null,
+          },
+        );
+
         const sessionData = (await sessionRes.json()) as DeepSeekApiEnvelope<{
           chat_session: { id: string };
           id: string;
         }>;
-        
+
         // Check for API error code (40003 = authorization failed, etc.)
         if (sessionData?.[API_FIELDS.CODE] !== SUCCESS_CODE) {
           const errorMsg = sessionData?.[API_FIELDS.MSG] || 'Unknown error';
@@ -463,13 +469,13 @@ export class DeepSeekProvider implements Provider {
             `Failed to create chat session (code: ${errorCode}): ${errorMsg}`,
           );
         }
-        
+
         if (!sessionRes.ok) {
           throw new Error(
             `Failed to create chat session: HTTP ${sessionRes.status}`,
           );
         }
-        
+
         // Lấy session ID thực từ response body
         sessionId =
           sessionData?.[API_FIELDS.DATA]?.[API_FIELDS.BIZ_DATA]?.[
@@ -478,13 +484,13 @@ export class DeepSeekProvider implements Provider {
           sessionData?.[API_FIELDS.DATA]?.[API_FIELDS.BIZ_DATA]?.[
             API_FIELDS.ID
           ];
-        
+
         if (!sessionId) {
           throw new Error(
             `Session ID missing from response: ${JSON.stringify(sessionData)}`,
           );
         }
-        
+
         logger.debug('[DeepSeek] Created new session:', {
           refererUUID: newSessionUUID,
           actualSessionId: sessionId,
@@ -524,9 +530,9 @@ export class DeepSeekProvider implements Provider {
       if (challengeRes.ok) {
         try {
           const rawText = await challengeRes.text();
-          const challengeJson = JSON.parse(
-            rawText,
-          ) as DeepSeekApiEnvelope<{ challenge: PoWChallenge }>;
+          const challengeJson = JSON.parse(rawText) as DeepSeekApiEnvelope<{
+            challenge: PoWChallenge;
+          }>;
           const challengeData: PoWChallenge | undefined =
             challengeJson?.[API_FIELDS.DATA]?.[API_FIELDS.BIZ_DATA]?.[
               API_FIELDS.CHALLENGE
@@ -549,13 +555,15 @@ export class DeepSeekProvider implements Provider {
       // - First message (no parent): model_type = null
       // - Subsequent messages: model_type = "default"
       const isFirstMessage = !parentMessageId;
-      
+
       const requestPayload: ChatPayload = {
         chat_session_id: sessionId,
         parent_message_id: parentMessageId || null || undefined,
         model_type: isFirstMessage ? null : MODEL_TYPES.DEFAULT,
         prompt: messages[messages.length - 1].content,
-        ref_file_ids: options.ref_file_ids || [],
+        ref_file_ids: (options.ref_file_ids || []).map((item) =>
+          typeof item === 'string' ? item : item.file_id,
+        ),
         thinking_enabled:
           options.thinking ?? !!MODELS.find((m) => m.id === model)?.is_thinking,
         search_enabled: options.search || false,
@@ -576,7 +584,7 @@ export class DeepSeekProvider implements Provider {
         API_PATHS.CHAT_COMPLETION,
         requestPayload,
       );
-      
+
       logger.debug('[DeepSeek] Completion response:', {
         status: response.status,
         ok: response.ok,
@@ -584,14 +592,17 @@ export class DeepSeekProvider implements Provider {
         contentLength: response.headers.get('content-length'),
         hasBody: !!response.body,
       });
-      
+
       // If response is JSON instead of SSE, log the error
       if (response.headers.get('content-type')?.includes('application/json')) {
         const jsonResponse = await response.text();
-        logger.error('[DeepSeek] Received JSON instead of SSE stream:', jsonResponse);
+        logger.error(
+          '[DeepSeek] Received JSON instead of SSE stream:',
+          jsonResponse,
+        );
         throw new Error(`DeepSeek returned JSON error: ${jsonResponse}`);
       }
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(

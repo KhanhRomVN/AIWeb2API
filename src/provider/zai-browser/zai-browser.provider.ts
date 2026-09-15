@@ -64,7 +64,7 @@ const logger = createLogger('ZaiBrowserProvider');
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class ZaiBrowserProvider implements Provider {
-  name = 'Z.AI Browser';
+  name = 'ZAI-Browser';
   proxyHandler = proxyHandler;
 
   // ─── Provider Configuration ────────────────────────────────────────

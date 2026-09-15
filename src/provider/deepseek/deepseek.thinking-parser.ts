@@ -42,21 +42,11 @@ export class DeepSeekThinkingParser {
       this.isThinkingStarted = true;
       this.buffer = chunk;
       const output = '<thinking>' + chunk;
-      console.log('[ThinkingParser] 🟢 feed() FIRST chunk:', { 
-        chunkLength: chunk.length, 
-        outputLength: output.length,
-        chunkPreview: chunk.substring(0, 50),
-        outputPreview: output.substring(0, 100)
-      });
       return output;
     }
 
     // Subsequent chunks: just append
     this.buffer += chunk;
-    console.log('[ThinkingParser] 🔵 feed() SUBSEQUENT chunk:', { 
-      chunkLength: chunk.length,
-      chunkPreview: chunk.substring(0, 50)
-    });
     return chunk;
   }
 
@@ -66,7 +56,6 @@ export class DeepSeekThinkingParser {
    */
   end(metadata?: DeepSeekThinkingMetadata): string {
     if (this.isThinkingEnded) {
-      console.log('[ThinkingParser] ⚠️ end() ALREADY ENDED - skipping');
       return '';
     }
     this.isThinkingEnded = true;
@@ -78,13 +67,6 @@ export class DeepSeekThinkingParser {
       const roundedTime = metadata.elapsed_secs.toFixed(1);
       result += `\n<thinking_elapsed>${roundedTime}</thinking_elapsed>`;
     }
-
-    console.log('[ThinkingParser] 🔴 end() called:', {
-      hasMetadata: !!metadata?.elapsed_secs,
-      elapsedSecs: metadata?.elapsed_secs,
-      resultLength: result.length,
-      result: result
-    });
 
     return result;
   }

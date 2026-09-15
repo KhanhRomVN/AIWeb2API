@@ -22,6 +22,7 @@ const logger = createLogger('UploadService');
 // ─── Interfaces ─────────────────────────────────────────────────────────
 export interface UploadResult {
   file_id?: string;
+  url?: string;
   token_usage?: number;
   raw?: any;
 }
@@ -59,10 +60,12 @@ export async function uploadFileToProvider(
     if (typeof result === 'string') {
       return { file_id: result };
     } else if (result && typeof result === 'object' && 'id' in result) {
-      return {
+      const normalized = {
         file_id: result.id,
+        url: (result as any).url,
         token_usage: (result as any).token_usage,
       };
+      return normalized;
     } else {
       logger.warn(
         `[UploadService] Result format unexpected | providerId=${providerId} | resultType=${typeof result}`,

@@ -27,8 +27,8 @@
 
 // ─── Provider Configuration ──────────────────────────────────────────
 
-export const PROVIDER_ID = 'z';
-export const PROVIDER_NAME = 'Z';
+export const PROVIDER_ID = 'zai';
+export const PROVIDER_NAME = 'ZAI';
 export const PROVIDER_DESCRIPTION = 'GLM series models with enhanced coding and reasoning';
 export const PROVIDER_COLOR = '#7C3AED';
 export const IS_ENABLED = true;

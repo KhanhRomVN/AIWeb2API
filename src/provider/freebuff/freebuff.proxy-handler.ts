@@ -34,12 +34,17 @@ export const proxyHandler: ProxyHandler = {
     const host = ctx.clientToProxyRequest.headers.host;
     const url = ctx.clientToProxyRequest.url;
 
-    if (host && host.includes(FREEBUFF_HOST) && url.includes('/api/auth/session')) {
+    if (
+      host &&
+      host.includes(FREEBUFF_HOST) &&
+      url.includes('/api/auth/session')
+    ) {
       try {
         const json = JSON.parse(body);
         if (json?.user?.email) {
-          logger.info(`[FreebuffProxy] Captured user email from session: ${json.user.email}`);
-          proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_EMAIL, { email: json.user.email });
+          proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_EMAIL, {
+            email: json.user.email,
+          });
 
           const reqCookies = ctx.clientToProxyRequest.headers.cookie;
           if (reqCookies) {
@@ -50,7 +55,10 @@ export const proxyHandler: ProxyHandler = {
           }
         }
       } catch (e) {
-        logger.debug('[FreebuffProxy] Failed to parse session response body:', e);
+        logger.debug(
+          '[FreebuffProxy] Failed to parse session response body:',
+          e,
+        );
       }
     }
   },

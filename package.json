@@ -33,13 +33,14 @@
     "build:min": "tsup",
     "build:bin": "node scripts/build-bin.js",
     "commit": "commit",
-    "find-unused": "node ts-reap/dist/cli.js check --scope \"src\"",
-    "seed:tokens": "node scripts/seed-fake-tokens.js"
+    "find-unused": "node ts-reap/dist/cli.js check --scope \"src\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ali-oss": "^6.23.0",
+    "axios": "^1.20.0",
     "better-sqlite3": "^12.6.2",
     "chokidar": "^5.0.0",
     "cookie-parser": "^1.4.7",
@@ -69,6 +70,7 @@
     "@commitlint/cli": "^19.8.0",
     "@commitlint/config-conventional": "^19.8.0",
     "@lancedb/lancedb": "^0.26.2",
+    "@types/ali-oss": "^6.23.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/chokidar": "^1.7.5",
     "@types/cookie-parser": "^1.4.8",

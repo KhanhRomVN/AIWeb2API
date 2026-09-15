@@ -274,6 +274,7 @@ export interface UploadFileInput {
 
 export interface UploadResult {
   id: string;
+  url: string;
   token_usage: number;
 }
 

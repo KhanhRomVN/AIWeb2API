@@ -71,7 +71,9 @@ export class FreebuffProvider implements Provider {
         }
         if (Array.isArray(msg.content)) {
           const joined = msg.content
-            .filter((p: any) => p && (p.type === 'text' || typeof p === 'string'))
+            .filter(
+              (p: any) => p && (p.type === 'text' || typeof p === 'string'),
+            )
             .map((p: any) => p.text || p)
             .join('\n')
             .trim();
@@ -116,24 +118,26 @@ export class FreebuffProvider implements Provider {
             .map((c) => c.split('=')[0].trim())
             .filter(Boolean)
             .join(', ');
-          logger.info(`[Freebuff] Validation check - captured cookies: [${cookieNames}]`);
 
           if (!hasSessionToken) {
-            logger.debug('[Freebuff] Login validation: waiting for session-token cookie...');
+            logger.debug(
+              '[Freebuff] Login validation: waiting for session-token cookie...',
+            );
             return { isValid: false };
           }
 
           // Bắt buộc gọi API session với chính cookie vừa bắt được để xác thực
           const profile = await this.getUserProfile(data.cookies);
           if (profile?.email) {
-            logger.info(`[Freebuff] Login successful for email: ${profile.email}`);
             return {
               isValid: true,
               email: profile.email,
               cookies: data.cookies,
             };
           }
-          logger.warn('[Freebuff] Login validation: session cookie not yet active on Freebuff session endpoint...');
+          logger.warn(
+            '[Freebuff] Login validation: session cookie not yet active on Freebuff session endpoint...',
+          );
         }
         return { isValid: false };
       },
@@ -228,10 +232,6 @@ export class FreebuffProvider implements Provider {
         bodyPayload.threadId = existingThreadId;
       }
 
-      logger.info(
-        `[Freebuff] Sending message: model=${bodyPayload.model}, threadId=${bodyPayload.threadId || 'new'}`,
-      );
-
       const cookie = this.parseCookies(credential);
 
       let response = await fetch(STREAM_URL, {
@@ -267,8 +267,12 @@ export class FreebuffProvider implements Provider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(`[Freebuff] API error ${response.status}: ${errorText.slice(0, 300)}`);
-        throw new Error(`Freebuff API error (${response.status}): ${errorText.slice(0, 200)}`);
+        logger.error(
+          `[Freebuff] API error ${response.status}: ${errorText.slice(0, 300)}`,
+        );
+        throw new Error(
+          `Freebuff API error (${response.status}): ${errorText.slice(0, 200)}`,
+        );
       }
 
       if (!response.body) {
