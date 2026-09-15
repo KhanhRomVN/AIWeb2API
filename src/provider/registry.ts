@@ -82,7 +82,16 @@ class ProviderRegistry {
   }
 
   getAllProviders(): Provider[] {
-    return Array.from(this.providers.values());
+    const unique = new Map<string, Provider>();
+    for (const provider of this.providers.values()) {
+      if (provider && provider.name) {
+        const key = provider.name.toLowerCase();
+        if (!unique.has(key)) {
+          unique.set(key, provider);
+        }
+      }
+    }
+    return Array.from(unique.values());
   }
 
   // ─── Load Providers ────────────────────────────────────────────────
@@ -104,6 +113,7 @@ class ProviderRegistry {
       const { default: GeminiProvider } = require('./gemini');
       const { default: KimiProvider } = require('./kimi');
       const { default: KiroProvider } = require('./kiro');
+      const { default: FreebuffProvider } = require('./freebuff');
 
       const providers = [
         ClaudeProvider,
@@ -121,6 +131,7 @@ class ProviderRegistry {
         GeminiProvider,
         KimiProvider,
         KiroProvider,
+        FreebuffProvider,
       ];
       for (const p of providers) {
         if (p && p.name) {

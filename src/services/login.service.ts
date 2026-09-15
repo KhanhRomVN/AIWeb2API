@@ -114,20 +114,67 @@ export class LoginService extends EventEmitter {
       rejectPromise = reject;
     });
 
-    // Listen to proxy events for custom cookie/email capture (e.g., DeepSeek)
-    const cookieEventListener = (data: any) => {
-      if (data.cookies) {
-        capturedCookies = data.cookies;
-      }
-      if (data.email) {
-        capturedEmail = data.email;
+    // Function to check validation and resolve login if valid
+    let isValidating = false;
+    const checkValidation = async () => {
+      if (!validate || (!capturedCookies && !capturedEmail)) return;
+      if (!resolvePromise || isValidating) return;
+
+      isValidating = true;
+      try {
+        const validation = await validate({
+          cookies: capturedCookies,
+          email: capturedEmail,
+        });
+
+        if (validation?.isValid && resolvePromise) {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
+          await cdpService.close();
+          this.activeSessions.delete(sessionId);
+
+          // Cleanup proxy event listeners
+          cleanup();
+
+          const result = {
+            cookies: validation.cookies || capturedCookies,
+            email: validation.email || capturedEmail,
+          };
+
+          const resolve = resolvePromise;
+          resolvePromise = null;
+          rejectPromise = null;
+          resolve(result);
+        }
+      } catch (validationError: any) {
+        logger.error(
+          `[LoginService] Validation threw error: ${validationError.message}`,
+        );
+      } finally {
+        isValidating = false;
       }
     };
 
-    const infoEventListener = (data: any) => {
-      if (data.email) {
+    // Listen to proxy events for custom cookie/email capture (e.g., DeepSeek, Freebuff)
+    const cookieEventListener = async (data: any) => {
+      if (typeof data === 'string' && data.length > 0) {
+        capturedCookies = data;
+      } else if (data && typeof data.cookies === 'string' && data.cookies.length > 0) {
+        capturedCookies = data.cookies;
+      }
+      if (data && data.email) {
         capturedEmail = data.email;
       }
+      await checkValidation();
+    };
+
+    const infoEventListener = async (data: any) => {
+      if (data && data.email) {
+        capturedEmail = data.email;
+      }
+      await checkValidation();
     };
 
     // Register proxy event listeners if events are specified
@@ -138,8 +185,14 @@ export class LoginService extends EventEmitter {
       proxyEvents.on(infoEvent, infoEventListener);
     }
 
+    let cookiePollInterval: NodeJS.Timeout | null = null;
+
     // Cleanup function to remove listeners
     const cleanup = () => {
+      if (cookiePollInterval) {
+        clearInterval(cookiePollInterval);
+        cookiePollInterval = null;
+      }
       if (cookieEvent) {
         proxyEvents.off(cookieEvent, cookieEventListener);
       }
@@ -147,6 +200,26 @@ export class LoginService extends EventEmitter {
         proxyEvents.off(infoEvent, infoEventListener);
       }
     };
+
+    // Listen to outgoing requests to capture Cookie headers
+    cdpService.on('request', async (req: any) => {
+      try {
+        const cookieHeader = req.headers?.['Cookie'] || req.headers?.['cookie'];
+        if (cookieHeader && typeof cookieHeader === 'string' && cookieHeader.length > 0) {
+          let host = '';
+          try {
+            host = new URL(loginUrl).host;
+          } catch {}
+
+          if (!host || (req.url && req.url.includes(host))) {
+            if (!capturedCookies || capturedCookies.length < cookieHeader.length) {
+              capturedCookies = cookieHeader;
+              await checkValidation();
+            }
+          }
+        }
+      } catch {}
+    });
 
     cdpService.on('response', async (response: any) => {
       // Store mimeType for later use
@@ -158,6 +231,7 @@ export class LoginService extends EventEmitter {
         const cookies = response.headers['set-cookie'];
         if (cookies) {
           capturedCookies += cookies + '; ';
+          await checkValidation();
         }
       }
     });
@@ -220,54 +294,10 @@ export class LoginService extends EventEmitter {
           }
         }
       } catch (e) {
-        // Only log if we expected JSON but couldn't parse it
-        logger.warn('[LoginService] Failed to parse JSON response body');
+        logger.debug('[LoginService] Failed to parse JSON response body');
       }
 
-      if (validate && (capturedCookies || capturedEmail)) {
-        try {
-          const validation = await validate({
-            cookies: capturedCookies,
-            email: capturedEmail,
-          });
-
-          if (validation.isValid) {
-            if (resolvePromise) {
-              if (timeoutId) {
-                clearTimeout(timeoutId);
-              }
-
-              await cdpService.close();
-              this.activeSessions.delete(sessionId);
-
-              // Cleanup proxy event listeners
-              cleanup();
-
-              const result = {
-                cookies: validation.cookies || capturedCookies,
-                email: validation.email || capturedEmail,
-              };
-
-              resolvePromise(result);
-
-              // Clear the promise references to prevent double resolution
-              resolvePromise = null;
-              rejectPromise = null;
-            } else {
-              logger.warn(
-                `[LoginService] Validation passed but resolvePromise is null!`,
-              );
-            }
-          }
-        } catch (validationError: any) {
-          logger.error(
-            `[LoginService] Validation threw error: ${validationError.message}`,
-          );
-          logger.error(
-            `[LoginService] Validation stack: ${validationError.stack}`,
-          );
-        }
-      }
+      await checkValidation();
     });
 
     cdpService.on('browser-exit', () => {
@@ -301,6 +331,51 @@ export class LoginService extends EventEmitter {
     }
 
     this.activeSessions.set(sessionId, { cdpService, browserProcess: null });
+
+    // Periodically query browser cookies & evaluate session via CDP
+    cookiePollInterval = setInterval(async () => {
+      if (!resolvePromise) {
+        if (cookiePollInterval) {
+          clearInterval(cookiePollInterval);
+          cookiePollInterval = null;
+        }
+        return;
+      }
+
+      try {
+        // 1. Try evaluating /api/auth/session inside the active browser page
+        const evalResult = await cdpService.evaluate(`
+          (async () => {
+            try {
+              const res = await window.fetch('/api/auth/session');
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.user && data.user.email) {
+                  return { loggedIn: true, user: data.user };
+                }
+              }
+            } catch (e) {}
+            return null;
+          })()
+        `);
+
+        // 2. Query all browser cookies across Freebuff domains
+        const browserCookies = await cdpService.getAllCookies();
+        if (browserCookies && browserCookies.length > 0) {
+          const cookieStr = browserCookies
+            .map((c: any) => `${c.name}=${c.value}`)
+            .join('; ');
+
+          if (cookieStr.length > 10) {
+            capturedCookies = cookieStr;
+            if (evalResult?.loggedIn && evalResult?.user?.email) {
+              capturedEmail = evalResult.user.email;
+            }
+            await checkValidation();
+          }
+        }
+      } catch {}
+    }, 1200);
 
     timeoutId = setTimeout(async () => {
       logger.warn(

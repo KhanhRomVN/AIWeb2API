@@ -56,10 +56,21 @@ try {
     console.log('Obfuscation failed, skipping (as per || true rule)');
   }
 
-  // 5. Rebuild better-sqlite3 for target platform (Node 18)
-  const targetPlatform = process.platform; // win32, linux, darwin etc.
-  console.log(`Rebuilding better-sqlite3 for target platform: ${targetPlatform} (Node 18.0.0)...`);
-  runCommand(`npm rebuild better-sqlite3 --target=18.0.0 --target_arch=x64 --target_platform=${targetPlatform} --update-binary`);
+  // 5. Ensure native SQLite addon for target platform (Node 18)
+  const targetPlatform = process.platform;
+  const node18Addon = path.join(rootDir, 'resources', 'better_sqlite3_node18.node');
+  if (!fs.existsSync(node18Addon)) {
+    console.log('Downloading prebuilt better-sqlite3 for Node 18 (ABI 108)...');
+    try {
+      runCommand('curl.exe -L "https://github.com/WiseLibs/better-sqlite3/releases/download/v11.8.1/better-sqlite3-v11.8.1-node-v108-win32-x64.tar.gz" -o resources/node108.tar.gz');
+      runCommand('tar -xzf resources/node108.tar.gz -C resources/');
+      fs.copyFileSync(path.join(rootDir, 'resources', 'build', 'Release', 'better_sqlite3.node'), node18Addon);
+      fs.rmSync(path.join(rootDir, 'resources', 'node108.tar.gz'), { force: true });
+      fs.rmSync(path.join(rootDir, 'resources', 'build'), { recursive: true, force: true });
+    } catch (e) {
+      console.warn('Could not auto-download node18 addon:', e.message);
+    }
+  }
 
   // 6. Package application with pkg
   console.log('Packaging application with explicit entry point dist/index.js...');
@@ -75,13 +86,18 @@ try {
 
   // 7. Copy native binding & resources to dist-bin
   console.log('Copying native SQLite addon and WASM resources to dist-bin...');
-  const addonSrc = path.join(rootDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
   const addonDest = path.join(distBinDir, 'better_sqlite3.node');
-  if (fs.existsSync(addonSrc)) {
-    fs.copyFileSync(addonSrc, addonDest);
-    console.log(`Copied better_sqlite3.node to dist-bin for platform: ${targetPlatform}`);
+  if (fs.existsSync(node18Addon)) {
+    fs.copyFileSync(node18Addon, addonDest);
+    console.log(`Copied better_sqlite3_node18.node to dist-bin/better_sqlite3.node`);
   } else {
-    throw new Error(`SQLite addon not found at ${addonSrc}`);
+    const addonSrc = path.join(rootDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
+    if (fs.existsSync(addonSrc)) {
+      fs.copyFileSync(addonSrc, addonDest);
+      console.log(`Copied better_sqlite3.node from node_modules`);
+    } else {
+      throw new Error(`SQLite addon not found at ${addonSrc}`);
+    }
   }
 
   // Copy WASM resources to dist-bin/resources
@@ -93,9 +109,12 @@ try {
     console.log('Copied sha3_wasm_bg.7b9ca65ddd.wasm to dist-bin/resources');
   }
 
-  // 8. Restore native binding for host Node version
-  console.log('Restoring better-sqlite3 for host Node version...');
-  runCommand('npm rebuild better-sqlite3');
+  // 8. Ensure host native binding remains intact
+  const hostAddon = path.join(rootDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
+  if (!fs.existsSync(hostAddon)) {
+    console.log('Restoring better-sqlite3 for host Node version...');
+    runCommand('npm rebuild better-sqlite3');
+  }
 
   console.log('\nBuild completed successfully!');
 } catch (error) {

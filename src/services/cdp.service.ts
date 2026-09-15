@@ -344,7 +344,7 @@ export class CDPService extends EventEmitter {
 
   // ─── Send Command ────────────────────────────────────────────────────
 
-  private send(method: string, params: any = {}): Promise<any> {
+  public send(method: string, params: any = {}): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         return reject(new Error('WebSocket not connected'));
@@ -421,6 +421,96 @@ export class CDPService extends EventEmitter {
   }
 
   // ─── Public Methods ──────────────────────────────────────────────────
+
+  public async getActivePageWebSocketUrl(): Promise<string | null> {
+    if (!this.debugPort) return null;
+    try {
+      const targetsResponse = await fetch(`http://127.0.0.1:${this.debugPort}/json`);
+      if (!targetsResponse.ok) return null;
+      const targets = (await targetsResponse.json()) as any[];
+
+      const domainTarget = targets.find(
+        (t: any) => t.type === 'page' && t.url && t.url.includes('freebuff.com'),
+      );
+      if (domainTarget?.webSocketDebuggerUrl) {
+        return domainTarget.webSocketDebuggerUrl;
+      }
+
+      const pageTarget = targets.find(
+        (t: any) => t.type === 'page' && t.url && !t.url.startsWith('devtools://'),
+      );
+      return pageTarget?.webSocketDebuggerUrl || null;
+    } catch {
+      return null;
+    }
+  }
+
+  public async ensureConnection(): Promise<boolean> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
+      return true;
+    }
+    const wsUrl = await this.getActivePageWebSocketUrl();
+    if (!wsUrl) return false;
+    return await this.connectToPage(wsUrl);
+  }
+
+  public async evaluate(expression: string): Promise<any> {
+    try {
+      await this.ensureConnection();
+      const res = await this.send('Runtime.evaluate', {
+        expression,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (res?.result?.value !== undefined) {
+        return res.result.value;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  public async getAllCookies(): Promise<any[]> {
+    await this.ensureConnection();
+    const cookieMap = new Map<string, any>();
+
+    try {
+      const res = await this.send('Network.getCookies', {
+        urls: [
+          'https://freebuff.com',
+          'https://freebuff.com/chat',
+          'https://freebuff.com/api/auth/session',
+          'https://freebuff.com/api/chat/stream',
+        ],
+      });
+      if (res?.cookies && Array.isArray(res.cookies)) {
+        for (const c of res.cookies) {
+          cookieMap.set(c.name, c);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const res2 = await this.send('Network.getCookies');
+      if (res2?.cookies && Array.isArray(res2.cookies)) {
+        for (const c of res2.cookies) {
+          if (!cookieMap.has(c.name)) cookieMap.set(c.name, c);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const res3 = await this.send('Storage.getCookies');
+      if (res3?.cookies && Array.isArray(res3.cookies)) {
+        for (const c of res3.cookies) {
+          if (!cookieMap.has(c.name)) cookieMap.set(c.name, c);
+        }
+      }
+    } catch (e) {}
+
+    return Array.from(cookieMap.values());
+  }
 
   async close(): Promise<void> {
     if (this.browserProcess) {
