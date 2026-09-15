@@ -30,6 +30,7 @@ export { default as CerebrasCloudProvider } from './cerebras-cloud';
 export { default as GeminiProvider } from './gemini';
 export { default as KimiProvider } from './kimi';
 export { default as KiroProvider } from './kiro';
+export { default as FreebuffProvider } from './freebuff';
 
 // ── Registry & Config ──
 export { providerRegistry } from './registry';

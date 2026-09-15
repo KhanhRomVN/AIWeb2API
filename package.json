@@ -33,7 +33,8 @@
     "build:min": "tsup",
     "build:bin": "node scripts/build-bin.js",
     "commit": "commit",
-    "find-unused": "node ts-reap/dist/cli.js check --scope \"src\""
+    "find-unused": "node ts-reap/dist/cli.js check --scope \"src\"",
+    "seed:tokens": "node scripts/seed-fake-tokens.js"
   },
   "keywords": [],
   "author": "",

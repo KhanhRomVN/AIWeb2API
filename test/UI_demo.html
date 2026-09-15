@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Thought Process UI</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: #f5f6f8;
+        padding: 40px;
+      }
+      .chat {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .bubble {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+
+      /* ===== Thought Process ===== */
+      .thought {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fafafa;
+        margin-bottom: 16px;
+        overflow: hidden;
+      }
+      .thought-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        user-select: none;
+        font-size: 13px;
+        color: #6b7280;
+      }
+      .thought-header:hover {
+        background: #f0f1f3;
+      }
+      .chevron {
+        margin-left: auto;
+        transition: transform 0.25s ease;
+      }
+      .thought.open .chevron {
+        transform: rotate(90deg);
+      }
+
+      /* Smooth expand animation (grid 0fr -> 1fr) */
+      .thought-body {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.35s ease;
+      }
+      .thought.open .thought-body {
+        grid-template-rows: 1fr;
+      }
+      .thought-body > .inner {
+        overflow: hidden;
+      }
+      .thought-content {
+        padding: 2px 16px 14px;
+        font-size: 13.5px;
+        color: #6b7280;
+        line-height: 1.7;
+        white-space: pre-wrap;
+      }
+
+      /* Blinking dots while thinking */
+      .dots span {
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        background: #9ca3af;
+        border-radius: 50%;
+        margin-left: 3px;
+        animation: blink 1.2s infinite;
+      }
+      .dots span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .dots span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes blink {
+        0%,
+        80%,
+        100% {
+          opacity: 0.2;
+        }
+        40% {
+          opacity: 1;
+        }
+      }
+
+      .answer {
+        display: none;
+        line-height: 1.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat">
+      <div class="bubble">
+        <div class="thought open" id="thought">
+          <div class="thought-header" id="header">
+            <span id="title">Thinking</span>
+            <span class="dots" id="dots"
+              ><span></span><span></span><span></span
+            ></span>
+            <span id="duration"></span>
+            <svg
+              class="chevron"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </div>
+          <div class="thought-body">
+            <div class="inner">
+              <div class="thought-content" id="content"></div>
+            </div>
+          </div>
+        </div>
+        <div class="answer" id="answer"></div>
+      </div>
+    </div>
+
+    <script>
+      const thought = document.getElementById('thought');
+      const content = document.getElementById('content');
+      const duration = document.getElementById('duration');
+      const title = document.getElementById('title');
+      const dots = document.getElementById('dots');
+      const answer = document.getElementById('answer');
+
+      // 1. Toggle expand/collapse
+      document.getElementById('header').onclick = () =>
+        thought.classList.toggle('open');
+
+      // 2. Simulate reasoning stream (in production: from server)
+      const reasoning = `The user asks how to build a Thought Process UI.
+First, describe the UI features: collapsible toggle, streaming text, elapsed time.
+Then provide a working demo: HTML structure, CSS animation using the grid 0fr/1fr trick,
+and JavaScript for streaming. Finally, explain how to connect a real backend via SSE.`;
+
+      // 3. Live timer while thinking
+      const start = Date.now();
+      const timer = setInterval(() => {
+        duration.textContent = Math.floor((Date.now() - start) / 1000) + 's';
+      }, 1000);
+
+      // 4. Stream reasoning character by character
+      let i = 0;
+      (function type() {
+        if (i < reasoning.length) {
+          content.textContent += reasoning[i++];
+          setTimeout(type, 12 + Math.random() * 40);
+        } else {
+          // Thinking done — clean up header
+          clearInterval(timer);
+          const elapsed = Math.floor((Date.now() - start) / 1000);
+          title.textContent = 'Thought for ' + elapsed + 's';
+          dots.remove(); // remove blinking dots
+          duration.textContent = ''; // clear live timer (no duplicate)
+          thought.classList.remove('open');
+          answer.style.display = 'block';
+          answer.textContent = 'This is the final answer... 🎉';
+        }
+      })();
+    </script>
+  </body>
+</html>

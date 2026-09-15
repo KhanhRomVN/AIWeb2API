@@ -64,11 +64,17 @@ export interface Provider {
 const fetchProviderConfig = async (): Promise<any[]> => {
   const allProviders = providerRegistry.getAllProviders();
   const configs: any[] = [];
+  const seenIds = new Set<string>();
 
   for (const provider of allProviders) {
     const ProviderClass = provider.constructor as any;
-    if (ProviderClass.config) {
-      configs.push(ProviderClass.config);
+    const cfg = ProviderClass?.config || (provider as any).config;
+    if (cfg && cfg.provider_id) {
+      const id = cfg.provider_id.toLowerCase();
+      if (!seenIds.has(id)) {
+        seenIds.add(id);
+        configs.push(cfg);
+      }
     }
   }
 
@@ -142,8 +148,14 @@ export const getAllProviders = async (): Promise<Provider[]> => {
   });
 
   const providersWithModels: Provider[] = [];
+  const seenIds = new Set<string>();
 
   for (const p of config) {
+    if (!p?.provider_id) continue;
+    const pid = p.provider_id.toLowerCase();
+    if (seenIds.has(pid)) continue;
+    seenIds.add(pid);
+
     let models: any[] | undefined = p.models;
 
     if ((!models || models.length === 0) && p.is_enabled) {
