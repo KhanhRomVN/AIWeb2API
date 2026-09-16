@@ -117,24 +117,10 @@ export class DeepSeekProvider implements Provider {
   // ─── Credential Helpers ─────────────────────────────────────────────
 
   private parseCredential(credential: string): string {
-    logger.debug('[DeepSeek] parseCredential - input:', {
-      type: typeof credential,
-      length: credential?.length,
-      preview: credential?.substring(0, 50),
-      startsWithBrace: credential?.trim().startsWith('{'),
-    });
-
     // Try parsing as JSON first
     if (credential.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(credential);
-        logger.debug('[DeepSeek] parseCredential - parsed JSON:', {
-          keys: Object.keys(parsed),
-          hasSecretKey: !!parsed.secretKey,
-          hasAccessToken: !!parsed.accessToken,
-          hasToken: !!parsed.token,
-        });
-
         // New format: {secretKey} or fallback: {accessToken, token}
         const token =
           parsed.secretKey ||
@@ -143,13 +129,6 @@ export class DeepSeekProvider implements Provider {
           parsed.access_token ||
           parsed.token;
         if (token) {
-          logger.debug(
-            '[DeepSeek] parseCredential - extracted token from JSON:',
-            {
-              tokenLength: token.length,
-              tokenPreview: token.substring(0, 20),
-            },
-          );
           return token;
         }
       } catch (e) {
@@ -161,7 +140,6 @@ export class DeepSeekProvider implements Provider {
     }
 
     // Fallback: treat as raw token
-    logger.debug('[DeepSeek] parseCredential - using raw token');
     return credential;
   }
 
@@ -170,18 +148,7 @@ export class DeepSeekProvider implements Provider {
   async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
-    logger.debug('[DeepSeek] getUserProfile - received credential:', {
-      type: typeof credential,
-      length: credential?.length,
-      preview: credential?.substring(0, 50),
-    });
-
     const token = this.parseCredential(credential);
-
-    logger.debug('[DeepSeek] getUserProfile - parsed token:', {
-      tokenLength: token.length,
-      tokenPreview: token.substring(0, 20),
-    });
 
     try {
       const url = `${BASE_URL}${API_PATHS.USERS_CURRENT}`;
@@ -240,12 +207,6 @@ export class DeepSeekProvider implements Provider {
           const token = data.cookies;
           let email = data.email;
 
-          logger.debug('[DeepSeek] Login - captured token:', {
-            tokenLength: token.length,
-            tokenPreview: token.substring(0, 20),
-            email: email,
-          });
-
           // If email is masked (contains ***), fetch real email from profile
           if (
             !email ||
@@ -259,10 +220,6 @@ export class DeepSeekProvider implements Provider {
           if (email) {
             // Return JSON format credential with secretKey
             const jsonCredential = JSON.stringify({ secretKey: token });
-            logger.debug('[DeepSeek] Login - returning JSON credential:', {
-              credentialLength: jsonCredential.length,
-              credentialPreview: jsonCredential.substring(0, 50),
-            });
             return { isValid: true, cookies: jsonCredential, email };
           }
           logger.warn(
@@ -375,19 +332,7 @@ export class DeepSeekProvider implements Provider {
       onRaw,
       onSessionCreated,
     } = options;
-
-    logger.debug('[DeepSeek] handleMessage - received credential:', {
-      type: typeof credential,
-      length: credential?.length,
-      preview: credential?.substring(0, 50),
-    });
-
     const token = this.parseCredential(credential);
-
-    logger.debug('[DeepSeek] handleMessage - parsed token:', {
-      tokenLength: token.length,
-      tokenPreview: token.substring(0, 20),
-    });
 
     const baseHeaders = {
       [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
@@ -490,12 +435,6 @@ export class DeepSeekProvider implements Provider {
             `Session ID missing from response: ${JSON.stringify(sessionData)}`,
           );
         }
-
-        logger.debug('[DeepSeek] Created new session:', {
-          refererUUID: newSessionUUID,
-          actualSessionId: sessionId,
-          responseData: sessionData,
-        });
       }
 
       if (!sessionId) throw new Error('Failed to obtain session ID');
@@ -584,14 +523,6 @@ export class DeepSeekProvider implements Provider {
         API_PATHS.CHAT_COMPLETION,
         requestPayload,
       );
-
-      logger.debug('[DeepSeek] Completion response:', {
-        status: response.status,
-        ok: response.ok,
-        contentType: response.headers.get('content-type'),
-        contentLength: response.headers.get('content-length'),
-        hasBody: !!response.body,
-      });
 
       // If response is JSON instead of SSE, log the error
       if (response.headers.get('content-type')?.includes('application/json')) {

@@ -16,7 +16,7 @@
  * - removeAccount()                            : Xóa account
  * - importAccounts()                           : Import hàng loạt accounts
  * - getProviderConfig()                        : Lấy provider config theo ID
- * - updateAccountCredentialAndLastRefresh()    : Cập nhật credential và last_refreshed_at
+ * - updateAccountCredentialAndLastRefresh()    : Cập nhật credential
  * - updateAccountUsageInfo()                   : Cập nhật usage và reset period
  * - refreshAccountToken()                      : Refresh token qua provider
  * - getAccountUsageFromProvider()              : Lấy usage từ provider
@@ -235,25 +235,24 @@ export function getProviderConfig(providerId: string) {
 }
 
 /**
- * Cập nhật credential và last_refreshed_at
+ * Cập nhật credential
  */
 export function updateAccountCredentialAndLastRefresh(
   accountId: string,
   credential: string,
-  lastRefreshedAt: number,
 ): void {
-  updateAccountCredentialAndRefresh(accountId, credential, lastRefreshedAt);
+  updateAccountCredentialAndRefresh(accountId, credential);
 }
 
 /**
- * Cập nhật usage và reset period
+ * Cập nhật usage và reset_usage_at
  */
 export function updateAccountUsageInfo(
   accountId: string,
-  usage: string,
-  resetPeriod: string,
+  usage: number,
+  resetUsageAt: string | null,
 ): void {
-  updateAccountUsage(accountId, usage, resetPeriod);
+  updateAccountUsage(accountId, usage, resetUsageAt);
 }
 
 /**
@@ -289,16 +288,22 @@ export async function refreshAccountToken(
 export async function getAccountUsageFromProvider(
   providerId: string,
   credential: string,
-): Promise<{ usage: string; resetPeriod: string } | null> {
+): Promise<{ usage: number; resetUsageAt: string | null } | null> {
   const provider = providerRegistry.getProvider(providerId);
-
   if (!provider?.getUsage) {
+    logger.warn(
+      `[getAccountUsageFromProvider] Provider "${providerId}" does not implement getUsage — skipping`,
+    );
     return null;
   }
 
   try {
-    return await provider.getUsage(credential);
-  } catch (error) {
+    const result = await provider.getUsage(credential);
+    return result;
+  } catch (error: any) {
+    logger.error(
+      `[getAccountUsageFromProvider] providerId=${providerId} | error=${error.message}`,
+    );
     throw error;
   }
 }
@@ -343,7 +348,6 @@ export class AccountRefreshService {
    */
   async checkAndRefresh() {
     const accounts = findAccountsNeedingRefresh(this.AUTO_REFRESH_THRESHOLD);
-
     for (const account of accounts) {
       try {
         let credential: any;
@@ -360,13 +364,9 @@ export class AccountRefreshService {
         const refreshToken =
           credential.refreshToken || credential.refresh_token;
         const now = Date.now();
-        const lastRefreshed = account.last_refreshed_at || 0;
 
         // Check if token needs refresh
-        if (
-          refreshToken &&
-          now - lastRefreshed >= this.AUTO_REFRESH_THRESHOLD
-        ) {
+        if (refreshToken) {
           try {
             const newTokens = await refreshAccountToken(
               account.provider_id,
@@ -393,7 +393,6 @@ export class AccountRefreshService {
               updateAccountCredentialAndLastRefresh(
                 account.id,
                 JSON.stringify(updatedCredential),
-                now,
               );
               credential = updatedCredential;
             }
@@ -404,8 +403,9 @@ export class AccountRefreshService {
           }
         }
 
-        // Refresh usage only when reset period has elapsed
-        if (this.shouldRefreshUsage(account)) {
+        // Refresh usage only when reset period has elapsed AND provider supports getUsage
+        const provider = providerRegistry.getProvider(account.provider_id);
+        if (provider?.getUsage && this.shouldRefreshUsage(account)) {
           await this.refreshUsage(account.id);
         }
       } catch (e: any) {
@@ -415,18 +415,23 @@ export class AccountRefreshService {
   }
 
   /**
-   * Kiểm tra xem account có cần refresh usage theo chu kỳ reset không.
-   * ceiling: dùng last_refreshed_at làm proxy vì chưa có last_usage_refreshed_at riêng.
-   * upgrade path: thêm field riêng khi cần tách chính xác.
+   * Kiểm tra xem account có cần refresh usage dựa trên reset_usage_at không.
+   * - Nếu usage là null (chưa bao giờ fetch) → cần refresh ngay.
+   * - Nếu reset_usage_at là ngày trong quá khứ → cần refresh.
+   * - Nếu không có reset_usage_at và đã có usage → không refresh tự động.
    */
-  private shouldRefreshUsage(account: AccountRow): boolean {
-    const period = account.reset_period;
-    const lastRefreshed = account.last_refreshed_at || 0;
-    if (!period) return false;
-    const now = Date.now();
-    const interval =
-      period === 'month' ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-    return now - lastRefreshed >= interval;
+  shouldRefreshUsage(account: AccountRow): boolean {
+    // Chưa bao giờ fetch usage → fetch ngay
+    if (account.usage == null) return true;
+
+    const resetAt = account.reset_usage_at;
+    if (!resetAt) return false;
+    try {
+      const resetDate = new Date(resetAt);
+      return resetDate.getTime() <= Date.now();
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -435,7 +440,6 @@ export class AccountRefreshService {
   async refreshUsage(accountId: string) {
     const account = getAccountById(accountId);
     if (!account) return;
-
     try {
       let credential: any;
       try {
@@ -453,7 +457,7 @@ export class AccountRefreshService {
         updateAccountUsageInfo(
           account.id,
           usageInfo.usage,
-          usageInfo.resetPeriod,
+          usageInfo.resetUsageAt,
         );
       }
     } catch (err: any) {

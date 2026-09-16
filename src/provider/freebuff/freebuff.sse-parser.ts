@@ -61,7 +61,10 @@ export function parseFreebuffSSE(
                   callbacks.onSessionCreated(event.threadId);
                 }
                 if (callbacks.onMetadata) {
-                  callbacks.onMetadata({ threadId: event.threadId, model: event.model });
+                  callbacks.onMetadata({
+                    threadId: event.threadId,
+                    model: event.model,
+                  });
                 }
               }
               break;
@@ -99,11 +102,8 @@ export function parseFreebuffSSE(
               break;
 
             default:
-              logger.debug('[Freebuff SSE] Unknown event type:', event);
           }
-        } catch (parseErr) {
-          logger.debug('[Freebuff SSE] Failed to parse JSON line:', rawJson);
-        }
+        } catch (parseErr) {}
       }
     }
   });

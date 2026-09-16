@@ -162,13 +162,16 @@ export const kimiProxyHandler: ProxyHandler = {
 
         const tokenPayload: KimiLoginTokenPayload = {
           [AUTH_FIELDS.TOKEN]: capturedToken,
-          cookies: capturedToken,
+          cookies: JSON.stringify({ accessToken: capturedToken }),
           [AUTH_FIELDS.EMAIL]: email,
           headers: headerPayload,
         };
         if (capturedRefreshToken) {
           tokenPayload[AUTH_FIELDS.REFRESH_TOKEN] = capturedRefreshToken;
-          tokenPayload.cookies = `${CREDENTIAL_KEYS.KIMI_AUTH}=${capturedToken}; ${CREDENTIAL_KEYS.REFRESH_TOKEN}=${capturedRefreshToken}`;
+          tokenPayload.cookies = JSON.stringify({
+            accessToken: capturedToken,
+            refreshToken: capturedRefreshToken,
+          });
         }
         proxyEvents.emit(KIMI_EVENTS.LOGIN_TOKEN, tokenPayload);
       }
@@ -240,6 +243,7 @@ export const kimiProxyHandler: ProxyHandler = {
           json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.REFRESH_TOKEN] ||
           json[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.REFRESH_TOKEN_SNAKE] ||
           json[AUTH_FIELDS.REFRESH_TOKEN];
+
         if (
           token &&
           typeof token === 'string' &&
@@ -259,7 +263,10 @@ export const kimiProxyHandler: ProxyHandler = {
           proxyEvents.emit(KIMI_EVENTS.LOGIN_EMAIL, { email });
           const tokenPayload: KimiLoginTokenPayload = {
             [AUTH_FIELDS.TOKEN]: token,
-            cookies: `${CREDENTIAL_KEYS.KIMI_AUTH}=${token}${refreshToken ? `; ${CREDENTIAL_KEYS.REFRESH_TOKEN}=${refreshToken}` : ''}`,
+            cookies: JSON.stringify({
+              accessToken: token,
+              ...(refreshToken ? { refreshToken } : {}),
+            }),
             [AUTH_FIELDS.EMAIL]: email,
           };
           if (refreshToken) {

@@ -23,7 +23,6 @@ export const proxyHandler: ProxyHandler = {
     if (host && host.includes(FREEBUFF_HOST)) {
       const reqCookies = ctx.clientToProxyRequest.headers.cookie;
       if (reqCookies && reqCookies.includes(SESSION_TOKEN_KEY)) {
-        logger.debug('[FreebuffProxy] Captured session cookie from request');
         proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_TOKEN, { cookies: reqCookies });
       }
     }
@@ -54,12 +53,7 @@ export const proxyHandler: ProxyHandler = {
             });
           }
         }
-      } catch (e) {
-        logger.debug(
-          '[FreebuffProxy] Failed to parse session response body:',
-          e,
-        );
-      }
+      } catch (e) {}
     }
   },
 };

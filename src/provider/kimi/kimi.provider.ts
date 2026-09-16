@@ -9,25 +9,19 @@
  * Main features:
  * - login()                : Đăng nhập qua browser
  * - handleMessage()        : Gửi tin nhắn với streaming response
- * - refreshAccessToken()   : Tự động refresh token khi hết hạn
+ * - refreshToken()   : Tự động refresh token khi hết hạn
  * - getModels()            : Lấy danh sách models
  * - getUserProfile()       : Lấy thông tin user profile
  * - Fallback handling      : Tự động fallback khi K3 overload
  *
  * Credential format (JSON string):
  * - accessToken         : JWT access token
- * - refreshToken        : Refresh token
- * - cookies             : Cookie string (kimi-auth=${token})
- * - deviceId            : Device ID
- * - sessionId           : Session ID
- * - trafficId (optional): Traffic ID
- * - userAgent (optional): User agent string
+ * - refreshToken        : Refresh token (optional, cho auto-refresh)
  * ------------------------------------------------------------------
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import * as crypto from 'crypto';
 import fetch from 'node-fetch';
 
 // ── Types ──
@@ -51,15 +45,17 @@ import {
 // ── Kimi Imports ──
 import {
   KimiChatRequest,
+  KimiChatBlock,
   KimiCredential,
   KimiHeadersPayload,
   KimiLoginResult,
   KimiTokenResponse,
   KimiUserResponse,
+  KimiAvailableModel,
+  KimiAvailableModelsResponse,
 } from './kimi.types';
 import {
   KIMI_BASE_URL,
-  KIMI_MODELS,
   PROVIDER_ID,
   PROVIDER_NAME,
   IS_ENABLED,
@@ -75,7 +71,8 @@ import {
   AUTH_REFRESH_URL,
   CHAT_URL,
   GET_USER_URL,
-  LIST_THIRD_ACCOUNTS_URL,
+  GET_AVAILABLE_MODELS_URL,
+  GET_SUBSCRIPTION_STATS_URL,
   HTTP_HEADER_NAMES,
   CONTENT_TYPES,
   REFERER_PATHS,
@@ -90,15 +87,16 @@ import {
   TOOL_TYPES,
   FRAME_PROTOCOL,
   ID_PREFIXES,
-  ID_RANDOM_BYTES,
   DEFAULT_EMAIL,
   DEFAULT_TIMEZONE,
   LOGIN_PARTITION_PREFIX,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
+  FILE_PROCESS_STATUS,
 } from './kimi.constant';
 import { parseKimiSSE } from './kimi.sse-parser';
 import { kimiProxyHandler } from './kimi.proxy-handler';
+import { kimiUploadFile } from './kimi.upload';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('KimiProvider');
@@ -124,6 +122,20 @@ export class KimiProvider implements Provider {
     color: PROVIDER_COLOR,
   };
 
+  // ─── Credential Helpers ─────────────────────────────────────────────
+
+  /**
+   * Serialize KimiCredential thành JSON string để lưu vào DB.
+   * Chỉ include các field có giá trị (loại bỏ undefined/empty).
+   */
+  private credentialToJson(cred: KimiCredential): string {
+    const obj: Record<string, string> = {
+      accessToken: cred.accessToken,
+    };
+    if (cred.refreshToken) obj.refreshToken = cred.refreshToken;
+    return JSON.stringify(obj);
+  }
+
   // ─── Credential Parser ─────────────────────────────────────────────
 
   private parseCredential(credential: string): KimiCredential {
@@ -144,24 +156,6 @@ export class KimiProvider implements Provider {
             (parsed[AUTH_FIELDS.REFRESH_TOKEN] as string) ||
             (parsed[AUTH_FIELDS.REFRESH_TOKEN_SNAKE] as string) ||
             '',
-          cookies:
-            (parsed.cookies as string) ||
-            (accessToken
-              ? `${CREDENTIAL_KEYS.KIMI_AUTH}=${accessToken}`
-              : ''),
-          deviceId:
-            (parsed.deviceId as string) ||
-            (parsed.device_id as string) ||
-            `${ID_PREFIXES.DEVICE}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-          sessionId:
-            (parsed.sessionId as string) ||
-            (parsed.session_id as string) ||
-            `${ID_PREFIXES.SESSION}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-          trafficId:
-            (parsed.trafficId as string) ||
-            (parsed.traffic_id as string) ||
-            '',
-          userAgent: (parsed.userAgent as string) || USER_AGENT,
         };
       } catch {
         logger.warn(
@@ -170,15 +164,12 @@ export class KimiProvider implements Provider {
       }
     }
 
+    // raw JWT
     if (credential.startsWith(AUTH_PREFIXES.JWT)) {
-      return {
-        accessToken: credential,
-        cookies: `${CREDENTIAL_KEYS.KIMI_AUTH}=${credential}`,
-        deviceId: `${ID_PREFIXES.DEVICE}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-        sessionId: `${ID_PREFIXES.SESSION}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-      };
+      return { accessToken: credential };
     }
 
+    // cookie string — extract kimi-auth token
     const match =
       credential.match(REGEX_PATTERNS.KIMI_AUTH) ||
       credential.match(REGEX_PATTERNS.ACCESS_TOKEN) ||
@@ -190,13 +181,7 @@ export class KimiProvider implements Provider {
       credential.match(REGEX_PATTERNS.REFRESH_TOKEN);
     const refreshToken = refreshMatch ? refreshMatch[1] : '';
 
-    return {
-      accessToken,
-      refreshToken,
-      cookies: credential,
-      deviceId: `${ID_PREFIXES.DEVICE}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-      sessionId: `${ID_PREFIXES.SESSION}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-    };
+    return { accessToken, refreshToken };
   }
 
   // ─── Refresh Token ──────────────────────────────────────────────────
@@ -212,9 +197,11 @@ export class KimiProvider implements Provider {
       const headers: Record<string, string> = {
         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
         [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
-        [HTTP_HEADER_NAMES.USER_AGENT]: cred.userAgent || USER_AGENT,
+        [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
         [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
         [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
+        ...MSH_HEADERS,
       };
 
       const res = await fetch(AUTH_REFRESH_URL, {
@@ -244,11 +231,10 @@ export class KimiProvider implements Provider {
         if (newAccessToken && typeof newAccessToken === 'string') {
           cred.accessToken = newAccessToken;
           if (newRefreshToken) cred.refreshToken = newRefreshToken;
-          cred.cookies = `${CREDENTIAL_KEYS.KIMI_AUTH}=${newAccessToken}${cred.refreshToken ? `; ${CREDENTIAL_KEYS.REFRESH_TOKEN}=${cred.refreshToken}` : ''}`;
 
           if (accountId) {
             try {
-              updateAccountCredential(accountId, cred.cookies);
+              updateAccountCredential(accountId, this.credentialToJson(cred));
             } catch (e) {
               logger.warn('[Kimi] Failed to persist refreshed credential:', e);
             }
@@ -267,7 +253,7 @@ export class KimiProvider implements Provider {
     return null;
   }
 
-  async refreshAccessToken(
+  async refreshCredential(
     cred: KimiCredential,
     accountId?: string,
   ): Promise<string | null> {
@@ -278,6 +264,12 @@ export class KimiProvider implements Provider {
     return coordinateTokenRefresh('kimi', tokenToUse, () =>
       this.performTokenRefresh(cred, accountId),
     );
+  }
+
+  // Provider interface: refreshToken(refreshToken: string) — wraps refreshCredential
+  async refreshToken(refreshToken: string): Promise<string | null> {
+    const cred: KimiCredential = { accessToken: refreshToken, refreshToken };
+    return this.refreshCredential(cred);
   }
 
   // ─── Profile ────────────────────────────────────────────────────────
@@ -309,11 +301,13 @@ export class KimiProvider implements Provider {
         [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${rawToken}`,
         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
         [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
         [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
         [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
         [HTTP_HEADER_NAMES.USER_AGENT]:
           extraHeaders?.[HTTP_HEADER_NAMES.USER_AGENT] || USER_AGENT,
         ...MSH_HEADERS,
+        [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
       };
 
       if (extraHeaders?.[HTTP_HEADER_NAMES.X_MSH_DEVICE_ID])
@@ -344,30 +338,18 @@ export class KimiProvider implements Provider {
             json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NICKNAME] ||
             json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NAME])
         ) {
-          let email: string | null = null;
+          const identifier =
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NICKNAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.NAME] ||
+            json[AUTH_FIELDS.USER]?.[AUTH_FIELDS.ID] ||
+            null;
 
-          try {
-            const thirdRes = await fetch(LIST_THIRD_ACCOUNTS_URL, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({}),
-              timeout: 3000,
-            } as any);
-            if (thirdRes.ok) {
-              const thirdJson = (await thirdRes.json()) as KimiTokenResponse;
-              if (thirdJson[AUTH_FIELDS.EMAIL]) {
-                email = thirdJson[AUTH_FIELDS.EMAIL] ?? null;
-              }
-            }
-          } catch {
-            // ignore
-          }
-
-          return { email };
+          return { email: identifier };
         }
         logger.warn('[Kimi] Get Profile response missing user data');
       } else {
         logger.warn(`[Kimi] Get Profile returned status ${res.status}`);
+        const errText = await res.text().catch(() => '');
       }
     } catch (e) {
       logger.error('[Kimi] Get Profile Error:', e);
@@ -398,7 +380,10 @@ export class KimiProvider implements Provider {
           headers?: any;
           email?: string;
         }) => {
-          if (!data.cookies) return { isValid: false };
+          if (!data.cookies) {
+            logger.warn('[Kimi] Login validate: no cookies received');
+            return { isValid: false };
+          }
 
           let token = data.cookies;
           if (token.startsWith('{')) {
@@ -416,11 +401,18 @@ export class KimiProvider implements Provider {
 
           if (token.includes(`${CREDENTIAL_KEYS.KIMI_AUTH}=`)) {
             const match = token.match(REGEX_PATTERNS.KIMI_AUTH);
-            if (match) token = match[1];
+            if (match) {
+              token = match[1];
+            }
           }
 
           if (!token || !token.startsWith(AUTH_PREFIXES.JWT)) {
-            logger.warn('[Kimi] Login validation failed: invalid token format');
+            logger.warn(
+              '[Kimi] Login validation failed: invalid token format',
+              {
+                tokenPrefix: token?.slice(0, 20) || '(empty)',
+              },
+            );
             return { isValid: false };
           }
 
@@ -428,6 +420,12 @@ export class KimiProvider implements Provider {
             (data as any)[AUTH_FIELDS.REFRESH_TOKEN] ||
             (data as any)[AUTH_FIELDS.REFRESH_TOKEN_SNAKE] ||
             '';
+
+          if (!refreshToken) {
+            logger.warn(
+              '[Kimi] Login warning: missing refresh token — token auto-refresh will not work',
+            );
+          }
 
           const profile = await this.getUserProfile(token, capturedHeaders);
           if (!profile.email) {
@@ -437,36 +435,14 @@ export class KimiProvider implements Provider {
             return { isValid: false };
           }
 
-          if (!refreshToken) {
-            logger.warn(
-              '[Kimi] Login validation failed: missing refresh token',
-            );
-            return { isValid: false };
-          }
-
-          const userIdentifier =
-            profile.email || data.email || DEFAULT_EMAIL;
-
-          const cookieString = `${CREDENTIAL_KEYS.KIMI_AUTH}=${token}${refreshToken ? `; ${CREDENTIAL_KEYS.REFRESH_TOKEN}=${refreshToken}` : ''}`;
-          const credObj: KimiCredential = {
-            accessToken: token,
-            refreshToken,
-            cookies: cookieString,
-            deviceId:
-              capturedHeaders[HTTP_HEADER_NAMES.X_MSH_DEVICE_ID] ||
-              `${ID_PREFIXES.DEVICE}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-            sessionId:
-              capturedHeaders[HTTP_HEADER_NAMES.X_MSH_SESSION_ID] ||
-              `${ID_PREFIXES.SESSION}${crypto.randomBytes(ID_RANDOM_BYTES).toString('hex')}`,
-            trafficId: capturedHeaders[HTTP_HEADER_NAMES.X_TRAFFIC_ID] || '',
-            userAgent:
-              capturedHeaders[HTTP_HEADER_NAMES.USER_AGENT] || USER_AGENT,
-          };
+          const userIdentifier = profile.email || data.email || DEFAULT_EMAIL;
+          const credObj: Record<string, string> = { accessToken: token };
+          if (refreshToken) credObj.refreshToken = refreshToken;
 
           return {
             isValid: true,
             email: userIdentifier,
-            cookies: cookieString,
+            cookies: JSON.stringify(credObj),
             headers: capturedHeaders,
           };
         },
@@ -492,6 +468,7 @@ export class KimiProvider implements Provider {
       conversationId,
       thinking = false,
       search = false,
+      ref_file_ids,
       onContent,
       onThinking,
       onMetadata,
@@ -512,30 +489,40 @@ export class KimiProvider implements Provider {
       cleanModel = cleanModel.split('/').pop() || cleanModel;
     }
 
-    let isThinkingModel = thinking === true;
-    let scenario: string = SCENARIOS.K2D5;
-    let kimiModelName: string = KIMI_CHAT_MODELS.K2D6_CHAT;
+    // Map model ID → scenario + reasoning effort
+    // Kimi always sends thinking: true in the request body.
+    // Thinking is controlled via reasoning_effort:
+    //   - REASONING_EFFORT_NONE  → thinking effectively disabled
+    //   - REASONING_EFFORT_LOW   → thinking on (light)
+    //   - REASONING_EFFORT_HIGH  → thinking on (default for K3/K2.8)
+    // The `thinking` option from the caller toggles between NONE and the model default.
+    let scenario: string = SCENARIOS.CHAT;
+    let kimiModelId: string | undefined;
+    let defaultReasoningEffort: string = REASONING_EFFORTS.LOW;
 
-    if (cleanModel === 'instant' || cleanModel === 'k2d6') {
-      scenario = SCENARIOS.K2D5;
-      isThinkingModel = false;
-      kimiModelName = KIMI_CHAT_MODELS.K2D6_CHAT;
+    if (cleanModel === 'k3-agent-swarm' || cleanModel === 'k3-swarm') {
+      scenario = SCENARIOS.OK_COMPUTER_SWARM;
+      defaultReasoningEffort = REASONING_EFFORTS.HIGH;
     } else if (
-      cleanModel === 'k2d6-thinking' ||
-      cleanModel.includes('thinking')
-    ) {
-      scenario = SCENARIOS.K2D5;
-      isThinkingModel = true;
-      kimiModelName = KIMI_CHAT_MODELS.K2D6_CHAT;
-    } else if (
+      cleanModel === 'k3-agent' ||
       cleanModel === 'k3' ||
-      cleanModel === 'k3-swarm' ||
-      cleanModel.includes('agent') ||
-      cleanModel.includes('swarm')
+      cleanModel === 'k28-agent-preview' ||
+      cleanModel === 'k28'
     ) {
       scenario = SCENARIOS.OK_COMPUTER;
-      isThinkingModel = true;
+      defaultReasoningEffort = REASONING_EFFORTS.HIGH;
+    } else {
+      // k2d6-chat, instant, and any unknown → SCENARIO_CHAT
+      scenario = SCENARIOS.CHAT;
+      kimiModelId = KIMI_CHAT_MODELS.K2D6_CHAT;
+      defaultReasoningEffort = REASONING_EFFORTS.LOW;
     }
+
+    // thinking: true is always sent; reasoning_effort controls whether thinking is active.
+    // thinking=false (caller) → REASONING_EFFORT_NONE (disable thinking)
+    // thinking=true (caller)  → use model's default reasoning effort
+    const reasoningEffort =
+      thinking === true ? defaultReasoningEffort : REASONING_EFFORTS.NONE;
 
     const lastMsg = messages[messages.length - 1];
     const promptText =
@@ -543,45 +530,59 @@ export class KimiProvider implements Provider {
         ? lastMsg[CHAT_REQUEST_FIELDS.CONTENT]
         : JSON.stringify(lastMsg?.[CHAT_REQUEST_FIELDS.CONTENT] || '');
 
+    // Build blocks: bắt đầu với text block
+    const messageBlocks: KimiChatBlock[] = [
+      {
+        [CHAT_REQUEST_FIELDS.TEXT]: {
+          [CHAT_REQUEST_FIELDS.CONTENT]: promptText,
+        },
+      },
+    ];
+
+    // Thêm file blocks từ ref_file_ids (kết quả upload)
+    if (ref_file_ids && ref_file_ids.length > 0) {
+      for (const fileRef of ref_file_ids) {
+        const fileId = typeof fileRef === 'string' ? fileRef : fileRef.file_id;
+        if (fileId) {
+          messageBlocks.push({
+            [CHAT_REQUEST_FIELDS.FILE]: {
+              id: fileId,
+              status: FILE_PROCESS_STATUS.SUCCESS,
+            },
+          });
+        }
+      }
+    }
+
     const payload: KimiChatRequest = {
       [CHAT_REQUEST_FIELDS.SCENARIO]: scenario,
-      [CHAT_REQUEST_FIELDS.OPTIONS]: {
-        [CHAT_REQUEST_FIELDS.THINKING]: isThinkingModel,
-        [CHAT_REQUEST_FIELDS.ENABLE_PLUGIN]: search,
-        [CHAT_REQUEST_FIELDS.REASONING_EFFORT]: isThinkingModel
-          ? REASONING_EFFORTS.HIGH
-          : REASONING_EFFORTS.LOW,
-      },
-      [CHAT_REQUEST_FIELDS.MESSAGE]: {
-        [CHAT_REQUEST_FIELDS.ROLE]: 'user',
-        [CHAT_REQUEST_FIELDS.BLOCKS]: [
-          {
-            [CHAT_REQUEST_FIELDS.TEXT]: {
-              [CHAT_REQUEST_FIELDS.CONTENT]: promptText,
-            },
-          },
-        ],
-      },
-    };
-
-    if (scenario === SCENARIOS.K2D5) {
-      payload[CHAT_REQUEST_FIELDS.OPTIONS]![CHAT_REQUEST_FIELDS.MODEL] =
-        kimiModelName;
-    } else if (scenario === SCENARIOS.OK_COMPUTER) {
-      payload[CHAT_REQUEST_FIELDS.KIMIPLUS_ID] = KIMI_CHAT_MODELS.OK_COMPUTER;
-    }
-
-    if (conversationId && !conversationId.startsWith(ID_PREFIXES.TEMP_CHAT)) {
-      payload[CHAT_REQUEST_FIELDS.CHAT_ID] = conversationId;
-    }
-
-    if (search) {
-      payload[CHAT_REQUEST_FIELDS.TOOLS] = [
+      [CHAT_REQUEST_FIELDS.TOOLS]: [
         {
           [CHAT_REQUEST_FIELDS.TYPE]: TOOL_TYPES.SEARCH,
           [CHAT_REQUEST_FIELDS.SEARCH]: {},
         },
-      ];
+        {
+          [CHAT_REQUEST_FIELDS.TYPE]: TOOL_TYPES.CRON_JOB,
+        },
+      ],
+      [CHAT_REQUEST_FIELDS.OPTIONS]: {
+        [CHAT_REQUEST_FIELDS.THINKING]: true,
+        [CHAT_REQUEST_FIELDS.ENABLE_PLUGIN]: search,
+        [CHAT_REQUEST_FIELDS.REASONING_EFFORT]: reasoningEffort,
+      },
+      [CHAT_REQUEST_FIELDS.MESSAGE]: {
+        [CHAT_REQUEST_FIELDS.ROLE]: 'user',
+        [CHAT_REQUEST_FIELDS.BLOCKS]: messageBlocks,
+      },
+    };
+
+    if (kimiModelId) {
+      payload[CHAT_REQUEST_FIELDS.OPTIONS]![CHAT_REQUEST_FIELDS.MODEL] =
+        kimiModelId;
+    }
+
+    if (conversationId && !conversationId.startsWith(ID_PREFIXES.TEMP_CHAT)) {
+      payload[CHAT_REQUEST_FIELDS.CHAT_ID] = conversationId;
     }
 
     const bodyWithEnvelope = this.encodeConnectFrame(payload);
@@ -590,7 +591,7 @@ export class KimiProvider implements Provider {
 
     // Check if token is expiring soon (within 5 minutes by default)
     if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
-      const refreshed = await this.refreshAccessToken(cred, options.accountId);
+      const refreshed = await this.refreshCredential(cred, options.accountId);
       if (refreshed) {
         activeToken = refreshed;
       } else {
@@ -605,20 +606,12 @@ export class KimiProvider implements Provider {
       [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.CONNECT_JSON,
       [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.CONNECT_JSON,
       [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
-      [HTTP_HEADER_NAMES.USER_AGENT]: cred.userAgent || USER_AGENT,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
       [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
       [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
       ...MSH_HEADERS,
       [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
     };
-
-    if (cred.sessionId)
-      headers[HTTP_HEADER_NAMES.X_MSH_SESSION_ID] = cred.sessionId;
-    if (cred.deviceId)
-      headers[HTTP_HEADER_NAMES.X_MSH_DEVICE_ID] = cred.deviceId;
-    if (cred.trafficId)
-      headers[HTTP_HEADER_NAMES.X_TRAFFIC_ID] = cred.trafficId;
-    if (cred.cookies) headers[HTTP_HEADER_NAMES.COOKIE] = cred.cookies;
 
     try {
       let response = await fetch(CHAT_URL, {
@@ -629,15 +622,11 @@ export class KimiProvider implements Provider {
       } as any);
 
       if (response.status === 401) {
-        const refreshed = await this.refreshAccessToken(
-          cred,
-          options.accountId,
-        );
+        const refreshed = await this.refreshCredential(cred, options.accountId);
         if (refreshed) {
           activeToken = refreshed;
-          headers[HTTP_HEADER_NAMES.AUTHORIZATION] = `${AUTH_PREFIXES.BEARER}${activeToken}`;
-          if (cred.cookies)
-            headers[HTTP_HEADER_NAMES.COOKIE] = cred.cookies;
+          headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+            `${AUTH_PREFIXES.BEARER}${activeToken}`;
 
           response = await fetch(CHAT_URL, {
             method: 'POST',
@@ -671,12 +660,13 @@ export class KimiProvider implements Provider {
       if (
         !result.accumulatedContent &&
         result.error &&
-        scenario === SCENARIOS.OK_COMPUTER
+        (scenario === SCENARIOS.OK_COMPUTER ||
+          scenario === SCENARIOS.OK_COMPUTER_SWARM)
       ) {
         logger.warn(
-          `[Kimi] OK_COMPUTER overloaded (${result.error}). Falling back to SCENARIO_K2D5.`,
+          `[Kimi] ${scenario} overloaded (${result.error}). Falling back to SCENARIO_CHAT.`,
         );
-        payload[CHAT_REQUEST_FIELDS.SCENARIO] = SCENARIOS.K2D5;
+        payload[CHAT_REQUEST_FIELDS.SCENARIO] = SCENARIOS.CHAT;
         payload[CHAT_REQUEST_FIELDS.OPTIONS]![CHAT_REQUEST_FIELDS.MODEL] =
           KIMI_CHAT_MODELS.K2D6_CHAT;
         delete payload[CHAT_REQUEST_FIELDS.KIMIPLUS_ID];
@@ -725,72 +715,175 @@ export class KimiProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   async getModels(credential: string, accountId?: string): Promise<any[]> {
-    return [
-      {
-        id: KIMI_MODELS.K3,
-        name: 'Kimi K3 (Flagship)',
-        is_thinking: true,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Chat & Agent, flagship all-rounder with deep reasoning',
-      },
-      {
-        id: KIMI_MODELS.K3_SWARM,
-        name: 'Kimi K3 Swarm',
-        is_thinking: true,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description:
-          'Massive search, batch processing, and multi-agent workflow',
-      },
-      {
-        id: KIMI_MODELS.INSTANT,
-        name: 'Kimi Instant',
-        is_thinking: false,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Fast chat, quick replies for everyday tasks',
-      },
-      {
-        id: KIMI_MODELS.K2D6_THINKING,
-        name: 'Kimi K2.6 Thinking',
-        is_thinking: true,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Deep reasoning for complex logic, math, and code',
-      },
-      {
-        id: KIMI_MODELS.K2D6,
-        name: 'Kimi K2.6 Instant',
-        is_thinking: false,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Ultra-fast responses for everyday chat',
-      },
-      {
-        id: KIMI_MODELS.K2D6_AGENT,
-        name: 'Kimi K2.6 Agent',
-        is_thinking: true,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Autonomous agent for deep research and documents',
-      },
-      {
-        id: KIMI_MODELS.K2D6_AGENT_ULTRA,
-        name: 'Kimi K2.6 Agent Swarm',
-        is_thinking: true,
-        max_context_length: 262144,
-        is_search: true,
-        is_image_upload: true,
-        description: 'Multi-agent swarm for massive batch research',
-      },
-    ];
+    try {
+      const cred = this.parseCredential(credential);
+      if (!cred.accessToken) return [];
+
+      // Refresh token nếu sắp hết hạn
+      if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
+        await this.refreshCredential(cred, accountId);
+      }
+
+      const buildHeaders = (token: string): Record<string, string> => ({
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${token}`,
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
+        [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
+        [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+        ...MSH_HEADERS,
+        [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
+      });
+
+      let res = await fetch(GET_AVAILABLE_MODELS_URL, {
+        method: 'POST',
+        headers: buildHeaders(cred.accessToken),
+        body: JSON.stringify({}),
+        timeout: 8000,
+      } as any);
+
+      // Retry một lần sau khi refresh nếu 401
+      if (res.status === 401) {
+        const refreshed = await this.refreshCredential(cred, accountId);
+        if (refreshed) {
+          res = await fetch(GET_AVAILABLE_MODELS_URL, {
+            method: 'POST',
+            headers: buildHeaders(refreshed),
+            body: JSON.stringify({}),
+            timeout: 8000,
+          } as any);
+        }
+      }
+
+      if (!res.ok) {
+        logger.warn(`[Kimi] GetAvailableModels returned ${res.status}`);
+        return [];
+      }
+
+      const json = (await res.json()) as KimiAvailableModelsResponse;
+      const apiModels = json.availableModels;
+      if (!apiModels || apiModels.length === 0) {
+        logger.warn('[Kimi] GetAvailableModels returned empty array');
+        return [];
+      }
+
+      return apiModels.map((m: KimiAvailableModel) => {
+        const id = m.id || m.key || '';
+
+        // Model có thinking nếu reasoningEffortOptions có ít nhất 1 option khác NONE
+        const hasThinking = (m.reasoningEffortOptions || []).some(
+          (o) =>
+            o.effort === REASONING_EFFORTS.HIGH ||
+            o.effort === 'REASONING_EFFORT_MAX' ||
+            o.effort === REASONING_EFFORTS.LOW,
+        );
+
+        // Model instant (SCENARIO_CHAT / k2d6) không có agent context, không phải thinking
+        const isInstant = m.scenario === SCENARIOS.CHAT;
+
+        // Tất cả model Kimi đều support search và image upload (từ API test)
+        return {
+          id,
+          name: m.displayName ? `Kimi ${m.displayName}` : id,
+          description: m.description || undefined,
+          is_thinking: !isInstant && hasThinking,
+          max_context_length: 262144,
+          is_search: true,
+          is_image_upload: true,
+          is_video_upload: false,
+          is_audio_upload: false,
+          is_file_upload: false,
+          is_larger_content_paste_upload: false,
+          is_image_generator: false,
+          is_video_generator: false,
+          is_deep_research: false,
+        };
+      });
+    } catch (e) {
+      logger.warn('[Kimi] getModels error:', e);
+      return [];
+    }
+  }
+
+  // ─── Upload File ────────────────────────────────────────────────────
+
+  async uploadFile(
+    credential: string,
+    file: Express.Multer.File,
+  ): Promise<{ id: string; url?: string }> {
+    const cred = this.parseCredential(credential);
+    if (!cred.accessToken) {
+      throw new Error('[Kimi] uploadFile: missing accessToken');
+    }
+
+    // Refresh token nếu sắp hết hạn
+    if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
+      await this.refreshCredential(cred);
+    }
+
+    return kimiUploadFile(cred.accessToken, file);
+  }
+
+  // ─── Get Usage ──────────────────────────────────────────────────────
+
+  /**
+   * Lấy usage quota từ Kimi API (GetSubscriptionStats).
+   * - usage       : amountUsedRatio * 100 (percent đã dùng)
+   * - resetUsageAt: expireTime của subscription (ISO string)
+   */
+  async getUsage(
+    credential: string,
+  ): Promise<{ usage: number; resetUsageAt: string | null }> {
+    const cred = this.parseCredential(credential);
+    if (!cred.accessToken) {
+      throw new Error('[Kimi] getUsage: missing accessToken');
+    }
+
+    const headers: Record<string, string> = {
+      [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${cred.accessToken}`,
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
+      [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
+      [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      ...MSH_HEADERS,
+      [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
+    };
+
+    const res = await fetch(GET_SUBSCRIPTION_STATS_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+      timeout: 8000,
+    } as any);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      logger.error(
+        `[Kimi] getUsage: request failed | status=${res.status} | body=${errText.slice(0, 300)}`,
+      );
+      throw new Error(
+        `[Kimi] GetSubscriptionStats returned ${res.status}: ${errText.slice(0, 200)}`,
+      );
+    }
+
+    const json = (await res.json()) as {
+      subscriptionBalance?: {
+        amountUsedRatio?: number;
+        expireTime?: string;
+      };
+    };
+
+    const balance = json.subscriptionBalance;
+    const usagePercent =
+      balance?.amountUsedRatio != null
+        ? Math.round(balance.amountUsedRatio * 100 * 100) / 100 // 2 decimal places
+        : 0;
+    const resetUsageAt = balance?.expireTime ?? null;
+
+    return { usage: usagePercent, resetUsageAt };
   }
 
   // ─── Frame Encoding ─────────────────────────────────────────────────

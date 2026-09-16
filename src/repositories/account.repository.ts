@@ -36,9 +36,8 @@ export interface AccountRow {
   provider_id: string;
   email: string;
   credential: string | null;
-  last_refreshed_at?: number;
-  usage?: string;
-  reset_period?: string;
+  usage?: number;
+  reset_usage_at?: string;
   is_memory_enabled?: number;
   user_data_dir?: string | null;
 }
@@ -144,24 +143,22 @@ export const insertAccount = (account: {
   provider_id: string;
   email: string;
   credential: string | null;
-  last_refreshed_at?: number;
-  usage?: string;
-  reset_period?: string;
+  usage?: number;
+  reset_usage_at?: string;
   is_memory_enabled?: number;
   user_data_dir?: string | null;
 }): void => {
   const db = getDb();
   db.prepare(
-    `INSERT INTO accounts (id, provider_id, email, credential, last_refreshed_at, usage, reset_period, is_memory_enabled, user_data_dir)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, is_memory_enabled, user_data_dir)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     account.id,
     account.provider_id,
     account.email,
     account.credential,
-    account.last_refreshed_at || null,
-    account.usage || null,
-    account.reset_period || null,
+    account.usage ?? null,
+    account.reset_usage_at || null,
     account.is_memory_enabled === 1 ? 1 : 0,
     account.user_data_dir || null,
   );
@@ -230,12 +227,11 @@ export const updateAccountUserDataDir = (
 export const updateAccountCredentialAndRefresh = (
   id: string,
   credential: string,
-  lastRefreshedAt: number,
 ): void => {
   const db = getDb();
   db.prepare(
-    'UPDATE accounts SET credential = ?, last_refreshed_at = ? WHERE id = ?',
-  ).run(credential, lastRefreshedAt, id);
+    'UPDATE accounts SET credential = ? WHERE id = ?',
+  ).run(credential, id);
 };
 
 export const updateAccountMemory = (id: string, isMemoryEnabled: boolean): void => {
@@ -247,31 +243,31 @@ export const updateAccountMemory = (id: string, isMemoryEnabled: boolean): void 
 };
 
 export const updateAccountLastUsed = (id: string): void => {
-  const db = getDb();
-  db.prepare('UPDATE accounts SET last_refreshed_at = ? WHERE id = ?').run(Date.now(), id);
+  // no-op: last_refreshed_at column removed
 };
 
 export const updateAccountUsage = (
   id: string,
-  usage: string,
-  resetPeriod: string,
+  usage: number,
+  resetUsageAt: string | null,
 ): void => {
   const db = getDb();
-  db.prepare('UPDATE accounts SET usage = ?, reset_period = ? WHERE id = ?').run(
+  db.prepare('UPDATE accounts SET usage = ?, reset_usage_at = ? WHERE id = ?').run(
     usage,
-    resetPeriod,
+    resetUsageAt,
     id,
   );
 };
 
 export const findAccountsNeedingRefresh = (threshold: number): AccountRow[] => {
   const db = getDb();
-  const cutoff = Date.now() - threshold;
+  // Include accounts that have never had usage fetched or need usage refresh
   return db
     .prepare(
-      'SELECT * FROM accounts WHERE last_refreshed_at IS NOT NULL AND last_refreshed_at < ?',
+      `SELECT * FROM accounts
+       WHERE usage IS NULL`,
     )
-    .all(cutoff) as AccountRow[];
+    .all() as AccountRow[];
 };
 
 // ─── Delete ────────────────────────────────────────────────────────────
@@ -286,6 +282,6 @@ export const deleteAccount = (id: string): void => {
 export const findBrowserAccountsByProvider = (providerId: string): AccountRow[] => {
   const db = getDb();
   return db
-    .prepare('SELECT * FROM accounts WHERE provider_id = ? AND user_data_dir IS NOT NULL ORDER BY last_refreshed_at DESC')
+    .prepare('SELECT * FROM accounts WHERE provider_id = ? AND user_data_dir IS NOT NULL ORDER BY email ASC')
     .all(providerId.toLowerCase()) as AccountRow[];
 };

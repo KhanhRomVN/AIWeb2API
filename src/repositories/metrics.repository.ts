@@ -109,9 +109,9 @@ export const queryModelStatsByPeriod = (
   return db
     .prepare(
       `SELECT
-        m.model_id, m.provider_id,
+        ms.model_id, ms.provider_id,
         stats.total_requests, stats.total_tokens
-       FROM models m
+       FROM model_stats ms
        LEFT JOIN (
          SELECT model_id,
            COUNT(id) as total_requests,
@@ -119,7 +119,7 @@ export const queryModelStatsByPeriod = (
          FROM metrics
          WHERE timestamp >= ? AND timestamp <= ?
          GROUP BY model_id
-       ) stats ON m.model_id = stats.model_id
+       ) stats ON ms.model_id = stats.model_id
        ORDER BY total_requests DESC`,
     )
     .all(startTime, endTime);

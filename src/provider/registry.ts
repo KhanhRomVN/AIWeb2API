@@ -118,7 +118,6 @@ class ProviderRegistry {
 
           if (provider && provider.name) {
             loadedProviders.push(provider);
-            logger.debug(`[Registry] Loaded provider: ${provider.name}`);
           } else {
             logger.warn(`[Registry] Invalid provider in folder: ${folderName}`);
           }

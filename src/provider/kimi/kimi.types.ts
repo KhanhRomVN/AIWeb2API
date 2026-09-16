@@ -19,11 +19,6 @@
 export interface KimiCredential {
   accessToken: string;
   refreshToken?: string;
-  cookies?: string;
-  deviceId?: string;
-  sessionId?: string;
-  trafficId?: string;
-  userAgent?: string;
 }
 
 // ─── Chat Request ───────────────────────────────────────────────────────
@@ -32,6 +27,7 @@ export interface KimiChatBlock {
   text?: { content: string };
   think?: { content: string };
   multiStage?: { stage?: string; status?: string };
+  file?: { id: string; status?: string };
   [key: string]: unknown;
 }
 
@@ -129,7 +125,25 @@ export interface KimiUserResponse {
   data?: { email?: string; name?: string };
 }
 
-// ─── Proxy ──────────────────────────────────────────────────────────────
+// ─── Models API ─────────────────────────────────────────────────────────
+
+export interface KimiAvailableModel {
+  id?: string;
+  key?: string;
+  displayName?: string;
+  description?: string;
+  scenario?: string;
+  reasoningEffortOptions?: Array<{ effort?: string; displayName?: string }>;
+  defaultReasoningEffort?: string;
+  contextLengthOptions?: Array<{ contextLength?: string; available?: boolean }>;
+  defaultContextLength?: string;
+  minMembershipLevel?: string;
+  label?: string[];
+}
+
+export interface KimiAvailableModelsResponse {
+  availableModels?: KimiAvailableModel[];
+}
 
 export interface KimiHeadersPayload {
   [key: string]: string;
@@ -148,4 +162,53 @@ export interface KimiLoginResult {
   email: string;
   cookies: string;
   headers?: KimiHeadersPayload;
+}
+
+// ─── Upload ─────────────────────────────────────────────────────────────
+
+export interface KimiFileMeta {
+  name?: string;
+  contentType?: string;
+  sizeBytes?: string;
+  ext?: string;
+  createTime?: string;
+  type?: string;
+}
+
+export interface KimiFileBlob {
+  signUrl?: string;
+  previewUrl?: string;
+}
+
+export interface KimiFileParseResult {
+  thumbnail?: {
+    thumbnailUrl?: string;
+    previewUrl?: string;
+    mobileThumbnailUrl?: string;
+  };
+}
+
+export interface KimiFile {
+  id?: string;
+  meta?: KimiFileMeta;
+  blob?: KimiFileBlob;
+  parseResult?: KimiFileParseResult;
+}
+
+export interface KimiUploadResponse {
+  file?: KimiFile;
+}
+
+export interface KimiFileParseProgress {
+  fileId?: string;
+  status?: string;
+}
+
+export interface KimiFileParseProgressResponse {
+  progresses?: KimiFileParseProgress[];
+}
+
+export interface KimiUploadResult {
+  id: string;
+  url?: string;
 }

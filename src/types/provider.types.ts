@@ -44,6 +44,6 @@ export interface Provider {
   refreshToken?(refreshToken: string): Promise<any>;
   getUsage?(
     credential: string,
-  ): Promise<{ usage: string; resetPeriod: 'day' | 'month' | string }>;
+  ): Promise<{ usage: number; resetUsageAt: string | null }>;
   proxyHandler?: any;
 }

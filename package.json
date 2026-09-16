@@ -22,7 +22,7 @@
   },
   "scripts": {
     "dev": "nodemon",
-    "start": "ts-node --transpile-only -r tsconfig-paths/register -r dotenv/config src/index.ts",
+    "start": "tsx -r dotenv/config src/index.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -102,6 +102,7 @@
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.10",
     "tsconfig-paths": "^4.2.0",
-    "tsup": "^8.5.1"
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.4"
   }
 }

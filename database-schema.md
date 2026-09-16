@@ -18,9 +18,8 @@ Lưu trữ thông tin tài khoản của các provider AI.
 - **`provider_id`** (TEXT, NOT NULL) — Tên provider (claude, deepseek, gemini, ...)
 - **`email`** (TEXT, NOT NULL) — Email đăng nhập
 - **`credential`** (TEXT, NULL) — Token/cookie/session JSON (có thể NULL cho browser-based accounts)
-- **`last_refreshed_at`** (INTEGER) — Thời gian refresh token gần nhất (timestamp ms) hoặc last used cho browser accounts
-- **`usage`** (TEXT) — Thông tin usage (JSON)
-- **`reset_period`** (TEXT) — Chu kỳ reset (day/month)
+- **`usage`** (REAL) — Tỷ lệ usage từ 0.0 đến 100.0 (phần trăm)
+- **`reset_usage_at`** (TEXT) — Thời điểm reset usage, có thể là ngày tháng năm (`YYYY-MM-DD`) hoặc ngày tháng năm và giờ phút (`YYYY-MM-DD HH:MM`)
 - **`is_memory_enabled`** (INTEGER, DEFAULT 0) — Trạng thái bật/tắt memory cho account (1 = enabled, 0 = disabled)
 - **`user_data_dir`** (TEXT) — Đường dẫn thư mục profile Chrome cho browser-based provider (VD: zai-browser)
 
@@ -58,34 +57,31 @@ Danh sách các provider đã được đăng ký trong hệ thống.
 
 ---
 
-## Bảng: `models`
+## Bảng: `model_stats`
 
-Lưu trữ danh sách model của từng provider (cache từ API provider để fallback khi API không khả dụng).
+Lưu trữ thống kê runtime per-model (hiện tại chỉ có success_rate).
+
+**⚠️ LƯU Ý QUAN TRỌNG:** Bảng này **CHỈ** lưu các thống kê runtime cần persist. **KHÔNG BAO GIỜ** lưu metadata của model (name, capabilities, context_length, description...) vào database. Những thông tin đó phải lấy từ:
+- Provider constants (`.constants.ts`) cho provider hardcode model list
+- Provider API live (`getModels()`) cho provider dynamic model list
 
 ### Columns
 
-- **`id`** (INTEGER, PRIMARY KEY AUTOINCREMENT) — ID tự tăng
 - **`provider_id`** (TEXT, NOT NULL) — Provider sở hữu model
 - **`model_id`** (TEXT, NOT NULL) — ID model (ví dụ: `deepseek-chat`)
-- **`model_name`** (TEXT, NOT NULL) — Tên hiển thị
-- **`is_thinking`** (INTEGER, DEFAULT 0) — Hỗ trợ thinking mode (1 = có, 0 = không)
-- **`max_context_length`** (INTEGER) — Độ dài context tối đa (token)
-- **`is_search`** (INTEGER, DEFAULT 0) — Hỗ trợ web search (1 = có, 0 = không)
-- **`is_image_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload hình ảnh (1 = có, 0 = không)
-- **`is_video_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload video (1 = có, 0 = không)
-- **`is_audio_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload audio (1 = có, 0 = không)
-- **`is_file_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ upload file/document (1 = có, 0 = không)
-- **`is_larger_content_paste_upload`** (INTEGER, DEFAULT 0) — Hỗ trợ paste nội dung lớn (1 = có, 0 = không)
-- **`is_image_generator`** (INTEGER, DEFAULT 0) — Hỗ trợ tạo hình ảnh (1 = có, 0 = không)
-- **`is_video_generator`** (INTEGER, DEFAULT 0) — Hỗ trợ tạo video (1 = có, 0 = không)
-- **`is_deep_research`** (INTEGER, DEFAULT 0) — Hỗ trợ deep research mode (1 = có, 0 = không)
-- **`updated_at`** (INTEGER, NOT NULL) — Thời gian cập nhật gần nhất (timestamp ms)
 - **`success_rate`** (REAL, DEFAULT NULL) — Tỷ lệ thành công (0-100%), NULL nếu chưa có dữ liệu
-- **`description`** (TEXT) — Mô tả chi tiết về model, khả năng và use cases
+- **`updated_at`** (INTEGER, NOT NULL) — Thời gian cập nhật gần nhất (timestamp ms)
 
-**Unique Constraint:** `UNIQUE(provider_id, model_id)`
+**Primary Key:** `(provider_id, model_id)`
 
-**Ghi chú:** Các field upload capabilities (`is_search`, `is_image_upload`, `is_video_upload`, `is_audio_upload`, `is_file_upload`, `is_larger_content_paste_upload`) nằm ở model level, không còn ở provider level.
+---
+
+## ~~Bảng: `models`~~ (DEPRECATED - ĐÃ XÓA)
+
+**⚠️ Bảng này đã bị loại bỏ hoàn toàn.** Model list không còn được lưu vào database nữa. Lý do:
+- Provider hardcode constants → cache là thừa
+- Provider dynamic API → luôn fetch từ live source để đảm bảo cập nhật
+- Chỉ `success_rate` cần persist → đã chuyển sang `model_stats`
 
 ---
 

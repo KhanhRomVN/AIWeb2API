@@ -28,7 +28,7 @@ const logger = createLogger('Database');
 export const runMigrations = (db: Database.Database): void => {
   migrateAccounts(db);
   migrateProviders(db);
-  migrateModels(db);
+  migrateModelStats(db);
   migrateMetrics(db);
   migrateBrowserSessions(db);
   dropUnusedTables(db);
@@ -43,9 +43,8 @@ function migrateAccounts(db: Database.Database): void {
         provider_id TEXT NOT NULL,
         email TEXT NOT NULL,
         credential TEXT NOT NULL,
-        last_refreshed_at INTEGER,
-        usage TEXT,
-        reset_period TEXT,
+        usage REAL,
+        reset_usage_at TEXT,
         is_memory_enabled INTEGER DEFAULT 0
       )
     `);
@@ -84,27 +83,30 @@ function migrateAccounts(db: Database.Database): void {
       (c) => c.name,
     );
 
-    if (!finalCols.includes('last_refreshed_at')) {
+    // Migration: drop last_refreshed_at column if it still exists in older DBs
+    if (finalCols.includes('last_refreshed_at')) {
       try {
-        db.exec('ALTER TABLE accounts ADD COLUMN last_refreshed_at INTEGER');
+        db.exec('ALTER TABLE accounts DROP COLUMN last_refreshed_at');
       } catch (e) {
-        logger.warn('Failed to add last_refreshed_at to accounts', e);
+        logger.warn('Failed to drop last_refreshed_at from accounts', e);
       }
     }
     if (!finalCols.includes('usage')) {
       try {
-        db.exec('ALTER TABLE accounts ADD COLUMN usage TEXT');
+        db.exec('ALTER TABLE accounts ADD COLUMN usage REAL');
       } catch (e) {
         logger.warn('Failed to add usage to accounts', e);
       }
     }
-    if (!finalCols.includes('reset_period')) {
+    if (!finalCols.includes('reset_usage_at')) {
       try {
-        db.exec('ALTER TABLE accounts ADD COLUMN reset_period TEXT');
+        db.exec('ALTER TABLE accounts ADD COLUMN reset_usage_at TEXT');
       } catch (e) {
-        logger.warn('Failed to add reset_period to accounts', e);
+        logger.warn('Failed to add reset_usage_at to accounts', e);
       }
     }
+    // Migration: rename reset_period → reset_usage_at (drop old column via table rebuild not needed,
+    // SQLite doesn't support DROP COLUMN easily — just leave reset_period as dead column if exists)
     if (!finalCols.includes('is_memory_enabled')) {
       try {
         db.exec(
@@ -260,162 +262,21 @@ function migrateProviders(db: Database.Database): void {
   }
 }
 
-// ─── Models Table ─────────────────────────────────────────────────────
+// ─── Model Stats Table ────────────────────────────────────────────────
 
-function migrateModels(db: Database.Database): void {
+function migrateModelStats(db: Database.Database): void {
   try {
     db.exec(`
-      CREATE TABLE IF NOT EXISTS models (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+      CREATE TABLE IF NOT EXISTS model_stats (
         provider_id TEXT NOT NULL,
         model_id TEXT NOT NULL,
-        model_name TEXT NOT NULL,
-        is_thinking INTEGER DEFAULT 0,
-        max_context_length INTEGER,
-        is_image_upload INTEGER DEFAULT 0,
-        is_video_upload INTEGER DEFAULT 0,
-        updated_at INTEGER NOT NULL,
         success_rate REAL DEFAULT NULL,
-        description TEXT,
-        UNIQUE(provider_id, model_id)
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (provider_id, model_id)
       )
     `);
-
-    const modelCols = (db.pragma('table_info(models)') as any[]).map(
-      (c) => c.name,
-    );
-
-    // Rename context_length → max_context_length
-    if (
-      modelCols.includes('context_length') &&
-      !modelCols.includes('max_context_length')
-    ) {
-      try {
-        db.exec(
-          'ALTER TABLE models RENAME COLUMN context_length TO max_context_length',
-        );
-      } catch (e) {
-        logger.warn(
-          'Failed to rename context_length to max_context_length in models',
-          e,
-        );
-      }
-    }
-    if (
-      !modelCols.includes('max_context_length') &&
-      !modelCols.includes('context_length')
-    ) {
-      try {
-        db.exec('ALTER TABLE models ADD COLUMN max_context_length INTEGER');
-      } catch (e) {
-        logger.warn('Failed to add max_context_length to models', e);
-      }
-    }
-
-    // Rename is_upload → is_image_upload
-    if (
-      modelCols.includes('is_upload') &&
-      !modelCols.includes('is_image_upload')
-    ) {
-      try {
-        db.exec(
-          'ALTER TABLE models RENAME COLUMN is_upload TO is_image_upload',
-        );
-      } catch (e) {
-        logger.warn(
-          'Failed to rename is_upload to is_image_upload in models',
-          e,
-        );
-      }
-    }
-    if (
-      !modelCols.includes('is_image_upload') &&
-      !modelCols.includes('is_upload')
-    ) {
-      try {
-        db.exec(
-          'ALTER TABLE models ADD COLUMN is_image_upload INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_image_upload to models', e);
-      }
-    }
-
-    // Add is_video_upload
-    if (!modelCols.includes('is_video_upload')) {
-      try {
-        db.exec(
-          'ALTER TABLE models ADD COLUMN is_video_upload INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_video_upload to models', e);
-      }
-    }
-
-    // Add success_rate
-    if (!modelCols.includes('success_rate')) {
-      try {
-        db.exec('ALTER TABLE models ADD COLUMN success_rate REAL DEFAULT NULL');
-      } catch (e) {
-        logger.warn('Failed to add success_rate column to models', e);
-      }
-    }
-
-    // Add description
-    if (!modelCols.includes('description')) {
-      try {
-        db.exec('ALTER TABLE models ADD COLUMN description TEXT');
-      } catch (e) {
-        logger.warn('Failed to add description column to models', e);
-      }
-    }
-
-    // Add is_search
-    if (!modelCols.includes('is_search')) {
-      try {
-        db.exec('ALTER TABLE models ADD COLUMN is_search INTEGER DEFAULT 0');
-      } catch (e) {
-        logger.warn('Failed to add is_search column to models', e);
-      }
-    }
-
-    // Add is_audio_upload
-    if (!modelCols.includes('is_audio_upload')) {
-      try {
-        db.exec(
-          'ALTER TABLE models ADD COLUMN is_audio_upload INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_audio_upload column to models', e);
-      }
-    }
-
-    // Add is_file_upload
-    if (!modelCols.includes('is_file_upload')) {
-      try {
-        db.exec(
-          'ALTER TABLE models ADD COLUMN is_file_upload INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_file_upload column to models', e);
-      }
-    }
-
-    // Add is_larger_content_paste_upload
-    if (!modelCols.includes('is_larger_content_paste_upload')) {
-      try {
-        db.exec(
-          'ALTER TABLE models ADD COLUMN is_larger_content_paste_upload INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn(
-          'Failed to add is_larger_content_paste_upload column to models',
-          e,
-        );
-      }
-    }
   } catch (err) {
-    logger.error('Error initializing models table', err);
+    logger.error('Error initializing model_stats table', err);
   }
 }
 
@@ -486,9 +347,8 @@ function migrateBrowserSessions(db: Database.Database): void {
         provider_id: string;
         email: string;
         credential: string | null;
-        last_refreshed_at: number | null;
-        usage: string | null;
-        reset_period: string | null;
+        usage: number | null;
+        reset_usage_at: string | null;
         is_memory_enabled: number | null;
         user_data_dir: string | null;
       }
@@ -506,9 +366,8 @@ function migrateBrowserSessions(db: Database.Database): void {
           provider_id TEXT NOT NULL,
           email TEXT NOT NULL,
           credential TEXT,
-          last_refreshed_at INTEGER,
-          usage TEXT,
-          reset_period TEXT,
+          usage REAL,
+          reset_usage_at TEXT,
           is_memory_enabled INTEGER DEFAULT 0,
           user_data_dir TEXT
         )
@@ -516,8 +375,8 @@ function migrateBrowserSessions(db: Database.Database): void {
 
       // Restore data
       const insertStmt = db.prepare(`
-        INSERT INTO accounts (id, provider_id, email, credential, last_refreshed_at, usage, reset_period, is_memory_enabled, user_data_dir)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, is_memory_enabled, user_data_dir)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const row of accountsData) {
@@ -526,9 +385,8 @@ function migrateBrowserSessions(db: Database.Database): void {
           row.provider_id,
           row.email,
           row.credential,
-          row.last_refreshed_at,
           row.usage,
-          row.reset_period,
+          row.reset_usage_at,
           row.is_memory_enabled || 0,
           row.user_data_dir,
         );
@@ -557,6 +415,8 @@ function dropUnusedTables(db: Database.Database): void {
     db.exec('DROP TABLE IF EXISTS provider_models');
     db.exec('DROP TABLE IF EXISTS provider_models_sync');
     db.exec('DROP TABLE IF EXISTS config');
+    // Migration: models table replaced by model_stats
+    db.exec('DROP TABLE IF EXISTS models');
     // Migration: remove old columns if exist
     const providerCols = (db.pragma('table_info(providers)') as any[]).map(
       (c) => c.name,

@@ -18,8 +18,11 @@
 import { providerRegistry } from '../provider/registry';
 
 // ── Repositories ──
-import { findAllProviders as findAllProviderRows, upsertProvider } from '../repositories/provider.repository';
-import { findAllModels, upsertModel } from '../repositories/model.repository';
+import {
+  findAllProviders as findAllProviderRows,
+  upsertProvider,
+} from '../repositories/provider.repository';
+import { findAllModelStats } from '../repositories/model-stats.repository';
 import { findFirstAccountByProvider } from '../repositories/account.repository';
 
 // ── Utils ──
@@ -84,7 +87,9 @@ const fetchProviderConfig = async (): Promise<any[]> => {
 
 const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
   const dynamicProvider = providerRegistry.getProvider(providerId);
-  if (!dynamicProvider?.getModels) return [];
+  if (!dynamicProvider?.getModels) {
+    return [];
+  }
 
   const account = findFirstAccountByProvider(providerId);
   if (!account || account.credential === null) {
@@ -96,21 +101,6 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
       account.credential,
       account.id,
     );
-    const now = Date.now();
-    for (const model of models) {
-      upsertModel(
-        providerId,
-        model.id,
-        model.name,
-        model.is_thinking || false,
-        model.max_context_length ?? model.context_length ?? null,
-        now,
-        model.is_image_upload ?? false,
-        model.is_video_upload ?? false,
-        model.is_audio_upload ?? false,
-        model.is_file_upload ?? false,
-      );
-    }
     return models;
   } catch (error) {
     logger.error(`Failed to fetch models from provider ${providerId}:`, error);
@@ -130,27 +120,17 @@ export const getAllProviders = async (): Promise<Provider[]> => {
   }
 
   const config = await fetchProviderConfig();
-
   const dbProviders = findAllProviderRows();
   const providersMap = new Map(dbProviders.map((p) => [p.id.toLowerCase(), p]));
 
-  const dbModels = findAllModels();
-  const modelsMap = new Map<string, any[]>();
-  dbModels.forEach((model) => {
-    const key = model.provider_id.toLowerCase();
-    if (!modelsMap.has(key)) modelsMap.set(key, []);
-    modelsMap.get(key)!.push({
-      id: model.model_id,
-      name: model.model_name,
-      is_thinking: model.is_thinking === 1,
-      max_context_length: model.max_context_length,
-      is_image_upload: model.is_image_upload === 1,
-      is_video_upload: model.is_video_upload === 1,
-      is_audio_upload: model.is_audio_upload === 1,
-      is_file_upload: model.is_file_upload === 1,
-      success_rate: model.success_rate ?? null,
-    });
-  });
+  // Chỉ lấy success_rate từ DB — metadata model (name, capabilities) lấy từ provider constants/API
+  const allModelStats = findAllModelStats();
+  const successRateMap = new Map<string, number | null>(
+    allModelStats.map((s) => [
+      `${s.provider_id.toLowerCase()}:${s.model_id.toLowerCase()}`,
+      s.success_rate ?? null,
+    ]),
+  );
 
   const providersWithModels: Provider[] = [];
   const seenIds = new Set<string>();
@@ -171,38 +151,29 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       connection_type: p.connection_type,
       is_enabled: p.is_enabled !== false ? 1 : 0,
       website_url: p.website_url,
-      auth_method: Array.isArray(p.auth_method) ? JSON.stringify(p.auth_method) : (p.auth_method ?? null),
+      auth_method: Array.isArray(p.auth_method)
+        ? JSON.stringify(p.auth_method)
+        : (p.auth_method ?? null),
       is_pausable: p.is_pausable ? 1 : 0,
       is_memory: p.is_memory ? 1 : 0,
       browser_extension_folder: p.browser_extension_folder,
     });
 
     let models: any[] | undefined = p.models;
-
     if ((!models || models.length === 0) && p.is_enabled) {
       try {
         const dynamicModels = await fetchModelsFromProvider(p.provider_id);
         if (dynamicModels.length > 0) {
           models = dynamicModels;
         } else {
-          const cached = modelsMap.get(p.provider_id.toLowerCase()) || [];
-          if (cached.length > 0) models = cached;
+          logger.warn(
+            `[getAllProviders] ${p.provider_id}: dynamic getModels() returned 0 models`,
+          );
         }
       } catch (e) {
         logger.warn(`Failed to fetch dynamic models for ${p.provider_id}:`, e);
-        const cached = modelsMap.get(p.provider_id.toLowerCase()) || [];
-        if (cached.length > 0) models = cached;
       }
     }
-
-    const dbModelsForProvider =
-      modelsMap.get(p.provider_id.toLowerCase()) || [];
-    const dbModelSuccessRateMap = new Map<string, number | null>(
-      dbModelsForProvider.map((m: any) => [
-        m.id.toLowerCase(),
-        m.success_rate ?? null,
-      ]),
-    );
 
     const dbProvider = providersMap.get(p.provider_id.toLowerCase());
     providersWithModels.push({
@@ -213,17 +184,22 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,
-        is_image_upload: m.is_image_upload !== undefined ? m.is_image_upload : false,
-        is_video_upload: m.is_video_upload !== undefined ? m.is_video_upload : false,
-        is_audio_upload: m.is_audio_upload !== undefined ? m.is_audio_upload : false,
-        is_file_upload: m.is_file_upload !== undefined ? m.is_file_upload : false,
+        is_image_upload:
+          m.is_image_upload !== undefined ? m.is_image_upload : false,
+        is_video_upload:
+          m.is_video_upload !== undefined ? m.is_video_upload : false,
+        is_audio_upload:
+          m.is_audio_upload !== undefined ? m.is_audio_upload : false,
+        is_file_upload:
+          m.is_file_upload !== undefined ? m.is_file_upload : false,
         max_context_length: m.max_context_length ?? m.context_length ?? null,
         context_length: m.max_context_length ?? m.context_length ?? null,
-        success_rate: dbModelSuccessRateMap.has(m.id?.toLowerCase())
-          ? (dbModelSuccessRateMap.get(m.id?.toLowerCase()) ?? null)
-          : m.success_rate !== undefined
-            ? m.success_rate
-            : null,
+        success_rate:
+          successRateMap.get(
+            `${p.provider_id.toLowerCase()}:${m.id?.toLowerCase()}`,
+          ) ??
+          m.success_rate ??
+          null,
       })),
     });
   }

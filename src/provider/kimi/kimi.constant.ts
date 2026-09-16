@@ -11,7 +11,7 @@
  * - WEBSITE_URL            : URL website
  * - AUTH_METHOD            : Phương thức xác thực
  * - CONNECTION_TYPE        : Loại kết nối (https/browser)
- * - MODELS                 : Danh sách models hỗ trợ
+ * - MODELS                 : Empty array (models fetched from API at runtime)
  * - IS_PAUSABLE            : Hỗ trợ tạm dừng session
  * - IS_MEMORY              : Hỗ trợ bộ nhớ dài hạn
  * - KIMI_BASE_URL          : Base URL của Kimi AI
@@ -43,141 +43,18 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
 
-export const MODELS = [
-  {
-    id: 'k3',
-    name: 'Kimi K3 (Flagship)',
-    is_thinking: true,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi K3 Flagship All-Rounder - Chat & Agent with state-of-the-art reasoning and problem solving.',
-  },
-  {
-    id: 'k3-swarm',
-    name: 'Kimi K3 Swarm',
-    is_thinking: true,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi K3 Swarm - Massive search, batch processing, and multi-agent workflow in one go.',
-  },
-  {
-    id: 'instant',
-    name: 'Kimi Instant',
-    is_thinking: false,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi Instant - Ultra-fast responses for everyday chat queries.',
-  },
-  {
-    id: 'k2d6-thinking',
-    name: 'Kimi K2.6 Thinking',
-    is_thinking: true,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi K2.6 Thinking delivers deep reasoning, step-by-step logic deduction, and advanced mathematical problem solving.',
-  },
-  {
-    id: 'k2d6',
-    name: 'Kimi K2.6 Instant',
-    is_thinking: false,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi K2.6 Instant provides fast text generation for conversational tasks.',
-  },
-  {
-    id: 'k2d6-agent',
-    name: 'Kimi K2.6 Agent',
-    is_thinking: true,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi K2.6 Agent autonomously performs comprehensive research, slides generation, and document processing.',
-  },
-  {
-    id: 'k2d6-agent-ultra',
-    name: 'Kimi K2.6 Agent Swarm',
-    is_thinking: true,
-    max_context_length: 262144,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description:
-      'Kimi K2.6 Agent Swarm coordinates multi-agent workers for large-scale information retrieval.',
-  },
-] as const;
+export const MODELS = [] as const;
 
 // ─── API Configuration ───────────────────────────────────────────────
 
 export const KIMI_BASE_URL = 'https://www.kimi.ai';
 
 export const KIMI_MODELS = {
-  K3: 'k3',
-  K3_SWARM: 'k3-swarm',
-  INSTANT: 'instant',
-  K2D6_THINKING: 'k2d6-thinking',
-  K2D6: 'k2d6',
-  K2D6_AGENT: 'k2d6-agent',
-  K2D6_AGENT_ULTRA: 'k2d6-agent-ultra',
-  KIMI_LATEST: 'kimi-latest',
+  K3: 'k3-agent',
+  K3_SWARM: 'k3-agent-swarm',
+  K28_PREVIEW: 'k28-agent-preview',
+  INSTANT: 'k2d6-chat',
+  KIMI_LATEST: 'k3-agent',
 } as const;
 
 export const KIMI_EVENTS = {
@@ -191,7 +68,7 @@ export const USER_AGENT =
 
 export const MSH_HEADERS = {
   'x-msh-platform': 'web',
-  'x-msh-version': '2.0.0',
+  'x-msh-version': '2.2.0',
   'x-language': 'en-US',
 } as const;
 
@@ -200,6 +77,10 @@ export const AUTH_REFRESH_URL =
 export const CHAT_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.chat.v1.ChatService/Chat`;
 export const GET_USER_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.account.v1.UserService/GetCurrentUser`;
 export const LIST_THIRD_ACCOUNTS_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.account.v1.SecurityService/ListThirdAccounts`;
+export const GET_AVAILABLE_MODELS_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.config.v1.ConfigService/GetAvailableModels`;
+export const GET_SUBSCRIPTION_STATS_URL = `${KIMI_BASE_URL}/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats`;
+export const FILE_UPLOAD_URL = `${KIMI_BASE_URL}/apiv2-files/file/upload`;
+export const GET_FILE_PARSE_PROGRESS_URL = `${KIMI_BASE_URL}/apiv2-files/kimi.gateway.file.v1.FileService/GetFileParseProgress`;
 
 // ─── Hosts ───────────────────────────────────────────────────────────
 
@@ -308,6 +189,7 @@ export const CHAT_REQUEST_FIELDS = {
   ROLE: 'role',
   BLOCKS: 'blocks',
   TEXT: 'text',
+  FILE: 'file',
   CONTENT: 'content',
   THINKING: 'thinking',
   ENABLE_PLUGIN: 'enable_plugin',
@@ -345,22 +227,25 @@ export const SSE_EVENT_FIELDS = {
 // ─── Scenario / Model / Reasoning Values ─────────────────────────────
 
 export const SCENARIOS = {
-  K2D5: 'SCENARIO_K2D5',
+  CHAT: 'SCENARIO_CHAT',
   OK_COMPUTER: 'SCENARIO_OK_COMPUTER',
+  OK_COMPUTER_SWARM: 'SCENARIO_OK_COMPUTER_SWARM',
 } as const;
 
 export const KIMI_CHAT_MODELS = {
   K2D6_CHAT: 'k2d6-chat',
-  OK_COMPUTER: 'ok-computer',
 } as const;
 
 export const REASONING_EFFORTS = {
-  HIGH: 'REASONING_EFFORT_HIGH',
+  NONE: 'REASONING_EFFORT_NONE',
   LOW: 'REASONING_EFFORT_LOW',
+  HIGH: 'REASONING_EFFORT_HIGH',
+  MAX: 'REASONING_EFFORT_MAX',
 } as const;
 
 export const TOOL_TYPES = {
   SEARCH: 'TOOL_TYPE_SEARCH',
+  CRON_JOB: 'TOOL_TYPE_CRON_JOB',
 } as const;
 
 // ─── SSE Frame Protocol ──────────────────────────────────────────────
@@ -413,3 +298,20 @@ export const DEFAULT_EMAIL = 'kimi_user@kimi.ai';
 export const DEFAULT_TIMEZONE = 'Asia/Saigon';
 export const DEFAULT_TIMEOUT_MS = 120000;
 export const LOGIN_PARTITION_PREFIX = 'kimi-';
+
+// ─── Upload Config ───────────────────────────────────────────────────
+
+export const UPLOAD_CONFIG = {
+  FORM_FIELD_NAME: 'file',
+  FORM_BOUNDARY_PREFIX: '----WebKitFormBoundary',
+  BOUNDARY_RANDOM_BYTES: 8,
+  CRLF: '\r\n',
+  POLLING_INTERVAL_MS: 1000,
+  POLLING_MAX_ATTEMPTS: 30,
+} as const;
+
+export const FILE_PROCESS_STATUS = {
+  SUCCESS: 'PROCESS_STATUS_SUCCESS',
+  PROCESSING: 'PROCESS_STATUS_PROCESSING',
+  FAIL: 'PROCESS_STATUS_FAIL',
+} as const;

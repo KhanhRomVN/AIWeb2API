@@ -40,8 +40,11 @@ import {
   removeAccount,
   importAccounts as importAccountsService,
   getProviderConfig,
+  accountRefreshService,
   type AccountInput,
 } from '../services/account.service';
+import { updateAccountCredential } from '../repositories/account.repository';
+import { providerRegistry } from '../provider/registry';
 import { queryAccountStatsByPeriod } from '../repositories/metrics.repository';
 
 // ── Utils ──
@@ -369,6 +372,17 @@ export const getAccounts = async (
       },
       meta: { timestamp: new Date().toISOString() },
     });
+
+    // Fire-and-forget: refresh usage cho các account có provider hỗ trợ getUsage.
+    // Kết quả sẽ được lưu vào DB → lần fetch tiếp theo sẽ có value sẵn.
+    for (const row of rows) {
+      const provider = providerRegistry.getProvider(row.provider_id);
+      if (provider?.getUsage && accountRefreshService.shouldRefreshUsage(row)) {
+        accountRefreshService.refreshUsage(row.id).catch(() => {
+          /* ignore */
+        });
+      }
+    }
   } catch (error) {
     logger.error('Error in getAccounts', error);
     res.status(500).json({
@@ -408,30 +422,96 @@ export const deleteAccount = async (
       return;
     }
 
-    try {
-      removeAccount(id, account.provider_id);
+    removeAccount(id, account.provider_id);
 
-      res.status(200).json({
-        success: true,
-        message: 'Account deleted successfully',
-        data: { id, action: 'deleted' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-    } catch (dbError) {
-      logger.error('Error deleting account from DB', dbError);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete account',
-        error: { code: 'DATABASE_ERROR' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-    }
-  } catch (error) {
-    logger.error('Error in deleteAccount', error);
+    res.status(200).json({
+      success: true,
+      message: 'Account deleted successfully',
+      data: { account_id: id },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error: any) {
+    logger.error('[DeleteAccount] Error deleting account:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: { code: 'INTERNAL_ERROR' },
+      error: { code: 'INTERNAL_ERROR', details: error.message },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
+// ─── POST /v1/accounts/:id/refresh-token ────────────────────────────
+
+export const refreshAccountToken = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { provider_id } = req.body;
+
+    if (!id || !provider_id) {
+      res.status(400).json({
+        success: false,
+        message: 'Account ID and provider_id are required',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const account = getAccountById(id);
+    if (!account) {
+      res.status(404).json({
+        success: false,
+        message: 'Account not found',
+        error: { code: 'NOT_FOUND' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    // Get provider and check if it supports browser login
+    const provider = providerRegistry.getProvider(provider_id);
+    if (!provider?.login) {
+      res.status(400).json({
+        success: false,
+        message: 'Provider does not support token refresh',
+        error: { code: 'UNSUPPORTED_PROVIDER' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    // Call provider login to get fresh token
+    const result = await provider.login(id);
+
+    if (!result.success || !result.credential) {
+      res.status(500).json({
+        success: false,
+        message: result.error || 'Failed to refresh token',
+        error: { code: 'REFRESH_FAILED' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    // Update account credential
+    updateAccountCredential(id, result.credential);
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: { account_id: id, email: result.email || account.email },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error: any) {
+    logger.error('[RefreshToken] Error refreshing token:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to refresh token',
+      error: { code: 'INTERNAL_ERROR', details: error.message },
       meta: { timestamp: new Date().toISOString() },
     });
   }

@@ -73,20 +73,9 @@ const logger = createLogger('GrokBuildCLIProvider');
 // ─── Helper Functions ───────────────────────────────────────────────────
 
 function parseCredential(credential: string): GrokBuildCredentials {
-  logger.debug('[GrokBuildCLI] parseCredential - input:', {
-    type: typeof credential,
-    length: credential?.length,
-    preview: credential?.substring(0, 50),
-  });
-
   if (credential.trim().startsWith('{')) {
     try {
       const parsed = JSON.parse(credential) as GrokBuildCredentials;
-      logger.debug('[GrokBuildCLI] parseCredential - parsed JSON:', {
-        hasAccessToken: !!parsed.accessToken,
-        hasRefreshToken: !!parsed.refreshToken,
-        hasEmail: !!parsed.email,
-      });
       return parsed;
     } catch (e) {
       logger.warn('[GrokBuildCLI] Failed to parse JSON credential:', e);
@@ -129,7 +118,7 @@ function buildSessionHeaders(
   model?: string,
   stream = true,
 ): Record<string, string> {
-  const headers = {
+  const headers: Record<string, string> = {
     [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
     [HTTP_HEADER_NAMES.ACCEPT]: stream
       ? CONTENT_TYPES.EVENT_STREAM
@@ -286,7 +275,7 @@ export class GrokBuildCLIProvider implements Provider {
 
   // ─── Token Refresh ──────────────────────────────────────────────────
 
-  private async refreshToken(
+  private async performRefresh(
     credentials: GrokBuildCredentials,
     attempt: number,
   ): Promise<Partial<GrokBuildCredentials> | null | undefined> {
@@ -372,11 +361,19 @@ export class GrokBuildCLIProvider implements Provider {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
 
-      const refreshed = await this.refreshToken(credentials, attempt);
+      const refreshed = await this.performRefresh(credentials, attempt);
       if (refreshed !== undefined) return refreshed;
     }
 
     return null;
+  }
+
+  async refreshToken(refreshTokenStr: string): Promise<any> {
+    const credentials: GrokBuildCredentials = {
+      accessToken: '',
+      refreshToken: refreshTokenStr,
+    };
+    return this.refreshCredentials(credentials);
   }
 
   // ─── Handle Message ─────────────────────────────────────────────────
@@ -392,11 +389,6 @@ export class GrokBuildCLIProvider implements Provider {
       onDone,
       onError,
     } = options;
-
-    logger.debug('[GrokBuildCLI] handleMessage:', {
-      model,
-      messageCount: messages.length,
-    });
 
     let credentials = parseCredential(credential);
 

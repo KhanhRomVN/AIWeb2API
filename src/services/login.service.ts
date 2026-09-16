@@ -114,6 +114,9 @@ export class LoginService extends EventEmitter {
       rejectPromise = reject;
     });
 
+    // Extra fields forwarded from proxy events (e.g. refreshToken, headers)
+    let capturedExtra: Record<string, any> = {};
+
     // Function to check validation and resolve login if valid
     let isValidating = false;
     const checkValidation = async () => {
@@ -125,6 +128,7 @@ export class LoginService extends EventEmitter {
         const validation = await validate({
           cookies: capturedCookies,
           email: capturedEmail,
+          ...capturedExtra,
         });
 
         if (validation?.isValid && resolvePromise) {
@@ -161,11 +165,22 @@ export class LoginService extends EventEmitter {
     const cookieEventListener = async (data: any) => {
       if (typeof data === 'string' && data.length > 0) {
         capturedCookies = data;
-      } else if (data && typeof data.cookies === 'string' && data.cookies.length > 0) {
+      } else if (
+        data &&
+        typeof data.cookies === 'string' &&
+        data.cookies.length > 0
+      ) {
         capturedCookies = data.cookies;
       }
       if (data && data.email) {
         capturedEmail = data.email;
+      }
+      // Forward any extra fields (e.g. refreshToken, headers) to validate
+      if (data && typeof data === 'object') {
+        const { cookies, email, ...extra } = data;
+        if (Object.keys(extra).length > 0) {
+          capturedExtra = { ...capturedExtra, ...extra };
+        }
       }
       await checkValidation();
     };
@@ -205,14 +220,21 @@ export class LoginService extends EventEmitter {
     cdpService.on('request', async (req: any) => {
       try {
         const cookieHeader = req.headers?.['Cookie'] || req.headers?.['cookie'];
-        if (cookieHeader && typeof cookieHeader === 'string' && cookieHeader.length > 0) {
+        if (
+          cookieHeader &&
+          typeof cookieHeader === 'string' &&
+          cookieHeader.length > 0
+        ) {
           let host = '';
           try {
             host = new URL(loginUrl).host;
           } catch {}
 
           if (!host || (req.url && req.url.includes(host))) {
-            if (!capturedCookies || capturedCookies.length < cookieHeader.length) {
+            if (
+              !capturedCookies ||
+              capturedCookies.length < cookieHeader.length
+            ) {
               capturedCookies = cookieHeader;
               await checkValidation();
             }
@@ -276,6 +298,7 @@ export class LoginService extends EventEmitter {
         }
 
         // Check for common auth token fields in JSON root
+        // Always override with JWT token — takes priority over browser cookies
         const tokenFields = [
           'token',
           'access_token',
@@ -286,16 +309,34 @@ export class LoginService extends EventEmitter {
           'DS-AUTH-TOKEN',
         ];
         for (const field of tokenFields) {
-          if (json[field]) {
-            if (!capturedCookies) capturedCookies = json[field];
+          const val = json[field] || json.data?.[field];
+          if (val && typeof val === 'string' && val.startsWith('eyJ')) {
+            // JWT token — always override browser cookies
+            capturedCookies = val;
+            break;
           }
-          if (json.data?.[field]) {
-            if (!capturedCookies) capturedCookies = json.data[field];
+          if (val && typeof val === 'string' && !capturedCookies) {
+            capturedCookies = val;
+          }
+          if (
+            json.data?.[field] &&
+            typeof json.data[field] === 'string' &&
+            !capturedCookies
+          ) {
+            capturedCookies = json.data[field];
           }
         }
-      } catch (e) {
-        logger.debug('[LoginService] Failed to parse JSON response body');
-      }
+
+        // Extract refreshToken if present and forward as extra field
+        const refreshTokenVal =
+          json['refreshToken'] ||
+          json['refresh_token'] ||
+          json.data?.['refreshToken'] ||
+          json.data?.['refresh_token'];
+        if (refreshTokenVal && typeof refreshTokenVal === 'string') {
+          capturedExtra = { ...capturedExtra, refreshToken: refreshTokenVal };
+        }
+      } catch (e) {}
 
       await checkValidation();
     });

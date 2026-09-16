@@ -120,9 +120,6 @@ export class FreebuffProvider implements Provider {
             .join(', ');
 
           if (!hasSessionToken) {
-            logger.debug(
-              '[Freebuff] Login validation: waiting for session-token cookie...',
-            );
             return { isValid: false };
           }
 

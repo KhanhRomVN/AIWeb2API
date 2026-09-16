@@ -191,15 +191,6 @@ export async function qwenUploadFile(
           const statusData =
             (await statusRes.json()) as FileParseStatusResponse;
 
-          // Debug: log raw response
-          logger.debug('[Qwen Upload] Parse status response', {
-            success: statusData.success,
-            hasData: !!statusData.data,
-            dataLength: statusData.data?.length || 0,
-            rawData: statusData.data,
-            message: statusData.message,
-          });
-
           if (
             statusData.success &&
             statusData.data &&
@@ -225,13 +216,6 @@ export async function qwenUploadFile(
               );
               throw new Error(`File processing failed: ${status}`);
             }
-
-            // Status is still processing, continue polling
-            logger.debug('[Qwen Upload] File still processing', {
-              file_id,
-              status,
-              attempt: attempts,
-            });
           } else {
             logger.warn(
               `[Qwen Upload] No file status data in response | attempt=${attempts}`,

@@ -26,7 +26,7 @@ import {
   queryAccountStatsByPeriod,
   queryModelStatsByPeriod,
 } from '../repositories/metrics.repository';
-import { upsertModel, updateModelSuccessRate } from '../repositories/model.repository';
+import { upsertModelStats, updateModelSuccessRate } from '../repositories/model-stats.repository';
 
 // ── Services ──
 import { invalidateProviderCache } from './provider.service';
@@ -43,7 +43,7 @@ const logger = createLogger('MetricsService');
 
 export async function recordRequest(providerId: string, modelId: string) {
   try {
-    upsertModel(providerId, modelId, modelId, false, null, Date.now());
+    upsertModelStats(providerId, modelId);
   } catch (error) {
     logger.error('Error updating request stats:', error);
   }
@@ -56,7 +56,7 @@ export async function recordSuccess(
   tokens: number,
 ) {
   try {
-    upsertModel(providerId, modelId, modelId, false, null, Date.now());
+    upsertModelStats(providerId, modelId);
   } catch (error) {
     logger.error('Error updating success stats:', error);
   }
@@ -70,7 +70,7 @@ export async function recordError(
   errorMessage?: string,
 ) {
   try {
-    upsertModel(providerId, modelId, modelId, false, null, Date.now());
+    upsertModelStats(providerId, modelId);
   } catch (error) {
     logger.error('Error updating error stats:', error);
   }
