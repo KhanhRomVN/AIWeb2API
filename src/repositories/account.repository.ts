@@ -40,6 +40,7 @@ export interface AccountRow {
   reset_usage_at?: string;
   is_memory_enabled?: number;
   user_data_dir?: string | null;
+  last_used_at?: number | null;
 }
 
 export interface ListAccountsOptions {
@@ -242,8 +243,13 @@ export const updateAccountMemory = (id: string, isMemoryEnabled: boolean): void 
   );
 };
 
-export const updateAccountLastUsed = (id: string): void => {
-  // no-op: last_refreshed_at column removed
+/**
+ * Cập nhật thời điểm account được dùng gần nhất (ms timestamp).
+ * Được gọi mỗi khi sendMessage() thực sự dispatch request tới provider.
+ */
+export const updateAccountLastUsed = (id: string, ts: number = Date.now()): void => {
+  const db = getDb();
+  db.prepare('UPDATE accounts SET last_used_at = ? WHERE id = ?').run(ts, id);
 };
 
 export const updateAccountUsage = (

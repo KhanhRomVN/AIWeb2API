@@ -24,6 +24,7 @@
  * - CLAUDE_HOST / CLAUDE_BOOTSTRAP_PATH_PREFIX
  * - DEFAULT_TIMEZONE / DEFAULT_LOCALE / DEFAULT_EFFORT / DEFAULT_THINKING_MODE
  *   / DEFAULT_RENDERING_MODE / DEFAULT_CHAT_MEMORY_MODE
+ * - EFFORT_LEVELS / THINKING_MODES / WEB_SEARCH_TOOL
  * ------------------------------------------------------------------
  */
 
@@ -281,6 +282,37 @@ export const DEFAULT_EFFORT = 'medium';
 export const DEFAULT_THINKING_MODE = 'auto';
 export const DEFAULT_RENDERING_MODE = 'messages';
 export const DEFAULT_CHAT_MEMORY_MODE = 'enabled';
+
+/**
+ * Các mức effort claude.ai chấp nhận cho completion request.
+ * `getModels()` nhân mỗi model base với từng mức này để tạo model id
+ * dạng `<base>-<effort>` (ví dụ `claude-sonnet-5-medium`).
+ *
+ * Lưu ý: hiện chỉ `low` và `medium` được xác nhận trong traffic capture.
+ * `high` / `extra` / `max` theo yêu cầu — nếu API từ chối, chỉ cần rút gọn
+ * mảng này, phần còn lại tự thích nghi.
+ */
+export const EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'extra',
+  'max',
+] as const;
+
+/** Giá trị `thinking_mode` trong completion payload. */
+export const THINKING_MODES = {
+  /** Tắt thinking hoàn toàn. */
+  OFF: 'off',
+  /** Để claude.ai tự quyết định (bật thinking cho model hỗ trợ). */
+  AUTO: 'auto',
+} as const;
+
+/** Tool descriptor để bật web search trong completion request. */
+export const WEB_SEARCH_TOOL = {
+  type: 'web_search_v0',
+  name: 'web_search',
+} as const;
 
 // ─── SSE Protocol ────────────────────────────────────────────────────
 

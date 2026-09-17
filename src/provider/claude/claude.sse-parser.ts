@@ -55,6 +55,9 @@ export async function parseSSEStream(
   let buffer = '';
   let accumulatedContent = '';
   let stopped = false;
+  let eventCount = 0;
+
+  logger.debug('[Claude SSE] Bắt đầu đọc response stream');
 
   for await (const chunk of responseBody) {
     const chunkStr = chunk.toString();
@@ -77,6 +80,15 @@ export async function parseSSEStream(
         logger.warn('[Claude] Failed to parse SSE line:', e);
         continue;
       }
+
+      eventCount++;
+      logger.debug(
+        `[Claude SSE] event #${eventCount} type=${json.type}` +
+          (json.delta?.text
+            ? ` text="${json.delta.text.slice(0, 80)}"`
+            : '') +
+          (json.delta?.thinking ? ' [thinking]' : ''),
+      );
 
       if (
         json.type === SSE_EVENT_TYPES.CONTENT_BLOCK_DELTA &&
@@ -105,11 +117,17 @@ export async function parseSSEStream(
       }
 
       if (json.type === SSE_EVENT_TYPES.MESSAGE_STOP) {
+        logger.debug(
+          `[Claude SSE] message_stop — tổng ${eventCount} event, content ${accumulatedContent.length} ký tự`,
+        );
         stopped = true;
         return { accumulatedContent, stopped };
       }
     }
   }
 
+  logger.debug(
+    `[Claude SSE] Stream kết thúc không có message_stop — tổng ${eventCount} event, content ${accumulatedContent.length} ký tự`,
+  );
   return { accumulatedContent, stopped };
 }

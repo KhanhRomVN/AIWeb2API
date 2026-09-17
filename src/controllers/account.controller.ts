@@ -45,6 +45,11 @@ import {
 import { updateAccountCredential } from '../repositories/account.repository';
 import { providerRegistry } from '../provider/registry';
 import { queryAccountStatsByPeriod } from '../repositories/metrics.repository';
+import {
+  heartbeatPresence,
+  releasePresence,
+  countOtherWindows,
+} from '../services/presence.service';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -321,6 +326,7 @@ export const getAccounts = async (
     const sort_by = (req.query.sort_by as string) || 'email';
     const order =
       (req.query.order as string)?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    const clientId = (req.query.clientId as string) || null;
 
     const { rows, total } = getAccountsService({
       page,
@@ -354,7 +360,12 @@ export const getAccounts = async (
         period_requests: 0,
         period_tokens: 0,
       };
-      return { ...row, ...stats };
+      return {
+        ...row,
+        ...stats,
+        last_used_at: row.last_used_at ?? null,
+        used_by_windows: countOtherWindows(row.id, clientId),
+      };
     });
 
     res.status(200).json({
@@ -435,6 +446,80 @@ export const deleteAccount = async (
       success: false,
       message: 'Internal server error',
       error: { code: 'INTERNAL_ERROR', details: error.message },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
+// POST /v1/accounts/:id/presence
+// Webview gọi định kỳ để báo "cửa sổ này đang active account X".
+// Body: { clientId: string }. Trả về số cửa sổ KHÁC đang active account đó.
+export const heartbeatAccountPresence = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { clientId } = req.body || {};
+
+    if (!id || typeof clientId !== 'string' || !clientId) {
+      res.status(400).json({
+        success: false,
+        message: 'account id and clientId are required',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const others = heartbeatPresence(id, clientId);
+    res.status(200).json({
+      success: true,
+      data: { account_id: id, used_by_windows: others },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error) {
+    logger.error('Error in heartbeatAccountPresence', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: { code: 'INTERNAL_ERROR' },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
+// DELETE /v1/accounts/:id/presence?clientId=...
+export const releaseAccountPresence = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const clientId = (req.query.clientId as string) || null;
+
+    if (!id || !clientId) {
+      res.status(400).json({
+        success: false,
+        message: 'account id and clientId are required',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    releasePresence(id, clientId);
+    res.status(200).json({
+      success: true,
+      data: { account_id: id },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error) {
+    logger.error('Error in releaseAccountPresence', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: { code: 'INTERNAL_ERROR' },
       meta: { timestamp: new Date().toISOString() },
     });
   }

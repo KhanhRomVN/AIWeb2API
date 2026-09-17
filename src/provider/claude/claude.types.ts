@@ -120,6 +120,8 @@ export interface ClaudeCompletionPayload {
   model: string;
   effort?: string;
   thinking_mode?: string;
+  /** Danh sách tool bật cho request này (ví dụ `web_search_v0`). */
+  tools?: Array<Record<string, unknown>>;
   turn_message_uuids: {
     human_message_uuid: string;
     assistant_message_uuid: string;

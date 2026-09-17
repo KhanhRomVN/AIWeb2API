@@ -44,3 +44,5 @@ temp
 src/scratch/
 dist-bin/
 .git_disabled/
+
+chatgpt2api

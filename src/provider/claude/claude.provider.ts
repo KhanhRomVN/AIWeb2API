@@ -77,7 +77,33 @@ import {
   DEFAULT_RENDERING_MODE,
   DEFAULT_CHAT_MEMORY_MODE,
   CHROME_FINGERPRINT_HEADERS,
+  EFFORT_LEVELS,
+  THINKING_MODES,
+  WEB_SEARCH_TOOL,
 } from './claude.constant';
+
+/**
+ * Tách `effort` khỏi model id dạng `<base>-<effort>`.
+ * Nếu suffix không khớp EFFORT_LEVELS → coi như không có effort.
+ * Ví dụ: `claude-sonnet-5-medium` → `{ base: 'claude-sonnet-5', effort: 'medium' }`
+ */
+function splitModelAndEffort(modelId: string): {
+  base: string;
+  effort: string | null;
+} {
+  for (const lvl of EFFORT_LEVELS) {
+    const suffix = `-${lvl}`;
+    if (modelId.endsWith(suffix)) {
+      return { base: modelId.slice(0, -suffix.length), effort: lvl };
+    }
+  }
+  return { base: modelId, effort: null };
+}
+
+/** Viết hoa chữ cái đầu để ghép vào tên hiển thị: `medium` → `Medium`. */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ClaudeProvider');
@@ -122,7 +148,9 @@ export class ClaudeProvider implements Provider {
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
-    models: FALLBACK_MODELS,
+    // Để rỗng → getAllProviders sẽ gọi dynamic getModels() (bootstrap).
+    // Fallback tĩnh vẫn dùng khi bootstrap fail (xem getModels()).
+    models: [],
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
     description: PROVIDER_DESCRIPTION,
@@ -235,10 +263,15 @@ export class ClaudeProvider implements Provider {
 
     if (!modelsConfig || modelsConfig.length === 0) {
       logger.warn('[Claude] No models config from bootstrap, using fallback');
+      logger.info(
+        `[Claude getModels] Dùng fallback models: ${FALLBACK_MODELS.map((m) => m.id).join(', ')}`,
+      );
       return [...FALLBACK_MODELS];
     }
 
-    return modelsConfig.map((m) => {
+    // Nhân mỗi model base với từng mức effort → nhiều entry cùng base.
+    const expanded: any[] = [];
+    for (const m of modelsConfig) {
       const caps = m.capabilities;
       const isThinking =
         Array.isArray(m.thinking_modes) && m.thinking_modes.length > 0;
@@ -246,23 +279,40 @@ export class ClaudeProvider implements Provider {
       const isPdfUpload = caps?.mm_pdf === true;
       const isSearch = caps?.web_search !== false;
 
-      return {
-        id: m.model,
-        name: m.name,
-        is_thinking: isThinking,
-        max_context_length: m.hard_limit ?? null,
-        is_search: isSearch,
-        is_image_upload: isImageUpload,
-        is_video_upload: false,
-        is_audio_upload: false,
-        is_file_upload: isPdfUpload,
-        is_larger_content_paste_upload: false,
-        is_image_generator: false,
-        is_video_generator: false,
-        is_deep_research: false,
-        description: m.description || m.name,
-      };
-    });
+      // Model không hỗ trợ thinking → effort vô nghĩa, chỉ tạo 1 entry.
+      const effortsForModel: Array<string | null> = isThinking
+        ? [...EFFORT_LEVELS]
+        : [null];
+
+      for (const effort of effortsForModel) {
+        const id = effort ? `${m.model}-${effort}` : m.model;
+        const name = effort ? `${m.name} ${capitalize(effort)}` : m.name;
+        expanded.push({
+          id,
+          name,
+          is_thinking: isThinking,
+          max_context_length: m.hard_limit ?? null,
+          is_search: isSearch,
+          is_image_upload: isImageUpload,
+          is_video_upload: false,
+          is_audio_upload: false,
+          is_file_upload: isPdfUpload,
+          is_larger_content_paste_upload: false,
+          is_image_generator: false,
+          is_video_generator: false,
+          is_deep_research: false,
+          description: m.description || m.name,
+        });
+      }
+    }
+
+    logger.info(
+      `[Claude getModels] Lấy được ${modelsConfig.length} model base từ bootstrap, ` +
+        `mở rộng thành ${expanded.length} model (effort levels: ${EFFORT_LEVELS.join(', ')}). ` +
+        `IDs: ${expanded.map((x) => x.id).join(', ')}`,
+    );
+
+    return expanded;
   }
 
   // ─── Login ──────────────────────────────────────────────────────────
@@ -451,13 +501,31 @@ export class ClaudeProvider implements Provider {
       const lastMessage = messages[messages.length - 1];
       const prompt = lastMessage?.content || '';
 
+      // Model id dạng `<base>-<effort>` (do getModels sinh ra); tách ngược lại.
+      const { base: baseModel, effort: parsedEffort } =
+        splitModelAndEffort(model);
+      const effort = parsedEffort || DEFAULT_EFFORT;
+
+      // thinking: false → tắt thinking; ngược lại dùng mode mặc định (auto).
+      const thinkingMode =
+        options.thinking === false ? THINKING_MODES.OFF : DEFAULT_THINKING_MODE;
+
+      // web search: chỉ bật khi caller truyền search=true.
+      const tools = options.search === true ? [WEB_SEARCH_TOOL] : [];
+
+      logger.debug(
+        `[Claude handleMessage] model=${model} → base=${baseModel}, effort=${effort}, ` +
+          `thinking_mode=${thinkingMode}, search=${options.search === true}, thinking=${options.thinking}`,
+      );
+
       const payload: ClaudeCompletionPayload = {
         prompt,
         timezone: DEFAULT_TIMEZONE,
         locale: DEFAULT_LOCALE,
-        model,
-        effort: DEFAULT_EFFORT,
-        thinking_mode: DEFAULT_THINKING_MODE,
+        model: baseModel,
+        effort,
+        thinking_mode: thinkingMode,
+        tools,
         turn_message_uuids: {
           human_message_uuid: randomUUID(),
           assistant_message_uuid: randomUUID(),
@@ -466,7 +534,7 @@ export class ClaudeProvider implements Provider {
         rendering_mode: DEFAULT_RENDERING_MODE,
         create_conversation_params: {
           name: '',
-          model,
+          model: baseModel,
           include_conversation_preferences: true,
           chat_memory_mode: DEFAULT_CHAT_MEMORY_MODE,
         },

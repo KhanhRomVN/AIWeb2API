@@ -32,6 +32,8 @@ import {
   updateAccountMemory,
   getAccountBrowserStatus,
   startAccountBrowser,
+  heartbeatAccountPresence,
+  releaseAccountPresence,
 } from '../../controllers/account.controller';
 
 // ─── Router ─────────────────────────────────────────────────────────────
@@ -42,6 +44,8 @@ router.post('/import', importAccounts);
 router.post('/', addAccount);
 router.get('/', getAccounts);
 router.delete('/:id', deleteAccount);
+router.post('/:id/presence', heartbeatAccountPresence);
+router.delete('/:id/presence', releaseAccountPresence);
 router.post('/:id/refresh-token', refreshAccountToken);
 router.get('/:id/memory', getAccountMemory);
 router.put('/:id/memory', updateAccountMemory);

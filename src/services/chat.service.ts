@@ -27,7 +27,10 @@ import { isProviderEnabled } from './provider.service';
 import { recordChatMetrics, recordError } from './metrics.service';
 
 // ── Repositories ──
-import { updateAccountCredential } from '../repositories/account.repository';
+import {
+  updateAccountCredential,
+  updateAccountLastUsed,
+} from '../repositories/account.repository';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -122,6 +125,18 @@ export const sendMessage = async (
           }
         : undefined),
   };
+
+  // Ghi nhận thời điểm account được dùng (trước khi dispatch thực tế).
+  if (accountId) {
+    try {
+      updateAccountLastUsed(accountId);
+    } catch (lastUsedErr: any) {
+      logger.warn(
+        `[sendMessage] Failed to update last_used_at for account ${accountId}:`,
+        lastUsedErr?.message || lastUsedErr,
+      );
+    }
+  }
 
   try {
     return await provider.handleMessage(wrappedOptions);

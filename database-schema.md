@@ -22,6 +22,7 @@ Lưu trữ thông tin tài khoản của các provider AI.
 - **`reset_usage_at`** (TEXT) — Thời điểm reset usage, có thể là ngày tháng năm (`YYYY-MM-DD`) hoặc ngày tháng năm và giờ phút (`YYYY-MM-DD HH:MM`)
 - **`is_memory_enabled`** (INTEGER, DEFAULT 0) — Trạng thái bật/tắt memory cho account (1 = enabled, 0 = disabled)
 - **`user_data_dir`** (TEXT) — Đường dẫn thư mục profile Chrome cho browser-based provider (VD: zai-browser)
+- **`last_used_at`** (INTEGER, NULL) — Timestamp (ms) của lần gần nhất account được dùng để gửi tin nhắn. NULL nếu chưa từng dùng. Được cập nhật mỗi khi `sendMessage()` thực sự dispatch request tới provider.
 
 ---
 

@@ -117,6 +117,18 @@ function migrateAccounts(db: Database.Database): void {
       }
     }
 
+    // Migration: add last_used_at (ms timestamp of last send)
+    const colsAfterMemory = (db.pragma('table_info(accounts)') as any[]).map(
+      (c) => c.name,
+    );
+    if (!colsAfterMemory.includes('last_used_at')) {
+      try {
+        db.exec('ALTER TABLE accounts ADD COLUMN last_used_at INTEGER');
+      } catch (e) {
+        logger.warn('Failed to add last_used_at to accounts', e);
+      }
+    }
+
     // Migration: Rename provider → provider_id
     const updatedCols = (db.pragma('table_info(accounts)') as any[]).map(
       (c) => c.name,
@@ -351,6 +363,7 @@ function migrateBrowserSessions(db: Database.Database): void {
         reset_usage_at: string | null;
         is_memory_enabled: number | null;
         user_data_dir: string | null;
+        last_used_at: number | null;
       }
       const accountsData = db
         .prepare('SELECT * FROM accounts')
@@ -369,14 +382,15 @@ function migrateBrowserSessions(db: Database.Database): void {
           usage REAL,
           reset_usage_at TEXT,
           is_memory_enabled INTEGER DEFAULT 0,
-          user_data_dir TEXT
+          user_data_dir TEXT,
+          last_used_at INTEGER
         )
       `);
 
       // Restore data
       const insertStmt = db.prepare(`
-        INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, is_memory_enabled, user_data_dir)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, is_memory_enabled, user_data_dir, last_used_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const row of accountsData) {
@@ -389,6 +403,7 @@ function migrateBrowserSessions(db: Database.Database): void {
           row.reset_usage_at,
           row.is_memory_enabled || 0,
           row.user_data_dir,
+          row.last_used_at ?? null,
         );
       }
     }
