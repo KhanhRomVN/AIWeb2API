@@ -96,6 +96,37 @@ export interface DeepSeekUserInfo {
   token: string;
 }
 
+// ─── Credential ─────────────────────────────────────────────────────────
+
+/**
+ * Credential DeepSeek đã parse từ JSON string.
+ * - `token`    : bearer token opaque (không phải JWT)
+ * - `deviceId` : UUID v4 do client sinh, lưu cố định theo credential.
+ *                `null` nếu credential cũ chưa có trường này.
+ */
+export interface DeepSeekCredential {
+  token: string;
+  deviceId: string | null;
+}
+
+// ─── Auth Renew (check_device) ──────────────────────────────────────────
+
+/**
+ * Response của `/api/v0/users/auth_token/check_device`.
+ * `rotate` là token mới nếu server muốn rotate, `null` nếu token còn hợp lệ.
+ * Doc ghi chú: chưa capture được traffic rotate thực, nên giữ union string|object.
+ */
+export interface CheckDeviceResponse {
+  rotate: string | null | { token?: string };
+}
+
+/** Kết quả của renewTokenIfPossible() — trả về credential mới (JSON string) */
+export interface RenewResult {
+  token: string;
+  rotated: boolean;
+  newCredential: string;
+}
+
 // ─── Upload ─────────────────────────────────────────────────────────────
 
 export interface UploadFileInput {

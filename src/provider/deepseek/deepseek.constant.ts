@@ -88,6 +88,7 @@ export const DEEPSEEK_AUTH_METHODS = {
 export const API_PATHS = {
   USERS_CURRENT: '/api/v0/users/current',
   USERS_LOGIN: '/api/v0/users/login',
+  USERS_AUTH_TOKEN_CHECK_DEVICE: '/api/v0/users/auth_token/check_device',
   CHAT_CONTINUE: '/api/v0/chat/continue',
   CHAT_SESSION_CREATE: '/api/v0/chat_session/create',
   CHAT_CREATE_POW_CHALLENGE: '/api/v0/chat/create_pow_challenge',
@@ -186,6 +187,26 @@ export const UPLOAD_CONFIG = {
 
 export const WASM_FILENAME = 'sha3_wasm_bg.7b9ca65ddd.wasm';
 export const LOGIN_PARTITION_PREFIX = 'deepseek-';
+
+// ─── Auth Renew (check_device) ───────────────────────────���────────────
+
+/**
+ * Cấu hình cho cơ chế auto-renew token DeepSeek.
+ * Token DeepSeek là opaque, không có expires_in → phải chủ động kiểm tra
+ * qua endpoint `auth_token/check_device` để nhận token mới khi server rotate.
+ */
+export const AUTH_RENEW_CONFIG = {
+  /** Gọi check_device proactive mỗi N ms (mặc định 6 giờ) */
+  PROACTIVE_INTERVAL_MS: 6 * 60 * 60 * 1000,
+  /** Timeout cho 1 lần check_device (ms) */
+  REQUEST_TIMEOUT_MS: 15_000,
+  /** Số lần retry tối đa khi gặp lỗi mạng (không tính 40003) */
+  MAX_NETWORK_RETRIES: 2,
+} as const;
+
+export const DEEPSEEK_ERROR_CODES = {
+  AUTHORIZATION_FAILED: 40003,
+} as const;
 export const HISTORY_MESSAGES_COUNT = 20;
 export const SUCCESS_CODE = 0;
 export const MASKED_EMAIL_INDICATOR = '***';
@@ -214,6 +235,8 @@ export const HTTP_HEADER_NAMES = {
   X_THINKING_ENABLED: 'x-thinking-enabled',
   X_FILE_SIZE: 'x-file-size',
   X_DS_POW_RESPONSE: 'X-Ds-Pow-Response',
+  X_DEVICE_ID: 'x-device-id',
+  X_DEVICE_MODEL: 'x-device-model',
 } as const;
 
 export const HTTP_HEADER_NAMES_LOWERCASE = {

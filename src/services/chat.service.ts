@@ -26,6 +26,9 @@ import { isProviderEnabled } from './provider.service';
 // ── Metrics ──
 import { recordChatMetrics, recordError } from './metrics.service';
 
+// ── Repositories ──
+import { updateAccountCredential } from '../repositories/account.repository';
+
 // ── Utils ──
 import { createLogger } from '../utils/logger';
 
@@ -99,6 +102,25 @@ export const sendMessage = async (
 
       if (onDone) onDone();
     },
+    // Nếu caller không tự cung cấp hook, mặc định persist credential mới
+    // (do provider rotate, ví dụ DeepSeek check_device) vào DB qua accountId.
+    onCredentialRotated:
+      options.onCredentialRotated ||
+      (accountId
+        ? (newCredential: string) => {
+            try {
+              updateAccountCredential(accountId, newCredential);
+              logger.info(
+                `[sendMessage] Persisted rotated credential for account ${accountId}`,
+              );
+            } catch (persistErr: any) {
+              logger.warn(
+                `[sendMessage] Failed to persist rotated credential for account ${accountId}:`,
+                persistErr?.message || persistErr,
+              );
+            }
+          }
+        : undefined),
   };
 
   try {

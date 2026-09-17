@@ -32,6 +32,11 @@ export interface SendMessageOptions {
   onError: (err: any) => void;
   onRaw?: (data: string) => void;
   onSessionCreated?: (sessionId: string) => void;
+  /**
+   * Được gọi khi provider rotate credential (ví dụ DeepSeek check_device trả token mới).
+   * Caller (service layer) chịu trách nhiệm persist credential mới vào DB.
+   */
+  onCredentialRotated?: (newCredential: string) => void | Promise<void>;
 }
 
 export interface Provider {

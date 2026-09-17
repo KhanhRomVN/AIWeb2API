@@ -9,8 +9,13 @@
  * - Phase: "thinking_summary"
  * - Structure: delta.extra.summary_thought.content (array of strings)
  * - Also supports: delta.reasoning_content (backward compatibility)
+ *
+ * Elapsed time: wall-clock timer (Qwen không trả về elapsed natively).
  * ------------------------------------------------------------------
  */
+
+// ─── Imports ────────────────────────────────────────────────────────────
+import { ThinkingTimer } from '../../utils/thinking-timer';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -32,34 +37,33 @@ export class QwenThinkingParser {
   private isThinkingEnded = false;
   private summaryTitle: string[] = [];
   private summaryThought: string[] = [];
+  private readonly timer = new ThinkingTimer();
 
   /**
-   * Feed thinking content chunk
-   * Automatically wrap trong <thinking> tags
+   * Feed thinking content chunk.
+   * Chunk đầu tiên tự động emit opening tag <thinking> và bắt đầu timer.
    */
   feed(chunk: string): string {
     if (!chunk) return '';
 
-    // First chunk: emit opening tag
     if (!this.isThinkingStarted) {
       this.isThinkingStarted = true;
+      this.timer.start();
       this.buffer = chunk;
       return '<thinking>' + chunk;
     }
 
-    // Subsequent chunks: just append
     this.buffer += chunk;
     return chunk;
   }
 
   /**
-   * Feed thinking summary (từ thinking_summary phase)
-   * This is called when we receive the complete summary object
+   * Feed thinking summary (từ thinking_summary phase).
+   * Gọi khi nhận được complete summary object.
    */
   feedSummary(summary: QwenThinkingSummary): string {
     const parts: string[] = [];
 
-    // Add title if available
     if (summary.title && summary.title.length > 0) {
       this.summaryTitle = summary.title;
       const titleText = summary.title.join('\n');
@@ -68,7 +72,6 @@ export class QwenThinkingParser {
       }
     }
 
-    // Add thought content
     if (summary.thought && summary.thought.length > 0) {
       this.summaryThought = summary.thought;
       const thoughtText = summary.thought.join('\n');
@@ -81,39 +84,41 @@ export class QwenThinkingParser {
 
     const content = parts.join('\n\n');
 
-    // First summary: emit opening tag
     if (!this.isThinkingStarted) {
       this.isThinkingStarted = true;
+      this.timer.start();
       this.buffer = content;
       return '<thinking>' + content;
     }
 
-    // Subsequent summaries: just append
     this.buffer += '\n\n' + content;
     return '\n\n' + content;
   }
 
   /**
-   * End thinking phase
-   * Emit closing tag
+   * Kết thúc thinking phase.
+   * Emit closing tag </thinking> với elapsed time.
    */
   end(): string {
     if (this.isThinkingEnded) return '';
     this.isThinkingEnded = true;
 
-    return '</thinking>';
+    const elapsed = this.timer.stop();
+    let result = '</thinking>';
+
+    if (elapsed !== null) {
+      result += `\n<thinking_elapsed>${ThinkingTimer.format(elapsed)}</thinking_elapsed>`;
+    }
+
+    return result;
   }
 
-  /**
-   * Get accumulated thinking content
-   */
+  /** Trả về toàn bộ thinking content đã tích lũy. */
   getBuffer(): string {
     return this.buffer;
   }
 
-  /**
-   * Get summary data
-   */
+  /** Trả về summary data. */
   getSummary(): QwenThinkingSummary {
     return {
       title: this.summaryTitle,
@@ -121,21 +126,20 @@ export class QwenThinkingParser {
     };
   }
 
-  /**
-   * Reset parser state
-   */
+  /** Reset parser state. */
   reset(): void {
     this.buffer = '';
     this.isThinkingStarted = false;
     this.isThinkingEnded = false;
     this.summaryTitle = [];
     this.summaryThought = [];
+    this.timer.reset();
   }
 }
 
 /**
- * Create normalized thinking parser for Qwen
- * Returns standardized <thinking>content</thinking> format
+ * Create normalized thinking parser for Qwen.
+ * Returns standardized <thinking>content</thinking> format.
  */
 export function createQwenThinkingParser() {
   return new QwenThinkingParser();

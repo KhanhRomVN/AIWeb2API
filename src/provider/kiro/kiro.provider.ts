@@ -2,58 +2,51 @@
  * ------------------------------------------------------------------
  * Kiro Provider
  * ------------------------------------------------------------------
- * Provider implementation cho Kiro với OAuth Device Code Flow.
- * Sử dụng AWS OIDC Device Authorization Grant cho Google/GitHub login.
+ * Provider implementation cho Kiro với nhiều auth method.
+ * Sync với OmniRoute src/lib/oauth/providers/kiro.ts + services/kiro.ts.
  *
- * Main features:
- * - login()                     : Đăng nhập qua OAuth Device Code Flow
- * - initiateDeviceAuthorization : Bắt đầu device flow, lấy user_code
- * - pollForTokens()             : Polling để lấy tokens sau khi user authorize
- * - getUserProfile()            : Lấy thông tin user profile
+ * Auth flows:
+ * 1. AWS Builder ID   – AWS OIDC Device Code, startUrl = view.awsapps.com/start
+ * 2. AWS IAM IDC      – AWS OIDC Device Code, custom startUrl/region do user nhập
+ * 3. Google / GitHub  – Kiro Social Device Code (prod.us-east-1.auth.desktop.kiro.dev)
+ * 4. Import Token     – Paste refresh token (validate + register OIDC client)
+ * 5. API Key          – Long-lived CodeWhisperer API key
+ *
+ * Login flow (2 bước):
+ * - login()    → trả về pending=true + user_code + verification_url + tempSessionId
+ * - pollOnce() → gọi định kỳ từ UI cho đến khi done=true
  * ------------------------------------------------------------------
  */
 
-// ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
-import { Router } from 'express';
+// ─── Imports ─────────────────────────────────────────────────────────────
 import fetch from 'node-fetch';
 import { exec } from 'child_process';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
-// ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
-
-// ── Utils ──
 import { createLogger } from '../../utils/logger';
+import { proxyHandler } from './kiro.proxy-handler';
+import { ByteQueue, parseEventFrame } from './kiro.sse-parser';
 
-// ── Kiro Constants ──
 import {
-  PROVIDER_ID,
   PROVIDER_NAME,
-  PROVIDER_DESCRIPTION,
-  PROVIDER_COLOR,
-  IS_ENABLED,
-  WEBSITE_URL,
-  AUTH_METHOD,
-  CONNECTION_TYPE,
   MODELS,
-  IS_PAUSABLE,
-  IS_MEMORY,
-  BASE_URL,
-  BASE_URLS,
-  DEVICE_CODE_FLOW,
-  API_FIELDS,
-  API_PATHS,
-  AUTH_DATA_DEFAULTS,
-  AUTH_METHODS,
-  CONTENT_TYPES,
+  AWS_OIDC,
+  OIDC_CLIENT,
+  SOCIAL_AUTH,
+  BUILDER_ID_START_URL,
   DEFAULT_REGION,
+  AUTH_METHODS,
+  AUTH_DATA_DEFAULTS,
   DEVICE_CODE_DEFAULTS,
   FALLBACK_EMAIL,
   HTTP_HEADER_NAMES,
   HTTP_HEADERS,
+  CONTENT_TYPES,
+  API_FIELDS,
+  kiroRuntimeHost,
 } from './kiro.constant';
 
-// ── Kiro Types ──
 import type {
   KiroAuthData,
   KiroAuthMethod,
@@ -63,110 +56,61 @@ import type {
   KiroDeviceAuthorizationResponse,
   KiroTokenPollRequest,
   KiroTokenPollResponse,
-  KiroUserProfileResponse,
   DeviceCodeResponse,
   DeviceTokenResponse,
   DeviceCodeError,
+  KiroPollContext,
+  KiroSocialPollResponse,
 } from './kiro.types';
 
-// ── Kiro Internal ──
-import { proxyHandler } from './kiro.proxy-handler';
-
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────
 const logger = createLogger('KiroProvider');
 
-// ─── Provider Class ────────────────────────────────────────────────────
+// ─── Provider Class ───────────────────────────────────────────────────────
 
 export class KiroProvider implements Provider {
   name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
 
-  // ─── Provider Configuration ────────────────────────────────────────
+  // ─── Provider Configuration ───────────────────────────────────────────
   static config = {
-    provider_id: PROVIDER_ID,
+    provider_id: 'kiro',
     provider_name: PROVIDER_NAME,
-    description: PROVIDER_DESCRIPTION,
-    color: PROVIDER_COLOR,
-    is_enabled: IS_ENABLED,
-    website_url: WEBSITE_URL,
-    auth_method: AUTH_METHOD,
-    connection_type: CONNECTION_TYPE,
+    description: 'AWS-powered AI coding assistant with OAuth authentication',
+    color: '#8B5CF6',
+    is_enabled: true,
+    website_url: 'https://kiro.dev/',
+    auth_method: ['google', 'github'],
+    connection_type: 'https',
     models: MODELS,
-    is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
+    is_pausable: false,
+    is_memory: false,
   };
 
-  // ─── Device Authorization Flow ─────────────────────────────────────
+  // ─── AWS OIDC: Register Client ─────────────────────────────────────────
 
   /**
-   * Step 1: Initiate device authorization
-   * Gọi AWS OIDC device authorization endpoint để lấy device_code và user_code
+   * Register OIDC client với AWS SSO OIDC.
+   * Tạo dynamic client để dùng trong device flow.
+   *
+   * Với IDC flow (skipIssuerUrl=true), không gửi issuerUrl vì mỗi tenant IDC
+   * có issuerUrl riêng — gửi issuerUrl cố định sẽ gây invalid_request.
    */
-  private async initiateDeviceAuthorization(
-    authMethod: KiroAuthMethod,
-  ): Promise<DeviceCodeResponse> {
-    // Register OIDC client first
-    const clientRegistration = await this.registerOIDCClient();
+  private async registerOIDCClient(
+    region = DEFAULT_REGION,
+    skipIssuerUrl = false,
+  ): Promise<KiroClientRegistrationResponse> {
+    const registerUrl = `https://oidc.${region}.amazonaws.com/client/register`;
 
-    // AWS OIDC device_authorization requires JSON body with clientId, clientSecret, startUrl
-    const requestBody: KiroDeviceAuthorizationRequest = {
-      clientId: clientRegistration.clientId,
-      clientSecret: clientRegistration.clientSecret,
-      startUrl: DEVICE_CODE_FLOW.START_URL,
-    };
-
-    const response = await fetch(DEVICE_CODE_FLOW.DEVICE_AUTHORIZATION_URL, {
-      method: 'POST',
-      headers: {
-        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('[Kiro] Device authorization failed:', errorText);
-      throw new Error(`Device authorization failed: ${response.status}`);
-    }
-
-    const data = (await response.json()) as KiroDeviceAuthorizationResponse;
-
-    // AWS OIDC returns camelCase fields
-    const deviceCodeResponse: DeviceCodeResponse = {
-      device_code: data[API_FIELDS.DEVICE_CODE],
-      user_code: data[API_FIELDS.USER_CODE],
-      verification_uri:
-        data[API_FIELDS.VERIFICATION_URI] || DEVICE_CODE_FLOW.VERIFICATION_URI,
-      verification_uri_complete:
-        data[API_FIELDS.VERIFICATION_URI_COMPLETE],
-      expires_in:
-        data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.EXPIRES_SEC,
-      interval:
-        data[API_FIELDS.INTERVAL] || DEVICE_CODE_DEFAULTS.INTERVAL_SEC,
-    };
-
-    // Store client credentials for token polling
-    deviceCodeResponse.clientId = clientRegistration.clientId;
-    deviceCodeResponse.clientSecret = clientRegistration.clientSecret;
-
-    return deviceCodeResponse;
-  }
-
-  /**
-   * Register OIDC client với AWS
-   * Tạo dynamic client để sử dụng trong device flow
-   */
-  private async registerOIDCClient(): Promise<KiroClientRegistrationResponse> {
     const requestBody: KiroClientRegistrationRequest = {
-      clientName: DEVICE_CODE_FLOW.CLIENT_NAME,
-      clientType: DEVICE_CODE_FLOW.CLIENT_TYPE,
-      scopes: DEVICE_CODE_FLOW.SCOPES,
-      grantTypes: DEVICE_CODE_FLOW.GRANT_TYPES,
-      issuerUrl: DEVICE_CODE_FLOW.ISSUER_URL,
+      clientName: OIDC_CLIENT.clientName,
+      clientType: OIDC_CLIENT.clientType,
+      scopes: OIDC_CLIENT.scopes,
+      grantTypes: OIDC_CLIENT.grantTypes,
+      ...(!skipIssuerUrl ? { issuerUrl: OIDC_CLIENT.issuerUrl } : {}),
     };
 
-    const response = await fetch(DEVICE_CODE_FLOW.REGISTER_CLIENT_URL, {
+    const response = await fetch(registerUrl, {
       method: 'POST',
       headers: {
         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
@@ -178,127 +122,576 @@ export class KiroProvider implements Provider {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error('[Kiro] OIDC client registration failed:', errorText);
-      throw new Error(`OIDC client registration failed: ${response.status}`);
+      throw new Error(`OIDC client registration failed: ${response.status} ${errorText}`);
     }
 
     const data = (await response.json()) as KiroClientRegistrationResponse;
     return {
       clientId: data.clientId,
       clientSecret: data.clientSecret,
-      clientSecretExpiresAt:
-        data[API_FIELDS.CLIENT_SECRET_EXPIRES_AT] || 0,
+      clientSecretExpiresAt: data[API_FIELDS.CLIENT_SECRET_EXPIRES_AT] || 0,
     };
   }
 
+  // ─── AWS OIDC: Device Authorization ───────────────────────────────────
+
   /**
-   * Step 2: Poll for tokens
-   * Polling AWS OIDC token endpoint cho đến khi user authorize
+   * Bắt đầu AWS OIDC device authorization flow.
+   * Dùng cho Builder ID và IDC.
    */
-  private async pollForTokens(
-    deviceCode: string,
-    clientId: string,
-    clientSecret: string,
-    interval: number = DEVICE_CODE_FLOW.POLLING_INTERVAL,
-  ): Promise<DeviceTokenResponse> {
-    const startTime = Date.now();
-    const maxWaitTime = DEVICE_CODE_FLOW.DEVICE_CODE_EXPIRES;
+  private async startAwsDeviceAuthorization(opts: {
+    region: string;
+    startUrl: string;
+    skipIssuerUrl: boolean;
+  }): Promise<DeviceCodeResponse & { _region: string }> {
+    const { region, startUrl, skipIssuerUrl } = opts;
 
-    while (Date.now() - startTime < maxWaitTime) {
-      await this.sleep(interval);
+    // Register OIDC client
+    const client = await this.registerOIDCClient(region, skipIssuerUrl);
 
-      try {
-        const requestBody: KiroTokenPollRequest = {
-          clientId,
-          clientSecret,
-          deviceCode: deviceCode,
-          grantType: DEVICE_CODE_FLOW.GRANT_TYPES[0],
+    const deviceAuthUrl = `https://oidc.${region}.amazonaws.com/device_authorization`;
+    const requestBody: KiroDeviceAuthorizationRequest = {
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      startUrl,
+    };
+
+    const response = await fetch(deviceAuthUrl, {
+      method: 'POST',
+      headers: {
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('[Kiro] Device authorization failed:', errorText);
+      throw new Error(`Device authorization failed: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as KiroDeviceAuthorizationResponse;
+
+    return {
+      device_code: data[API_FIELDS.DEVICE_CODE],
+      user_code: data[API_FIELDS.USER_CODE],
+      verification_uri: data[API_FIELDS.VERIFICATION_URI] || '',
+      verification_uri_complete: data[API_FIELDS.VERIFICATION_URI_COMPLETE],
+      expires_in: data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.EXPIRES_SEC,
+      interval: data[API_FIELDS.INTERVAL] || DEVICE_CODE_DEFAULTS.INTERVAL_SEC,
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      _region: region,
+    };
+  }
+
+  // ─── Social Device Authorization (Google / GitHub) ────────────────────
+
+  /**
+   * Bắt đầu Kiro social device authorization flow.
+   * Dùng cho Google và GitHub via prod.us-east-1.auth.desktop.kiro.dev.
+   *
+   * Endpoint này là Kiro's own auth service (Cognito-based), KHÔNG phải AWS OIDC —
+   * do đó device_code phải poll ở socialDevicePollUrl chứ không phải AWS OIDC token.
+   */
+  private async startSocialDeviceAuthorization(
+    provider: 'google' | 'github',
+  ): Promise<DeviceCodeResponse> {
+    // Endpoint expects: { clientId, loginProvider: "Google" | "Github" }
+    // Response uses camelCase + millisecond fields (expiresInMilliseconds, intervalInMilliseconds)
+    const loginProvider = provider === 'google' ? 'Google' : 'Github';
+
+    const response = await fetch(SOCIAL_AUTH.SOCIAL_DEVICE_AUTHORIZE_URL, {
+      method: 'POST',
+      headers: {
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+      },
+      body: JSON.stringify({
+        clientId: SOCIAL_AUTH.SOCIAL_CLIENT_ID,
+        loginProvider,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('[Kiro] Social device authorization failed:', errorText);
+      throw new Error(`Social device authorization failed: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as {
+      deviceCode?: string;
+      userCode?: string;
+      verificationUri?: string;
+      verificationUriComplete?: string;
+      expiresInMilliseconds?: number;
+      intervalInMilliseconds?: number;
+      // fallback snake_case
+      device_code?: string;
+      user_code?: string;
+      verification_uri?: string;
+      verification_uri_complete?: string;
+      expires_in?: number;
+      interval?: number;
+    };
+
+    const deviceCode = data.deviceCode || data.device_code || '';
+    const userCode = data.userCode || data.user_code || '';
+    const verificationUri = data.verificationUri || data.verification_uri || '';
+    const verificationUriComplete = data.verificationUriComplete || data.verification_uri_complete;
+    // Response uses milliseconds; convert to seconds for consistency
+    const expiresIn = data.expiresInMilliseconds
+      ? Math.floor(data.expiresInMilliseconds / 1000)
+      : (data.expires_in || DEVICE_CODE_DEFAULTS.EXPIRES_SEC);
+    const interval = data.intervalInMilliseconds
+      ? Math.floor(data.intervalInMilliseconds / 1000)
+      : (data.interval || DEVICE_CODE_DEFAULTS.INTERVAL_SEC);
+
+    if (!deviceCode) {
+      throw new Error('Social device authorization response missing device_code');
+    }
+
+    return {
+      device_code: deviceCode,
+      user_code: userCode,
+      verification_uri: verificationUri,
+      verification_uri_complete: verificationUriComplete,
+      expires_in: expiresIn,
+      interval,
+      clientId: SOCIAL_AUTH.SOCIAL_CLIENT_ID,
+    };
+  }
+
+  // ─── Login ────────────────────────────────────────────────────────────
+
+  /**
+   * Bước 1: Khởi tạo device flow, trả về user_code + verification_url ngay.
+   *
+   * options.kiroMethod:
+   * - 'builder-id' : AWS OIDC device code, startUrl = awsapps.com/start
+   * - 'idc'        : AWS OIDC device code, startUrl + region do user cung cấp
+   * - 'google'     : Kiro social device code, provider = google
+   * - 'github'     : Kiro social device code, provider = github
+   */
+  async login(options?: {
+    kiroMethod?: 'google' | 'github' | 'builder-id' | 'idc';
+    startUrl?: string;  // cho IDC
+    region?: string;    // cho IDC
+  }) {
+    const method = options?.kiroMethod || AUTH_METHODS.GOOGLE;
+
+    try {
+      let deviceAuth: DeviceCodeResponse;
+      let pollContext: KiroPollContext;
+
+      if (method === 'google' || method === 'github') {
+        // ── Social device code flow ──
+        deviceAuth = await this.startSocialDeviceAuthorization(method);
+        pollContext = {
+          flowType: 'social',
+          device_code: deviceAuth.device_code,
+          client_id: SOCIAL_AUTH.SOCIAL_CLIENT_ID,
+          auth_method: method,
+          interval: deviceAuth.interval,
         };
+      } else {
+        // ── AWS OIDC device code flow (Builder ID / IDC) ──
+        const region = options?.region || DEFAULT_REGION;
+        const startUrl = method === 'idc'
+          ? (options?.startUrl || BUILDER_ID_START_URL)
+          : BUILDER_ID_START_URL;
+        // IDC: không gửi issuerUrl vì tenant-specific; Builder ID: gửi issuerUrl chuẩn
+        const skipIssuerUrl = method === 'idc';
 
-        const response = await fetch(DEVICE_CODE_FLOW.TOKEN_URL, {
+        const result = await this.startAwsDeviceAuthorization({ region, startUrl, skipIssuerUrl });
+        deviceAuth = result;
+        pollContext = {
+          flowType: 'aws_oidc',
+          device_code: deviceAuth.device_code,
+          client_id: result.clientId || '',
+          client_secret: (deviceAuth as any).clientSecret || '',
+          region,
+          auth_method: method === 'idc' ? 'idc' : 'builder-id',
+          interval: deviceAuth.interval,
+        };
+      }
+
+      const verificationUrl =
+        deviceAuth.verification_uri_complete ||
+        deviceAuth.verification_uri ||
+        '';
+
+      return {
+        success: true,
+        pending: true,
+        cookies: '',
+        email: '',
+        tempSessionId: JSON.stringify(pollContext),
+        user_code: deviceAuth.user_code,
+        verification_url: verificationUrl,
+        expires_in: deviceAuth.expires_in,
+        poll_interval: deviceAuth.interval,
+      };
+    } catch (error) {
+      logger.error('[Kiro] Login initiation failed:', error);
+      throw error;
+    }
+  }
+
+  // ─── Poll Once ────────────────────────────────────────────────────────
+
+  /**
+   * Bước 2: Poll một lần — gọi từ UI định kỳ cho đến khi done hoặc error.
+   *
+   * - done: false + no error  → authorization_pending, tiếp tục poll
+   * - done: false + error     → hết hạn hoặc bị denied
+   * - done: true              → thành công, cookies + email có giá trị
+   */
+  async pollOnce(pollContext: string): Promise<{
+    done: boolean;
+    cookies?: string;
+    email?: string;
+    error?: string;
+  }> {
+    let ctx: KiroPollContext;
+    try {
+      ctx = JSON.parse(pollContext);
+    } catch {
+      return { done: false, error: 'Invalid poll context' };
+    }
+
+    try {
+      if (ctx.flowType === 'social') {
+        return await this.pollSocialDeviceToken(ctx);
+      } else {
+        return await this.pollAwsOidcToken(ctx);
+      }
+    } catch (error) {
+      logger.warn('[Kiro] pollOnce error:', error);
+      return { done: false };
+    }
+  }
+
+  // ─── Poll: AWS OIDC (Builder ID / IDC) ───────────────────────────────
+
+  private async pollAwsOidcToken(ctx: KiroPollContext): Promise<{
+    done: boolean;
+    cookies?: string;
+    email?: string;
+    error?: string;
+  }> {
+    const region = ctx.region || DEFAULT_REGION;
+    const tokenUrl = `https://oidc.${region}.amazonaws.com/token`;
+
+    const requestBody: KiroTokenPollRequest = {
+      clientId: ctx.client_id,
+      clientSecret: ctx.client_secret || '',
+      deviceCode: ctx.device_code,
+      grantType: OIDC_CLIENT.grantTypes[0],
+    };
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as KiroTokenPollResponse;
+      return await this.buildAuthResult(data.accessToken, data.refreshToken, {
+        authMethod: ctx.auth_method,
+        clientId: ctx.client_id,
+        clientSecret: ctx.client_secret,
+        region,
+        expiresIn: data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+      });
+    }
+
+    const errorData = (await response.json().catch(() => ({}))) as DeviceCodeError;
+    return this.handlePollError(errorData);
+  }
+
+  // ─── Poll: Social (Google / GitHub) ──────────────────────────────────
+
+  /**
+   * Poll Kiro social device code endpoint.
+   * Request body: JSON { deviceCode, clientId }
+   * Response: { error/status, accessToken, refreshToken, profileArn, expiresIn }
+   */
+  private async pollSocialDeviceToken(ctx: KiroPollContext): Promise<{
+    done: boolean;
+    cookies?: string;
+    email?: string;
+    error?: string;
+  }> {
+    const response = await fetch(SOCIAL_AUTH.SOCIAL_DEVICE_POLL_URL, {
+      method: 'POST',
+      headers: {
+        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+      },
+      body: JSON.stringify({
+        deviceCode: ctx.device_code,
+        clientId: ctx.client_id,
+      }),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as KiroSocialPollResponse;
+
+    // Kiro social endpoint trả về error/status thay vì HTTP status cho pending
+    const progress = data.error ?? data.status;
+    if (progress === 'authorization_pending' || progress === 'slow_down') {
+      return { done: false };
+    }
+
+    if (!response.ok || (data.error && data.error !== 'authorization_pending')) {
+      if (progress === 'access_denied') {
+        return { done: false, error: 'User denied authorization' };
+      }
+      if (progress === 'expired_token' || progress === 'device_expired') {
+        return { done: false, error: 'Device code expired. Please try again.' };
+      }
+      const errMsg = typeof data.error === 'string' ? data.error : 'Authorization failed';
+      return { done: false, error: errMsg };
+    }
+
+    if (!data.accessToken && !data.refreshToken) {
+      return { done: false, error: 'No token received from social auth' };
+    }
+
+    return await this.buildAuthResult(data.accessToken || '', data.refreshToken || '', {
+      authMethod: ctx.auth_method,
+      profileArn: data.profileArn,
+      expiresIn: data.expiresIn || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+      provider: ctx.auth_method === 'google' ? 'Google' : 'Github',
+    });
+  }
+
+  // ─── Handle Poll Error ────────────────────────────────────────────────
+
+  private handlePollError(errorData: DeviceCodeError): {
+    done: boolean;
+    cookies?: string;
+    email?: string;
+    error?: string;
+  } {
+    if (
+      errorData.error === 'authorization_pending' ||
+      errorData.error === 'slow_down'
+    ) {
+      return { done: false };
+    }
+    if (errorData.error === 'access_denied') {
+      return { done: false, error: 'User denied authorization' };
+    }
+    if (errorData.error === 'expired_token') {
+      return { done: false, error: 'Device code expired. Please try again.' };
+    }
+    return { done: false, error: `Token polling failed: ${errorData.error || 'unknown'}` };
+  }
+
+  // ─── Build Auth Result ────────────────────────────────────────────────
+
+  /**
+   * Tạo cookies JSON và lấy email sau khi poll thành công.
+   */
+  private async buildAuthResult(
+    accessToken: string,
+    refreshToken: string,
+    meta: {
+      authMethod: KiroAuthMethod;
+      clientId?: string;
+      clientSecret?: string;
+      clientSecretExpiresAt?: number;
+      region?: string;
+      profileArn?: string;
+      expiresIn?: number;
+      provider?: string;
+    },
+  ): Promise<{ done: boolean; cookies: string; email: string }> {
+    const authData: KiroAuthData = {
+      accessToken,
+      refreshToken,
+      expiresIn: meta.expiresIn || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+      authMethod: meta.authMethod,
+      ...(meta.clientId ? { clientId: meta.clientId } : {}),
+      ...(meta.clientSecret ? { clientSecret: meta.clientSecret } : {}),
+      ...(meta.clientSecretExpiresAt ? { clientSecretExpiresAt: meta.clientSecretExpiresAt } : {}),
+      region: meta.region || DEFAULT_REGION,
+      ...(meta.profileArn ? { profileArn: meta.profileArn } : {}),
+      ...(meta.provider ? { provider: meta.provider } : {}),
+    };
+
+    // Kiro social tokens là AWS opaque — không có endpoint nào trả email.
+    // Email sẽ được nhập thủ công ở UI.
+    const emailFromJwt = this.extractEmailFromJWT(accessToken);
+
+    return { done: true, cookies: JSON.stringify(authData), email: emailFromJwt || '' };
+  }
+
+  // ─── JWT Email Extraction ─────────────────────────────────────────────
+
+  /**
+   * Best-effort decode JWT payload để lấy email.
+   * Không verify signature — chỉ dùng cho display.
+   */
+  private extractEmailFromJWT(accessToken: string): string | null {
+    try {
+      const parts = accessToken.split('.');
+      if (parts.length !== 3) return null;
+      let payload = parts[1];
+      while (payload.length % 4) payload += '=';
+      const decoded = JSON.parse(
+        Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'),
+      );
+      return (
+        decoded.email ||
+        decoded.preferred_username ||
+        decoded.upn ||
+        decoded.sub ||
+        null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  // ─── Profile ──────────────────────────────────────────────────────────
+
+  async getUserProfile(credential: string): Promise<{ email: string | null }> {
+    try {
+      const authData = this.parseAuthData(credential);
+      const email = this.extractEmailFromJWT(authData.accessToken);
+      return { email };
+    } catch {
+      return { email: null };
+    }
+  }
+
+  // ─── Auth Data Parser ─────────────────────────────────────────────────
+
+  parseAuthData(credential: string): KiroAuthData {
+    try {
+      const parsed = JSON.parse(credential) as Partial<KiroAuthData>;
+      return {
+        accessToken: parsed.accessToken || credential,
+        refreshToken: parsed.refreshToken || AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
+        authMethod: parsed.authMethod || (AUTH_DATA_DEFAULTS.METHOD as KiroAuthMethod),
+        expiresIn: parsed.expiresIn,
+        clientId: parsed.clientId,
+        clientSecret: parsed.clientSecret,
+        clientSecretExpiresAt: parsed.clientSecretExpiresAt,
+        region: parsed.region || DEFAULT_REGION,
+        profileArn: parsed.profileArn,
+        provider: parsed.provider,
+      };
+    } catch {
+      return {
+        accessToken: credential,
+        refreshToken: AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
+        authMethod: AUTH_DATA_DEFAULTS.METHOD as KiroAuthMethod,
+        region: DEFAULT_REGION,
+      };
+    }
+  }
+
+  // ─── Token Refresh ────────────────────────────────────────────────────
+
+  /**
+   * Refresh access token bằng refresh token.
+   * Sync với OmniRoute services/kiro.ts → refreshToken().
+   */
+  async refreshToken(credential: string): Promise<KiroAuthData | null> {
+    const authData = this.parseAuthData(credential);
+    const { refreshToken, authMethod, clientId, clientSecret, region } = authData;
+
+    if (!refreshToken) return null;
+
+    try {
+      // AWS SSO OIDC refresh (Builder ID / IDC)
+      // Không refresh imported social token bằng OIDC (chỉ dùng social path)
+      if (clientId && clientSecret && authMethod !== 'imported') {
+        const resolvedRegion = region || DEFAULT_REGION;
+        const endpoint = `https://oidc.${resolvedRegion}.amazonaws.com/token`;
+
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
             [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({
+            clientId,
+            clientSecret,
+            refreshToken,
+            grantType: 'refresh_token',
+          }),
         });
 
         if (response.ok) {
           const data = (await response.json()) as KiroTokenPollResponse;
           return {
+            ...authData,
             accessToken: data.accessToken,
-            refreshToken: data.refreshToken,
-            expiresIn:
-              data[API_FIELDS.EXPIRES_IN] ||
-              DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
-            tokenType:
-              data[API_FIELDS.TOKEN_TYPE] ||
-              DEVICE_CODE_DEFAULTS.TOKEN_TYPE,
+            refreshToken: data.refreshToken || refreshToken,
+            expiresIn: data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
           };
         }
-
-        // Check for errors
-        const errorData = (await response.json()) as DeviceCodeError;
-
-        if (errorData.error === 'authorization_pending') {
-          continue;
-        }
-
-        if (errorData.error === 'slow_down') {
-          interval += DEVICE_CODE_DEFAULTS.SLOW_DOWN_INCREMENT_MS;
-          continue;
-        }
-
-        if (errorData.error === 'access_denied') {
-          logger.error('[Kiro] User denied authorization');
-          throw new Error('User denied authorization');
-        }
-
-        if (errorData.error === 'expired_token') {
-          logger.error('[Kiro] Device code expired');
-          throw new Error('Device code expired. Please try again.');
-        }
-
-        logger.error('[Kiro] Unknown error:', errorData);
-        throw new Error(`Token polling failed: ${errorData.error}`);
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('denied')) {
-          throw error;
-        }
-        logger.warn('[Kiro] Polling error (will retry):', error);
-        continue;
+        // Nếu lỗi, fall through sang social refresh
+        logger.warn('[Kiro] OIDC refresh failed, trying social path');
       }
+
+      // Social Auth refresh (Google / GitHub / imported)
+      const response = await fetch(SOCIAL_AUTH.SOCIAL_REFRESH_URL, {
+        method: 'POST',
+        headers: {
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+          [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token refresh failed: ${errorText}`);
+      }
+
+      const data = (await response.json()) as {
+        accessToken?: string;
+        refreshToken?: string;
+        profileArn?: string;
+        expiresIn?: number;
+      };
+
+      return {
+        ...authData,
+        accessToken: data.accessToken || '',
+        refreshToken: data.refreshToken || refreshToken,
+        expiresIn: data.expiresIn || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+        ...(data.profileArn ? { profileArn: data.profileArn } : {}),
+      };
+    } catch (error) {
+      logger.error('[Kiro] Token refresh error:', error);
+      return null;
     }
-
-    throw new Error('Device code authorization timeout. Please try again.');
   }
 
-  /**
-   * Sleep helper
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+  // ─── Auto-open Browser ────────────────────────────────────────────────
 
-  /**
-   * Auto-open browser helper
-   * Cross-platform browser launcher
-   */
-  private openBrowser(url: string): void {
+  openBrowser(url: string): void {
     const platform = process.platform;
-
     let cmd: string;
     if (platform === 'darwin') {
-      // macOS
       cmd = `open "${url}"`;
     } else if (platform === 'win32') {
-      // Windows
       cmd = `start "" "${url}"`;
     } else {
-      // Linux
       cmd = `xdg-open "${url}"`;
     }
-
     exec(cmd, (error) => {
       if (error) {
         logger.warn('[Kiro] Could not auto-open browser:', error.message);
@@ -306,129 +699,227 @@ export class KiroProvider implements Provider {
     });
   }
 
-  // ─── Login ──────────────────────────────────────────────────────────
+  // ─── Handle Message ───────────────────────────────────────────────────
 
-  async login(options?: { kiroMethod?: 'google' | 'github' }) {
-    const method: KiroAuthMethod = options?.kiroMethod || AUTH_METHODS.GOOGLE;
-    try {
-      // Step 1: Lấy device code và user code
-      const deviceAuth = await this.initiateDeviceAuthorization(method);
+  async handleMessage(options: SendMessageOptions): Promise<void> {
+    const {
+      credential,
+      messages,
+      model,
+      onContent,
+      onThinking,
+      onDone,
+      onError,
+    } = options;
 
-      // Build enhanced signin URL with provider pre-selection and redirect
-      // Format: /signin?user_code=XXX&login_provider=Github&redirect_to_after_auth=/account/device?user_code=XXX
-      const loginProvider =
-        method === AUTH_METHODS.GITHUB ? 'Github' : 'Google';
-      const encodedRedirect = encodeURIComponent(
-        `${API_PATHS.DEVICE}?user_code=${deviceAuth.user_code}`,
-      );
-      const enhancedSigninUrl = `${BASE_URLS.KIRO_APP}${API_PATHS.SIGNIN}?user_code=${deviceAuth.user_code}&login_provider=${loginProvider}&redirect_to_after_auth=${encodedRedirect}`;
-
-      // Auto-open browser with enhanced signin URL
-      this.openBrowser(enhancedSigninUrl);
-
-      // Step 2: Poll for tokens
-      const tokens = await this.pollForTokens(
-        deviceAuth.device_code,
-        deviceAuth.clientId || '',
-        deviceAuth.clientSecret || '',
-        deviceAuth.interval * 1000,
-      );
-
-      // Step 3: Get user profile
-      let email = '';
-      const fallbackEmail = `${FALLBACK_EMAIL.PREFIX}${method}-${Date.now()}${FALLBACK_EMAIL.SUFFIX}`;
-      try {
-        const profile = await this.getUserProfile(tokens.accessToken);
-        email = profile.email || fallbackEmail;
-      } catch (e) {
-        email = fallbackEmail;
-      }
-
-      // Step 4: Tạo auth data object
-      const authData: KiroAuthData = {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresIn: tokens.expiresIn,
-        authMethod: AUTH_METHODS.DEVICE,
-        clientId: deviceAuth.clientId,
-        clientSecret: deviceAuth.clientSecret,
-        region: DEFAULT_REGION,
-      };
-
-      return {
-        success: true,
-        cookies: JSON.stringify(authData),
-        email,
-      };
-    } catch (error) {
-      logger.error('[Kiro] Login failed:', error);
-      throw error;
-    }
-  }
-
-  // ─── Profile ────────────────────────────────────────────────────────
-
-  async getUserProfile(credential: string): Promise<{ email: string | null }> {
     try {
       const authData = this.parseAuthData(credential);
+      const { accessToken, region, profileArn } = authData;
 
-      const response = await fetch(`${BASE_URL}${API_PATHS.USER_PROFILE}`, {
-        method: 'GET',
-        headers: {
-          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${HTTP_HEADERS.BEARER_PREFIX}${authData.accessToken}`,
-          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-        },
+      if (!accessToken) {
+        throw new Error('Kiro: missing access token');
+      }
+
+      // ── Build Kiro conversationState payload ──
+      const resolvedRegion = region || DEFAULT_REGION;
+      const body = this.buildConversationPayload(messages, model, profileArn);
+
+      // ── Build headers ──
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-amz-json-1.0',
+        'X-Amz-Target': 'AmazonCodeWhispererStreamingService.GenerateAssistantResponse',
+        'Accept': 'application/vnd.amazon.eventstream',
+        'Amz-Sdk-Request': 'attempt=1; max=3',
+        'x-amzn-bedrock-cache-control': 'enable',
+      };
+
+      // ── Determine endpoint ──
+      // Social auth (google/github) → try branded Kiro gateway first
+      // Falls back to direct CodeWhisperer if needed
+      const baseUrl = resolvedRegion === DEFAULT_REGION
+        ? 'https://runtime.us-east-1.kiro.dev/generateAssistantResponse'
+        : kiroRuntimeHost(resolvedRegion) + '/generateAssistantResponse';
+
+      const response = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        logger.warn(`[Kiro] Get Profile returned status ${response.status}`);
-        return { email: null };
+        // Fallback to direct CodeWhisperer endpoint on auth failure
+        if (response.status === 401 || response.status === 403) {
+          const fallbackUrl = kiroRuntimeHost(resolvedRegion) + '/generateAssistantResponse';
+          if (fallbackUrl !== baseUrl) {
+            const fallbackResponse = await fetch(fallbackUrl, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(body),
+            });
+            if (!fallbackResponse.ok) {
+              const errText = await fallbackResponse.text();
+              throw new Error(`Kiro API error ${fallbackResponse.status}: ${errText}`);
+            }
+            await this.processEventStream(response as any, onContent, onThinking);
+      onDone();
+      return;
+          }
+        }
+        const errText = await response.text();
+        throw new Error(`Kiro API error ${response.status}: ${errText}`);
       }
 
-      const data = (await response.json()) as KiroUserProfileResponse;
-
-      return {
-        email:
-          data[API_FIELDS.EMAIL] ||
-          data[API_FIELDS.USER]?.[API_FIELDS.EMAIL] ||
-          null,
-      };
-    } catch (e) {
-      logger.error('[Kiro] Get Profile Error:', e);
-      return { email: null };
+      await this.processEventStream(response as any, onContent, onThinking);
+      onDone();
+    } catch (err) {
+      logger.error('[Kiro] handleMessage error:', err);
+      onError(err);
     }
   }
 
-  // ─── Auth Data Parser ───────────────────────────────────────────────
+  /**
+   * Build minimal Kiro conversationState từ OpenAI messages.
+   * Chỉ handle single-turn và basic multi-turn — đủ cho chat thông thường.
+   */
+  private buildConversationPayload(
+    messages: Array<{ role: string; content: string | any[] }>,
+    model: string,
+    profileArn?: string,
+  ) {
+    // Normalize model: dashes → dots cho version number (e.g. claude-sonnet-4-5 → claude-sonnet-4.5)
+    const normalizedModel = model.replace(/-(\d+)-(\d{1,2})$/, '-$1.$2');
 
-  private parseAuthData(credential: string): KiroAuthData {
-    try {
-      const parsed = JSON.parse(credential) as Partial<KiroAuthData>;
-      return {
-        accessToken: parsed.accessToken || credential,
-        refreshToken: parsed.refreshToken || AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
-        authMethod: parsed.authMethod || AUTH_DATA_DEFAULTS.METHOD,
-        expiresIn: parsed.expiresIn,
-        clientId: parsed.clientId,
-        clientSecret: parsed.clientSecret,
-        region: parsed.region || DEFAULT_REGION,
-      };
-    } catch {
-      // Nếu không parse được, coi như là access token thuần
-      return {
-        accessToken: credential,
-        refreshToken: AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
-        authMethod: AUTH_DATA_DEFAULTS.METHOD,
-        region: DEFAULT_REGION,
-      };
+    // Build history và currentMessage
+    const history: any[] = [];
+    let systemContent = '';
+
+    for (let i = 0; i < messages.length - 1; i++) {
+      const msg = messages[i];
+      if (msg.role === 'system') {
+        const text = typeof msg.content === 'string' ? msg.content : '';
+        systemContent += (systemContent ? '\n\n' : '') + text;
+      } else if (msg.role === 'user') {
+        const text = typeof msg.content === 'string' ? msg.content
+          : Array.isArray(msg.content) ? msg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
+        history.push({
+          userInputMessage: {
+            content: text || '(empty)',
+            modelId: normalizedModel,
+            origin: 'AI_EDITOR',
+          },
+        });
+      } else if (msg.role === 'assistant') {
+        const text = typeof msg.content === 'string' ? msg.content
+          : Array.isArray(msg.content) ? msg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
+        history.push({
+          assistantResponseMessage: { content: text || '(empty)' },
+        });
+      }
     }
+
+    // Current (last) message
+    const lastMsg = messages[messages.length - 1];
+    let lastContent = typeof lastMsg?.content === 'string' ? lastMsg.content
+      : Array.isArray(lastMsg?.content) ? lastMsg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
+
+    // Prepend system prompt vào content của current message
+    if (systemContent) {
+      lastContent = `<system-reminder>\n${systemContent}\n</system-reminder>\n\n${lastContent}`;
+    }
+
+    // Deterministic conversationId từ first user message
+    const NAMESPACE_KIRO = '34f7193f-561d-4050-bc84-9547d953d6bf';
+    const firstUser = messages.find((m) => m.role === 'user');
+    const seed = typeof firstUser?.content === 'string' ? firstUser.content
+      : Array.isArray(firstUser?.content) ? firstUser.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ') : '';
+    const conversationId = seed
+      ? uuidv5(seed.substring(0, 4000), NAMESPACE_KIRO)
+      : uuidv4();
+
+    const payload: any = {
+      conversationState: {
+        chatTriggerType: 'MANUAL',
+        conversationId,
+        currentMessage: {
+          userInputMessage: {
+            content: lastContent || '(empty)',
+            modelId: normalizedModel,
+            origin: 'AI_EDITOR',
+          },
+        },
+        history,
+      },
+      inferenceConfig: {
+        maxTokens: 32000,
+      },
+    };
+
+    if (profileArn) {
+      payload.profileArn = profileArn;
+    }
+
+    return payload;
   }
 
-  // ─── Handle Message (Placeholder) ───────────────────────────────────
+  /**
+   * Process AWS EventStream binary response và extract text content.
+   * response.body là Node.js Readable (từ node-fetch).
+   */
+  private async processEventStream(
+    response: any,
+    onContent: (chunk: string) => void,
+    onThinking?: (chunk: string) => void,
+  ): Promise<void> {
+    if (!response.body) {
+      throw new Error('Kiro: empty response body');
+    }
 
-  async handleMessage(options: SendMessageOptions): Promise<void> {
-    const { onError } = options;
-    onError(new Error('Kiro handleMessage not implemented yet'));
+    const buffer = new ByteQueue();
+
+    await new Promise<void>((resolve, reject) => {
+      const nodeStream = response.body as NodeJS.ReadableStream;
+
+      const processBuffer = () => {
+        let iterations = 0;
+        while (buffer.length >= 16 && iterations < 1000) {
+          iterations++;
+          const totalLength = buffer.peekUint32BE(0);
+          if (!totalLength || totalLength < 16 || totalLength > buffer.length) break;
+
+          const eventData = buffer.read(totalLength);
+          if (!eventData) break;
+
+          const event = parseEventFrame(eventData);
+          if (!event) continue;
+
+          const eventType = event.headers[':event-type'] || '';
+
+          if (eventType === 'assistantResponseEvent') {
+            const content = typeof event.payload?.content === 'string' ? event.payload.content : '';
+            if (content) onContent(content);
+          } else if (eventType === 'reasoningContentEvent') {
+            const rp = event.payload as Record<string, unknown> | null;
+            const rt = rp?.reasoningText;
+            let reasoning = '';
+            if (rt && typeof rt === 'object') {
+              reasoning = typeof (rt as any).text === 'string' ? (rt as any).text : '';
+            } else if (typeof rt === 'string') {
+              reasoning = rt;
+            }
+            if (reasoning && onThinking) onThinking(reasoning);
+          }
+        }
+      };
+
+      nodeStream.on('data', (chunk: Buffer) => {
+        buffer.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+        processBuffer();
+      });
+
+      nodeStream.on('end', () => resolve());
+      nodeStream.on('error', (err: Error) => reject(err));
+    });
   }
 }
 

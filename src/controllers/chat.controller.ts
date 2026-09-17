@@ -76,7 +76,21 @@ export const sendMessage = async (
     const accountId = accountIdFromParams || accountIdFromBody;
     const useSearch = is_search === true || search === true;
 
-    if (!accountId) {
+    // Lấy provider config sớm để check auth_method
+    const providers = await getAllProviders();
+    const targetProviderId = (providerId as string | undefined)?.toLowerCase();
+    const providerConfig = targetProviderId
+      ? providers.find((p) => p.provider_id.toLowerCase() === targetProviderId)
+      : undefined;
+
+    // Kiểm tra provider có cần auth không (auth_method rỗng = anonymous provider)
+    const rawAuthMethod = (providerConfig as any)?.auth_method;
+    const noAuthRequired =
+      providerConfig !== undefined &&
+      Array.isArray(rawAuthMethod) &&
+      rawAuthMethod.filter((m: any) => typeof m === 'string' && m.length > 0).length === 0;
+
+    if (!accountId && !noAuthRequired) {
       res.status(400).json({
         success: false,
         message:
@@ -87,34 +101,51 @@ export const sendMessage = async (
       return;
     }
 
-    const account = getAccountById(accountId);
+    // Với provider cần auth: lấy account từ DB như cũ
+    // Với anonymous provider: dùng virtual account (không cần credential)
+    let account: { id: string; provider_id: string; email?: string | null; credential: string } | null = null;
 
-    if (!account) {
-      res.status(404).json({
-        success: false,
-        message: `Account not found with id: ${accountId}`,
-        error: { code: 'NOT_FOUND' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
+    if (accountId) {
+      const dbAccount = getAccountById(accountId);
+      if (!dbAccount) {
+        res.status(404).json({
+          success: false,
+          message: `Account not found with id: ${accountId}`,
+          error: { code: 'NOT_FOUND' },
+          meta: { timestamp: new Date().toISOString() },
+        });
+        return;
+      }
+      if (
+        providerId &&
+        dbAccount.provider_id.toLowerCase() !== providerId.toLowerCase()
+      ) {
+        res.status(400).json({
+          success: false,
+          message: `Account Conflict: The provided accountId belongs to provider '${dbAccount.provider_id}', but providerId is '${providerId}'.`,
+          error: { code: 'BAD_REQUEST' },
+        });
+        return;
+      }
+      account = { ...dbAccount, credential: dbAccount.credential ?? '' };
+    } else {
+      // noAuthRequired = true, accountId vắng mặt → virtual account
+      account = {
+        id: `anon-${providerId}`,
+        provider_id: providerId as string,
+        email: null,
+        credential: '',
+      };
+      logger.debug(`[SendMessage] Anonymous provider "${providerId}" — using virtual account`);
     }
 
-    if (
-      providerId &&
-      account.provider_id.toLowerCase() !== providerId.toLowerCase()
-    ) {
-      res.status(400).json({
-        success: false,
-        message: `Account Conflict: The provided accountId belongs to provider '${account.provider_id}', but providerId is '${providerId}'.`,
-        error: { code: 'BAD_REQUEST' },
-      });
-      return;
-    }
+    // account luôn được set tại đây (null guards đã xử lý ở trên)
+    const resolvedAccount = account;
 
     const model = modelId;
 
-    // Validate credential before proceeding
-    if (!account.credential || account.credential.trim() === '') {
+    // Validate credential — bỏ qua với anonymous provider
+    if (!noAuthRequired && (!resolvedAccount.credential || resolvedAccount.credential.trim() === '')) {
       if (stream !== false) {
         res.writeHead(400, { 'Content-Type': 'text/event-stream' });
         res.write(
@@ -131,20 +162,16 @@ export const sendMessage = async (
       return;
     }
 
-    const providers = await getAllProviders();
-    const providerConfig = providers.find(
-      (p) => p.provider_id.toLowerCase() === account.provider_id.toLowerCase(),
-    );
     const websiteUrl = providerConfig?.website;
 
     // Search capability is now determined at model level, not provider level
     // The actual search support will be checked by the provider implementation
 
     const initialMeta: any = {
-      accountId: account.id,
-      providerId: account.provider_id,
+      accountId: resolvedAccount.id,
+      providerId: resolvedAccount.provider_id,
       modelId: model,
-      email: account.email,
+      email: resolvedAccount.email,
     };
     if (websiteUrl) {
       initialMeta.websiteUrl = websiteUrl;
@@ -166,7 +193,7 @@ export const sendMessage = async (
     let finalError: Error | null = null;
 
     try {
-      recordRequest(account.provider_id, model);
+      recordRequest(resolvedAccount.provider_id, model);
 
       const lastMsg = messages?.[messages.length - 1];
       const lastMsgSnippet =
@@ -197,9 +224,9 @@ export const sendMessage = async (
       }
 
       await sendMessageService({
-        credential: account.credential,
-        provider_id: account.provider_id,
-        accountId: account.id,
+        credential: resolvedAccount.credential,
+        provider_id: resolvedAccount.provider_id,
+        accountId: resolvedAccount.id,
         model,
         messages,
         conversationId,
@@ -251,7 +278,7 @@ export const sendMessage = async (
           if (stream !== false) {
             if (!accumulatedResponse || accumulatedResponse.trim() === '') {
               logger.warn(
-                `[Response] Provider ${account.provider_id} returned empty content for model=${model}`,
+                `[Response] Provider ${resolvedAccount.provider_id} returned empty content for model=${model}`,
               );
               res.write(
                 `data: ${JSON.stringify({ error: 'Provider returned empty response', code: 'EMPTY_RESPONSE' })}\n\n`,
@@ -311,11 +338,11 @@ export const sendMessage = async (
             : 0;
 
           logger.error(
-            `[Transaction Error] provider_id=${account.provider_id} model_id=${model} account_id=${account.id} conversation_id=${conversationId || 'none'} input_token=${inputToken} output_token=${outputToken} error=${error.message}`,
+            `[Transaction Error] provider_id=${resolvedAccount.provider_id} model_id=${model} account_id=${resolvedAccount.id} conversation_id=${conversationId || 'none'} input_token=${inputToken} output_token=${outputToken} error=${error.message}`,
             { stack: error.stack, code: (error as any).code },
           );
           // Record error metric so success_rate reflects failures
-          recordError(account.id, account.provider_id, model, error.message);
+          recordError(resolvedAccount.id, resolvedAccount.provider_id, model, error.message);
 
           if (stream !== false) {
             if (!res.writableEnded) {

@@ -1,0 +1,1 @@
+phân biệt lúc nào gửi effor, lúc nào bật thinking

@@ -16,6 +16,9 @@ import { Request, Response } from 'express';
 // ── Services ──
 import { loginWithProvider } from '../services/login.service';
 
+// ── Registry ──
+import { providerRegistry } from '../provider/registry';
+
 // ── Utils ──
 import { createLogger } from '../utils/logger';
 
@@ -50,6 +53,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       if (result.pending) {
         accountResponse.pending = result.pending;
         accountResponse.tempSessionId = result.tempSessionId;
+        // Device code flow extras (Kiro, grok-build, etc.)
+        if ((result as any).user_code) {
+          accountResponse.user_code = (result as any).user_code;
+          accountResponse.verification_url = (result as any).verification_url;
+          accountResponse.expires_in = (result as any).expires_in;
+          accountResponse.poll_interval = (result as any).poll_interval;
+        }
       }
 
       res.status(200).json({
@@ -82,5 +92,56 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res
       .status(500)
       .json({ success: false, message: error.message || 'Login failed' });
+  }
+};
+
+// POST /v1/accounts/login/:provider/poll
+// Được UI gọi định kỳ sau khi nhận pending=true từ /login
+export const pollLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { provider: providerId } = req.params;
+    const { pollContext } = req.body;
+
+    if (!pollContext) {
+      res.status(400).json({ success: false, message: 'pollContext is required' });
+      return;
+    }
+
+    const p = providerRegistry.getProvider(providerId);
+
+    if (!p) {
+      res.status(404).json({ success: false, message: `Provider ${providerId} not found` });
+      return;
+    }
+
+    if (typeof (p as any).pollOnce !== 'function') {
+      res.status(400).json({ success: false, message: `Provider ${providerId} does not support poll` });
+      return;
+    }
+
+    const result = await (p as any).pollOnce(pollContext);
+
+    if (result.error) {
+      res.status(200).json({ success: false, done: false, error: result.error });
+      return;
+    }
+
+    if (!result.done) {
+      res.status(200).json({ success: true, done: false });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      done: true,
+      account: {
+        provider_id: providerId,
+        email: result.email || '',
+        credential: result.cookies || '',
+      },
+    });
+  } catch (error: any) {
+    logger.error('[PollLogin] Error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Poll failed' });
   }
 };

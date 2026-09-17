@@ -92,14 +92,21 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
   }
 
   const account = findFirstAccountByProvider(providerId);
-  if (!account || account.credential === null) {
+
+  // Provider không cần auth (auth_method=[]) — gọi getModels với credential rỗng
+  const ProviderClass = (dynamicProvider as any).constructor as any;
+  const cfg = ProviderClass?.config || (dynamicProvider as any).config;
+  const noAuthRequired =
+    Array.isArray(cfg?.auth_method) && cfg.auth_method.length === 0;
+
+  if (!noAuthRequired && (!account || account.credential === null)) {
     return [];
   }
 
   try {
     const models = await dynamicProvider.getModels(
-      account.credential,
-      account.id,
+      account?.credential ?? '',
+      account?.id,
     );
     return models;
   } catch (error) {

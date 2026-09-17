@@ -42,55 +42,22 @@ export const API_PATHS = {
 
 // ─── Models ──────────────────────────────────────────────────────────
 
-export const DEFAULT_MODEL = 'gpt-5o';
+// No default model — user must explicitly choose
+export const DEFAULT_MODEL = '';
 
 export const MODEL_ALIASES: Record<string, string> = {
-  'gpt-5o': 'gpt-5o',
-  'claude-haiku-4-5': 'claude-haiku-4-5',
   'gpt-5.6-luna': 'gpt-5.6-luna',
-  'llama-3.3-70b': 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-  'mixtral-8x7b': 'mistralai/Mixtral-8x7B-Instruct-v0.1',
+  'gpt-5.4-mini': 'gpt-5.4-mini',
+  'claude-haiku-4-5': 'claude-haiku-4-5',
 } as const;
 
 export const MODELS = [
-  {
-    id: 'gpt-5o',
-    name: 'GPT-5o',
-    is_thinking: false,
-    max_context_length: 128000,
-    is_search: false,
-    is_image_upload: false,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description: 'DuckDuckGo AI - GPT-5o model',
-  },
-  {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    is_thinking: false,
-    max_context_length: 200000,
-    is_search: false,
-    is_image_upload: false,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description: 'DuckDuckGo AI - Claude Haiku 4.5 model',
-  },
   {
     id: 'gpt-5.6-luna',
     name: 'GPT-5.6 Luna',
     is_thinking: false,
     max_context_length: 128000,
-    is_search: false,
+    is_search: true,
     is_image_upload: false,
     is_video_upload: false,
     is_audio_upload: false,
@@ -102,11 +69,11 @@ export const MODELS = [
     description: 'DuckDuckGo AI - GPT-5.6 Luna model',
   },
   {
-    id: 'llama-3.3-70b',
-    name: 'Llama 3.3 70B',
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
     is_thinking: false,
     max_context_length: 128000,
-    is_search: false,
+    is_search: true,
     is_image_upload: false,
     is_video_upload: false,
     is_audio_upload: false,
@@ -115,14 +82,14 @@ export const MODELS = [
     is_image_generator: false,
     is_video_generator: false,
     is_deep_research: false,
-    description: 'DuckDuckGo AI - Llama 3.3 70B Instruct',
+    description: 'DuckDuckGo AI - GPT-5.4 Mini (free tier)',
   },
   {
-    id: 'mixtral-8x7b',
-    name: 'Mixtral 8x7B',
-    is_thinking: false,
-    max_context_length: 32000,
-    is_search: false,
+    id: 'claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
+    is_thinking: true,
+    max_context_length: 200000,
+    is_search: true,
     is_image_upload: false,
     is_video_upload: false,
     is_audio_upload: false,
@@ -131,7 +98,7 @@ export const MODELS = [
     is_image_generator: false,
     is_video_generator: false,
     is_deep_research: false,
-    description: 'DuckDuckGo AI - Mixtral 8x7B Instruct',
+    description: 'DuckDuckGo AI - Claude Haiku 4.5 with thinking support',
   },
 ] as const;
 
@@ -199,12 +166,42 @@ export const REASONING_EFFORT = {
 
 // ─── Model Capabilities ──────────────────────────────────────────────
 
+/**
+ * reasoningEffort per model.
+ * Field này là BẮTBUỘC trên mỗi request — thiếu → 400 ERR_BAD_REQUEST.
+ * - "low"  : model có thinking (Claude Haiku, gpt-oss-120b)
+ * - "none" : model không có thinking
+ *
+ * Khi user BẬT thinking toggle:  dùng giá trị trong map này (low)
+ * Khi user TẮT thinking toggle:  override thành "none" dù model hỗ trợ
+ */
 export const MODEL_CAPABILITIES: Record<
   string,
   { reasoningEffort: string }
 > = {
-  'claude-haiku-4-5': { reasoningEffort: REASONING_EFFORT.LOW },
-  'tinfoil/gpt-oss-120b': { reasoningEffort: REASONING_EFFORT.LOW },
+  'claude-haiku-4-5':      { reasoningEffort: REASONING_EFFORT.LOW },
+  'tinfoil/gpt-oss-120b':  { reasoningEffort: REASONING_EFFORT.LOW },
+} as const;
+
+// ─── Search / Tool Choice ─────────────────────────────────────────────
+
+/**
+ * toolChoice payload cho metadata.toolChoice trong chat request.
+ * Khi user TẮT search toggle: dùng SEARCH_OFF (mặc định).
+ * Khi user BẬT search toggle: dùng SEARCH_ON → NewsSearch: true.
+ */
+export const TOOL_CHOICE_SEARCH_OFF = {
+  NewsSearch: false,
+  VideosSearch: false,
+  LocalSearch: false,
+  WeatherForecast: false,
+} as const;
+
+export const TOOL_CHOICE_SEARCH_ON = {
+  NewsSearch: true,
+  VideosSearch: false,
+  LocalSearch: false,
+  WeatherForecast: false,
 } as const;
 
 // ─── Misc ────────────────────────────────────────────────────────────

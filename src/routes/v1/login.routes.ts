@@ -14,12 +14,13 @@
 import { Router } from 'express';
 
 // ── Controllers ──
-import { login } from '../../controllers/login.controller';
+import { login, pollLogin } from '../../controllers/login.controller';
 
 // ─── Router ─────────────────────────────────────────────────────────────
 
 const router = Router();
 
 router.post('/:provider', login);
+router.post('/:provider/poll', pollLogin);
 
 export default router;

@@ -3,6 +3,7 @@
  * Kiro Types
  * ------------------------------------------------------------------
  * Type definitions cho Kiro API.
+ * Sync với OmniRoute providers/kiro.ts và services/kiro.ts.
  *
  * Main exports:
  * - KiroAuthMethod                    : Auth method literal type
@@ -17,12 +18,23 @@
  * - DeviceTokenResponse               : Normalized token response
  * - DeviceCodeError                   : Polling error
  * - KiroUserProfileResponse           : User profile response
+ * - KiroPollContext                   : Serialized poll context (JSON stored in tempSessionId)
  * ------------------------------------------------------------------
  */
 
-// ─── Auth ───────────────────────────────────────────────────────────────
+// ─── Auth Method ────────────────────────────────────────────────────────
 
-export type KiroAuthMethod = 'google' | 'github' | 'device';
+export type KiroAuthMethod =
+  | 'google'
+  | 'github'
+  | 'builder-id'
+  | 'idc'
+  | 'imported'
+  | 'api_key'
+  | 'device'
+  | 'external_idp';
+
+// ─── Auth Data (credential JSON) ────────────────────────────────────────
 
 export interface KiroAuthData {
   accessToken: string;
@@ -31,17 +43,40 @@ export interface KiroAuthData {
   authMethod: KiroAuthMethod;
   clientId?: string;
   clientSecret?: string;
+  clientSecretExpiresAt?: number;
   region?: string;
+  profileArn?: string;
+  provider?: string;
 }
 
-// ─── Client Registration ────────────────────────────────────────────────
+// ─── Poll Context (serialized into tempSessionId) ────────────────────────
+
+/**
+ * Context serialized khi login() trả về pending=true,
+ * được UI gửi lại qua pollOnce(pollContext).
+ *
+ * flowType:
+ * - 'aws_oidc'  → Builder ID / IDC device code poll → AWS OIDC token endpoint
+ * - 'social'    → Google / GitHub social device poll → Kiro auth service
+ */
+export interface KiroPollContext {
+  flowType: 'aws_oidc' | 'social';
+  device_code: string;
+  client_id: string;
+  client_secret?: string; // chỉ có ở aws_oidc
+  region?: string;        // chỉ có ở aws_oidc
+  auth_method: KiroAuthMethod; // 'builder-id' | 'idc' | 'google' | 'github'
+  interval: number;
+}
+
+// ─── Client Registration ─────────────────────────────────────────────────
 
 export interface KiroClientRegistrationRequest {
   clientName: string;
   clientType: string;
   scopes: readonly string[];
   grantTypes: readonly string[];
-  issuerUrl: string;
+  issuerUrl?: string;
 }
 
 export interface KiroClientRegistrationResponse {
@@ -50,14 +85,16 @@ export interface KiroClientRegistrationResponse {
   clientSecretExpiresAt: number;
 }
 
-// ─── Device Authorization ───────────────────────────────────────────────
+// ─── Device Authorization ─────────────────────────────────────────────────
 
+/** AWS OIDC device authorization request */
 export interface KiroDeviceAuthorizationRequest {
   clientId: string;
   clientSecret: string;
   startUrl: string;
 }
 
+/** AWS OIDC device authorization response (camelCase) */
 export interface KiroDeviceAuthorizationResponse {
   deviceCode: string;
   userCode: string;
@@ -81,8 +118,9 @@ export interface DeviceCodeResponse {
   clientSecret?: string;
 }
 
-// ─── Token Polling ──────────────────────────────────────────────────────
+// ─── Token Polling ────────────────────────────────────────────────────────
 
+/** AWS OIDC token poll request */
 export interface KiroTokenPollRequest {
   clientId: string;
   clientSecret: string;
@@ -90,6 +128,7 @@ export interface KiroTokenPollRequest {
   grantType: string;
 }
 
+/** AWS OIDC token poll response (camelCase) */
 export interface KiroTokenPollResponse {
   accessToken: string;
   refreshToken: string;
@@ -112,14 +151,28 @@ export interface DeviceCodeError {
     | 'authorization_pending'
     | 'slow_down'
     | 'access_denied'
-    | 'expired_token';
+    | 'expired_token'
+    | string;
   error_description?: string;
+  message?: string;
 }
 
-// ─── User Profile ───────────────────────────────────────────────────────
+// ─── User Profile ─────────────────────────────────────────────────────────
 
 export interface KiroUserProfileResponse {
   email?: string;
   user?: { email?: string };
   userEmail?: string;
+}
+
+// ─── Social Device Poll Response ─────────────────────────────────────────
+
+/** Response từ Kiro social device poll endpoint */
+export interface KiroSocialPollResponse {
+  error?: string;
+  status?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  profileArn?: string;
+  expiresIn?: number;
 }

@@ -53,6 +53,21 @@ export interface ChatPayload {
   };
 }
 
+// ─── Chat Options ────────────────────────────────────────────────────────
+
+/**
+ * Options điều khiển thinking và search per-request.
+ * Được truyền vào buildChatPayload() và handleMessage().
+ *
+ * - enableSearch  : true → NewsSearch bật trong toolChoice
+ * - enableThinking: true → dùng reasoningEffort từ MODEL_CAPABILITIES
+ *                   false → force reasoningEffort = "none"
+ */
+export interface DuckDuckGoChatOptions {
+  enableSearch?: boolean;
+  enableThinking?: boolean;
+}
+
 // ─── Circuit Breaker State ──────────────────────────────────────────────
 
 export interface CircuitBreakerState {

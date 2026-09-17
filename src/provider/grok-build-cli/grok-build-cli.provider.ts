@@ -8,14 +8,16 @@
  * Main features:
  * - handleMessage()        : Gửi tin nhắn với streaming response
  * - OAuth authentication
- * - Token refresh support
+ * - Token refresh support (với exponential backoff + jitter)
  *
  * Credential format (JSON string):
- * - accessToken    : OAuth access token
- * - refreshToken   : OAuth refresh token (optional)
- * - expiresAt      : Token expiration timestamp (optional)
- * - email          : User email (optional)
- * - userId         : User ID (optional)
+ * - accessToken            : OAuth access token
+ * - refreshToken           : OAuth refresh token (optional)
+ * - expiresAt              : Token expiration timestamp (optional)
+ * - email                  : User email (optional, root or providerSpecificData)
+ * - userId                 : User ID (optional, root or providerSpecificData)
+ * - providerSpecificData   : Nested identity data (OmniRoute-compatible)
+ *   - userId, email, teamId, tier, principalType, principalId, organizationId
  * ------------------------------------------------------------------
  */
 
@@ -30,9 +32,13 @@ import { Provider, SendMessageOptions } from '../../types';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── SSE Parser ──
+import { parseGrokBuildSSEStream } from './grok-build-cli.sse-parser';
+
 // ── Grok Build Imports ──
 import {
   GrokBuildCredentials,
+  GrokBuildProviderData,
   GrokBuildRequestBody,
   GrokBuildReasoning,
   OAuthTokenResponse,
@@ -65,12 +71,25 @@ import {
   REFRESH_MAX_ATTEMPTS,
   REFRESH_MIN_DELAY_MS,
   TERMINAL_REFRESH_ERRORS,
+  DEVICE_CODE_URL,
+  OAUTH_CLIENT_ID,
+  OAUTH_SCOPES,
+  OAUTH_REFERRER,
 } from './grok-build-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('GrokBuildCLIProvider');
 
+const REASONING_EFFORT_SET = new Set(SUPPORTED_REASONING_EFFORTS);
+
 // ─── Helper Functions ───────────────────────────────────────────────────
+
+/** Return value only if it is a non-empty trimmed string, otherwise null. */
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
 
 function parseCredential(credential: string): GrokBuildCredentials {
   if (credential.trim().startsWith('{')) {
@@ -84,6 +103,28 @@ function parseCredential(credential: string): GrokBuildCredentials {
 
   // Fallback: treat as raw access token
   return { accessToken: credential };
+}
+
+/**
+ * Resolve identity fields from credential, checking both providerSpecificData
+ * (OmniRoute-compatible) and the legacy root fields for backward-compat.
+ */
+function resolveProviderData(
+  credentials: GrokBuildCredentials,
+): GrokBuildProviderData {
+  const pd = credentials.providerSpecificData || {};
+  return {
+    userId: nonEmptyString(pd.userId) ?? nonEmptyString(credentials.userId),
+    email: nonEmptyString(pd.email) ?? nonEmptyString(credentials.email),
+    principalType:
+      nonEmptyString(pd.principalType) ??
+      nonEmptyString(credentials.principalType),
+    principalId:
+      nonEmptyString(pd.principalId) ?? nonEmptyString(credentials.principalId),
+    teamId: nonEmptyString(pd.teamId) ?? null,
+    organizationId: nonEmptyString(pd.organizationId) ?? null,
+    tier: pd.tier,
+  };
 }
 
 function mapPlatform(platform: string): string {
@@ -104,7 +145,9 @@ function getUserAgent(): string {
   return `${CLIENT_IDENTIFIER}/${DEFAULT_CLIENT_VERSION} (${platform}; ${arch})`;
 }
 
-function getClientHeaders(clientMode = 'headless'): Record<string, string> {
+function getClientHeaders(
+  clientMode = 'headless',
+): Record<string, string> {
   return {
     [HTTP_HEADER_NAMES.X_GROK_CLIENT_VERSION]: DEFAULT_CLIENT_VERSION,
     [HTTP_HEADER_NAMES.X_GROK_CLIENT_IDENTIFIER]: CLIENT_IDENTIFIER,
@@ -113,11 +156,33 @@ function getClientHeaders(clientMode = 'headless'): Record<string, string> {
   };
 }
 
+/**
+ * Resolve the wire-email value. Returns null for team / organization
+ * principal types (x-email must not be sent for those accounts).
+ * Matches OmniRoute's getWireEmail logic exactly.
+ */
+function getWireEmail(
+  email: string | null | undefined,
+  principalType: string | null | undefined,
+): string | null {
+  const normalized = principalType?.trim().toLowerCase();
+  return normalized === 'team' || normalized === 'organization'
+    ? null
+    : nonEmptyString(email);
+}
+
+/**
+ * Build session headers for the Responses API endpoint.
+ * Reads identity from resolved providerData so team/org accounts work correctly.
+ */
 function buildSessionHeaders(
   credentials: GrokBuildCredentials,
+  providerData: GrokBuildProviderData,
   model?: string,
   stream = true,
 ): Record<string, string> {
+  const wireEmail = getWireEmail(providerData.email, providerData.principalType);
+
   const headers: Record<string, string> = {
     [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
     [HTTP_HEADER_NAMES.ACCEPT]: stream
@@ -133,16 +198,31 @@ function buildSessionHeaders(
     headers[HTTP_HEADER_NAMES.X_GROK_MODEL_OVERRIDE] = model;
   }
 
-  if (credentials.userId) {
-    headers[HTTP_HEADER_NAMES.X_USERID] = credentials.userId;
-    headers[HTTP_HEADER_NAMES.X_GROK_USER_ID] = credentials.userId;
+  if (providerData.userId) {
+    headers[HTTP_HEADER_NAMES.X_USERID] = providerData.userId;
+    headers[HTTP_HEADER_NAMES.X_GROK_USER_ID] = providerData.userId;
   }
 
-  if (credentials.email && credentials.principalType !== 'team') {
-    headers[HTTP_HEADER_NAMES.X_EMAIL] = credentials.email;
+  if (wireEmail) {
+    headers[HTTP_HEADER_NAMES.X_EMAIL] = wireEmail;
   }
 
   return headers;
+}
+
+/**
+ * Build headers for OAuth token-endpoint requests (refresh / device code / token exchange).
+ * Matches OmniRoute's getGrokBuildOAuthHeaders.
+ */
+function buildOAuthHeaders(
+  surface: 'ui' | 'cli' | 'headless' = 'ui',
+): Record<string, string> {
+  return {
+    [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+    [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+    [HTTP_HEADER_NAMES.X_GROK_CLIENT_VERSION]: DEFAULT_CLIENT_VERSION,
+    [HTTP_HEADER_NAMES.X_GROK_CLIENT_SURFACE]: surface,
+  };
 }
 
 function ensureReasoningInclude(value: unknown): unknown[] {
@@ -169,7 +249,7 @@ function normalizeReasoning(
   );
 
   if (
-    !SUPPORTED_REASONING_EFFORTS.includes(
+    !REASONING_EFFORT_SET.has(
       reasoning.effort as 'low' | 'medium' | 'high',
     )
   ) {
@@ -191,6 +271,119 @@ function stripUnsupportedParams(request: GrokBuildRequestBody): void {
   }
 }
 
+/**
+ * Sanitize a single `function_call_output.output` value into a valid JSON
+ * string (or plain text) before dispatching to Grok's strict JSON parser.
+ *
+ * Grok's cli-chat-proxy is stricter than OpenAI's Responses API and rejects
+ * truncated / incomplete JSON strings or invalid `\uXXXX` escapes (#7611).
+ */
+function sanitizeFunctionCallOutput(output: unknown): string {
+  if (output == null) return '';
+
+  if (typeof output === 'string') {
+    const value = output;
+    // Try to round-trip through JSON parse/stringify to normalise.
+    try {
+      return JSON.stringify(JSON.parse(value));
+    } catch {
+      // fall through
+    }
+    // Drop incomplete \u escapes (0-3 hex digits) that break strict JSON parsers.
+    const repaired = value.replace(
+      /\\u([0-9A-Fa-f]{0,3})(?![0-9A-Fa-f])/g,
+      '',
+    );
+    try {
+      return JSON.stringify(JSON.parse(repaired));
+    } catch {
+      // Replace lone surrogates to produce valid Unicode.
+      return repaired.replace(/[\uD800-\uDFFF]/g, '\uFFFD');
+    }
+  }
+
+  if (Array.isArray(output)) {
+    const textParts = output
+      .map((part) => {
+        if (part && typeof part === 'object') {
+          const rec = part as Record<string, unknown>;
+          if (typeof rec.text === 'string') return rec.text;
+        }
+        return typeof part === 'string' ? part : JSON.stringify(part);
+      })
+      .join('\n');
+    return sanitizeFunctionCallOutput(textParts);
+  }
+
+  try {
+    return JSON.stringify(output);
+  } catch {
+    return String(output);
+  }
+}
+
+/**
+ * Walk the Responses API `input` array and sanitize any
+ * `function_call_output.output` fields before dispatch.
+ */
+function sanitizeResponsesBody(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const input = body.input;
+  if (!Array.isArray(input)) return body;
+
+  let changed = false;
+  const nextInput = input.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const rec = item as Record<string, unknown>;
+    if (rec.type !== 'function_call_output') return item;
+    const sanitized = sanitizeFunctionCallOutput(rec.output);
+    if (sanitized === rec.output) return item;
+    changed = true;
+    return { ...rec, output: sanitized };
+  });
+
+  return changed ? { ...body, input: nextInput } : body;
+}
+
+/**
+ * Normalize a single Chat Completions message into Responses API input item format.
+ *
+ * Grok's /v1/responses requires each input item to have `type: "message"`.
+ * A raw Chat Completions message `{ role, content }` is missing this field,
+ * causing 422. Matches OmniRoute's normalizeResponsesInputItem logic.
+ *
+ * Examples:
+ *   { role: "user", content: "hi" }
+ *     → { type: "message", role: "user", content: "hi" }
+ *
+ *   { type: "message", role: "user", content: "hi" }
+ *     → (unchanged)
+ */
+function normalizeResponsesInputItem(item: unknown): unknown {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+  const rec = item as Record<string, unknown>;
+
+  // Already has type — pass through
+  if (rec.type) return rec;
+
+  // Has role → Chat Completions message, add type: "message"
+  if (rec.role) {
+    return { type: 'message', ...rec };
+  }
+
+  // Plain text shorthand
+  if (typeof rec.text === 'string') {
+    return {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'input_text', text: rec.text }],
+    };
+  }
+
+  return rec;
+}
+
 function transformRequestBody(
   model: string,
   body: unknown,
@@ -206,6 +399,26 @@ function transformRequestBody(
     transformed.model = model || 'grok-composer-2.5-fast';
   }
   transformed.stream = !!stream;
+
+  // ── Responses API requires `input`, not `messages` ──────────────────
+  // Grok's /v1/responses endpoint uses `input[]`, not `messages[]`.
+  // If the caller sent Chat Completions-shaped body (with `messages`),
+  // promote it to `input` and normalize each item to Responses format.
+  // Matches OmniRoute translator/index.ts normalizeOpenAIResponsesRequest logic.
+  if (transformed.input == null && Array.isArray(transformed.messages)) {
+    logger.debug('[GrokBuildCLI] transformRequestBody: promoting messages → input', {
+      messageCount: (transformed.messages as unknown[]).length,
+    });
+    transformed.input = (transformed.messages as unknown[]).map(
+      normalizeResponsesInputItem,
+    );
+    delete transformed.messages;
+  } else if (Array.isArray(transformed.input)) {
+    // Also normalize existing input[] items in case they lack `type`
+    transformed.input = (transformed.input as unknown[]).map(
+      normalizeResponsesInputItem,
+    );
+  }
 
   // Grok Build defaults
   if (transformed.store === undefined) transformed.store = false;
@@ -230,7 +443,21 @@ function transformRequestBody(
     transformed.tools = transformed.tools.slice(0, MAX_TOOLS);
   }
 
-  return transformed;
+  // Sanitize tool-result payloads for Grok's strict JSON parser (#7611)
+  return sanitizeResponsesBody(transformed) as GrokBuildRequestBody;
+}
+
+/**
+ * Compute retry delay with exponential backoff and ±50 % jitter.
+ * Prevents thundering herd when multiple requests need to refresh simultaneously.
+ * Matches OmniRoute's getRefreshRetryDelayMs logic.
+ */
+function getRefreshRetryDelayMs(retryNumber: number): number {
+  const baseDelay = Math.min(
+    2_000,
+    REFRESH_MIN_DELAY_MS * 2 ** Math.max(0, retryNumber - 1),
+  );
+  return Math.max(1, Math.round(baseDelay * (0.5 + Math.random())));
 }
 
 // ─── Provider Class ────────────────────────────────────────────────────
@@ -259,18 +486,159 @@ export class GrokBuildCLIProvider implements Provider {
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     const creds = parseCredential(credential);
+    const pd = resolveProviderData(creds);
     return {
-      email: creds.email || null,
-      id: creds.userId,
+      email: pd.email ?? null,
+      id: pd.userId ?? undefined,
     };
   }
 
-  // ─── Login ──────────────────────────────────────────────────────────
+  // ─── Login (Device Code Flow) ────────────────────────────────────────
 
   async login() {
-    throw new Error(
-      'Grok Build CLI requires OAuth authentication. Please use device code flow.',
-    );
+    try {
+      const clientId =
+        process.env.GROK_OAUTH_CLIENT_ID ||
+        process.env.GROK_BUILD_CLIENT_ID ||
+        OAUTH_CLIENT_ID;
+
+      const body = new URLSearchParams({
+        client_id: clientId,
+        scope: OAUTH_SCOPES.join(' '),
+        referrer: OAUTH_REFERRER,
+      });
+
+      const response = await fetch(DEVICE_CODE_URL, {
+        method: 'POST',
+        headers: {
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+          [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+        },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({})) as any;
+        throw new Error(
+          errData.error_description || errData.error || `Device code request failed: ${response.status}`,
+        );
+      }
+
+      const data = await response.json() as {
+        device_code: string;
+        user_code: string;
+        verification_uri: string;
+        verification_uri_complete?: string;
+        expires_in: number;
+        interval: number;
+      };
+
+      const pollContext = JSON.stringify({
+        device_code: data.device_code,
+        client_id: clientId,
+        interval: data.interval ?? 5,
+      });
+
+      return {
+        success: true,
+        pending: true,
+        cookies: '',
+        email: '',
+        tempSessionId: pollContext,
+        user_code: data.user_code,
+        verification_url: data.verification_uri_complete || data.verification_uri,
+        expires_in: data.expires_in,
+        poll_interval: data.interval ?? 5,
+      };
+    } catch (error) {
+      logger.error('[GrokBuildCLI] Login initiation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Poll một lần — gọi từ UI định kỳ đến khi done hoặc error.
+   */
+  async pollOnce(pollContext: string): Promise<{
+    done: boolean;
+    cookies?: string;
+    email?: string;
+    error?: string;
+    account?: any;
+  }> {
+    let ctx: { device_code: string; client_id: string; interval: number };
+    try {
+      ctx = JSON.parse(pollContext);
+    } catch {
+      return { done: false, error: 'Invalid poll context' };
+    }
+
+    try {
+      const body = new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        device_code: ctx.device_code,
+        client_id: ctx.client_id,
+      });
+
+      const response = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
+          [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+        },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      const data = await response.json().catch(() => ({})) as OAuthTokenResponse & {
+        error?: string;
+        error_description?: string;
+      };
+
+      if (response.ok && data.access_token) {
+        const credential: GrokBuildCredentials = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token || null,
+        };
+
+        // Try to get email from userinfo endpoint
+        let email = '';
+        try {
+          const userInfoRes = await fetch('https://auth.x.ai/oauth2/userinfo', {
+            headers: { Authorization: `Bearer ${data.access_token}` },
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (userInfoRes.ok) {
+            const userInfo = await userInfoRes.json() as { email?: string; sub?: string };
+            email = userInfo.email || '';
+          }
+        } catch {
+          // ignore
+        }
+        if (!email) {
+          email = `grok-${Date.now()}@grok.local`;
+        }
+
+        return { done: true, cookies: JSON.stringify(credential), email };
+      }
+
+      const errCode = data.error;
+      if (errCode === 'authorization_pending' || errCode === 'slow_down') {
+        return { done: false };
+      }
+      if (errCode === 'access_denied') {
+        return { done: false, error: 'User denied authorization' };
+      }
+      if (errCode === 'expired_token') {
+        return { done: false, error: 'Device code expired. Please try again.' };
+      }
+
+      return { done: false, error: data.error_description || errCode || 'Token polling failed' };
+    } catch (error) {
+      logger.warn('[GrokBuildCLI] pollOnce error:', error);
+      return { done: false };
+    }
   }
 
   // ─── Token Refresh ──────────────────────────────────────────────────
@@ -285,24 +653,26 @@ export class GrokBuildCLIProvider implements Provider {
     }
 
     try {
+      const pd = resolveProviderData(credentials);
+
       const body = new URLSearchParams({
         grant_type: 'refresh_token',
-        client_id: process.env.GROK_OAUTH_CLIENT_ID || '',
+        // Resolve client_id: prefer env var, fall back to the public grok-shell client id.
+        // An empty string would cause the server to reject the request immediately.
+        client_id:
+          process.env.GROK_OAUTH_CLIENT_ID ||
+          process.env.GROK_BUILD_CLIENT_ID ||
+          OAUTH_CLIENT_ID,
         refresh_token: credentials.refreshToken,
       });
 
-      if (credentials.principalType) {
-        body.set('principal_type', credentials.principalType);
-      }
-      if (credentials.principalId) {
-        body.set('principal_id', credentials.principalId);
-      }
+      // Include principal fields for team / organization accounts.
+      if (pd.principalType) body.set('principal_type', pd.principalType);
+      if (pd.principalId) body.set('principal_id', pd.principalId);
 
       const response = await fetch(TOKEN_URL, {
         method: 'POST',
-        headers: {
-          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.FORM_URLENCODED,
-        },
+        headers: buildOAuthHeaders('ui'),
         body,
         signal: AbortSignal.timeout(15_000),
       });
@@ -312,10 +682,10 @@ export class GrokBuildCLIProvider implements Provider {
         .catch(() => ({}))) as OAuthTokenResponse;
 
       if (!response.ok) {
-        const errorCode = data.error;
+        const errorCode = nonEmptyString(data.error);
         const isTerminal =
           attempt === REFRESH_MAX_ATTEMPTS ||
-          (errorCode && TERMINAL_REFRESH_ERRORS.has(errorCode));
+          (errorCode !== null && TERMINAL_REFRESH_ERRORS.has(errorCode));
         logger.warn(
           '[GrokBuildCLI] Token refresh failed:',
           response.status,
@@ -324,21 +694,18 @@ export class GrokBuildCLIProvider implements Provider {
         return isTerminal ? null : undefined;
       }
 
-      if (!data.access_token) {
+      const accessToken = nonEmptyString(data.access_token);
+      if (!accessToken) {
         logger.warn('[GrokBuildCLI] No access_token in refresh response');
         return attempt === REFRESH_MAX_ATTEMPTS ? null : undefined;
       }
 
-      const expiresIn =
-        typeof data.expires_in === 'number' && data.expires_in > 0
-          ? data.expires_in
-          : 21600;
-      const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+      logger.info('[GrokBuildCLI] Token refreshed successfully');
 
       return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token || credentials.refreshToken,
-        expiresAt,
+        accessToken,
+        refreshToken:
+          nonEmptyString(data.refresh_token) || credentials.refreshToken,
       };
     } catch (error) {
       logger.warn(
@@ -354,9 +721,9 @@ export class GrokBuildCLIProvider implements Provider {
   ): Promise<Partial<GrokBuildCredentials> | null> {
     for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
       if (attempt > 1) {
-        const delayMs = Math.min(
-          2_000,
-          REFRESH_MIN_DELAY_MS * 2 ** (attempt - 2),
+        const delayMs = getRefreshRetryDelayMs(attempt - 1);
+        logger.debug(
+          `[GrokBuildCLI] Retrying token refresh (${attempt}/${REFRESH_MAX_ATTEMPTS})`,
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -392,25 +759,9 @@ export class GrokBuildCLIProvider implements Provider {
 
     let credentials = parseCredential(credential);
 
-    // Check if token needs refresh
-    if (credentials.expiresAt) {
-      const expiresAt = new Date(credentials.expiresAt).getTime();
-      const now = Date.now();
-      const expiresIn = expiresAt - now;
-
-      // Refresh if expires in less than 5 minutes
-      if (expiresIn < 5 * 60 * 1000) {
-        const refreshed = await this.refreshCredentials(credentials);
-        if (refreshed) {
-          credentials = { ...credentials, ...refreshed };
-        } else {
-          onError(new Error('Failed to refresh access token'));
-          return;
-        }
-      }
-    }
-
+    // Check if token needs refresh (within 5-minute window)
     const requestModel = model || 'grok-composer-2.5-fast';
+    const providerData = resolveProviderData(credentials);
 
     try {
       const bodyObj = {
@@ -420,7 +771,26 @@ export class GrokBuildCLIProvider implements Provider {
       };
 
       const transformedBody = transformRequestBody(requestModel, bodyObj, true);
-      const headers = buildSessionHeaders(credentials, requestModel, true);
+      const headers = buildSessionHeaders(
+        credentials,
+        providerData,
+        requestModel,
+        true,
+      );
+
+      logger.debug('[GrokBuildCLI] Sending request', {
+        url: RESPONSES_URL,
+        model: requestModel,
+        inputCount: Array.isArray(transformedBody.input)
+          ? transformedBody.input.length
+          : null,
+        messagesCount: Array.isArray(transformedBody.messages)
+          ? transformedBody.messages.length
+          : null,
+        hasInput: transformedBody.input != null,
+        hasMessages: transformedBody.messages != null,
+        bodyKeys: Object.keys(transformedBody),
+      });
 
       const response = await fetch(RESPONSES_URL, {
         method: 'POST',
@@ -429,17 +799,40 @@ export class GrokBuildCLIProvider implements Provider {
       });
 
       if (!response.ok) {
+        // ── Log error details for debugging ─────────────────────────
+        let errorBody: unknown = null;
+        try {
+          errorBody = await response.json();
+        } catch {
+          try {
+            errorBody = await response.text();
+          } catch {
+            // ignore
+          }
+        }
+        logger.error('[GrokBuildCLI] API error response', {
+          status: response.status,
+          statusText: response.statusText,
+          model: requestModel,
+          errorBody,
+          bodyKeys: Object.keys(transformedBody),
+          hasInput: transformedBody.input != null,
+          hasMessages: transformedBody.messages != null,
+        });
+
         if (response.status === 401) {
-          // Try token refresh
+          // Attempt token refresh then retry once
           const refreshed = await this.refreshCredentials(credentials);
           if (refreshed) {
             credentials = { ...credentials, ...refreshed };
-            // Retry request with new token
             const retryHeaders = buildSessionHeaders(
               credentials,
+              providerData,
               requestModel,
               true,
             );
+
+            logger.debug('[GrokBuildCLI] Retrying after token refresh');
             const retryResponse = await fetch(RESPONSES_URL, {
               method: 'POST',
               headers: retryHeaders,
@@ -447,20 +840,31 @@ export class GrokBuildCLIProvider implements Provider {
             });
 
             if (!retryResponse.ok) {
+              let retryErrorBody: unknown = null;
+              try {
+                retryErrorBody = await retryResponse.json();
+              } catch {
+                try {
+                  retryErrorBody = await retryResponse.text();
+                } catch {
+                  // ignore
+                }
+              }
+              logger.error('[GrokBuildCLI] Retry also failed', {
+                status: retryResponse.status,
+                retryErrorBody,
+              });
               throw new Error(
                 `Grok Build API returned ${retryResponse.status}`,
               );
             }
 
-            // Process retry response
-            await this.processStream(
-              retryResponse,
+            await parseGrokBuildSSEStream(retryResponse.body as NodeJS.ReadableStream, {
               onContent,
               onThinking,
               onMetadata,
-              onDone,
-              onError,
-            );
+            });
+            onDone();
             return;
           }
         }
@@ -472,14 +876,12 @@ export class GrokBuildCLIProvider implements Provider {
         throw new Error('No response body');
       }
 
-      await this.processStream(
-        response,
+      await parseGrokBuildSSEStream(response.body as NodeJS.ReadableStream, {
         onContent,
         onThinking,
         onMetadata,
-        onDone,
-        onError,
-      );
+      });
+      onDone();
     } catch (err: any) {
       logger.error('[GrokBuildCLI] handleMessage error:', {
         message: err.message,
@@ -489,83 +891,6 @@ export class GrokBuildCLIProvider implements Provider {
     }
   }
 
-  // ─── Process Stream ─────────────────────────────────────────────────
-
-  private async processStream(
-    response: any,
-    onContent: (content: string) => void,
-    onThinking: ((thinking: string) => void) | undefined,
-    onMetadata: ((metadata: any) => void) | undefined,
-    onDone: () => void,
-    onError: (error: Error) => void,
-  ): Promise<void> {
-    try {
-      const reader = response.body;
-      let buffer = '';
-
-      reader.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-
-              // Extract content
-              if (data.choices && Array.isArray(data.choices)) {
-                for (const choice of data.choices) {
-                  if (choice.delta?.content) {
-                    onContent(choice.delta.content);
-                  }
-                }
-              }
-
-              // Extract thinking (if available)
-              if (data.reasoning && onThinking) {
-                if (typeof data.reasoning === 'string') {
-                  onThinking(data.reasoning);
-                } else if (data.reasoning.content) {
-                  onThinking(data.reasoning.content);
-                }
-              }
-
-              // Extract metadata
-              if (onMetadata) {
-                if (data.finish_reason) {
-                  onMetadata({ finish_reason: data.finish_reason });
-                }
-                if (data.usage) {
-                  onMetadata({ usage: data.usage });
-                }
-              }
-            } catch (parseError) {
-              logger.warn(
-                '[GrokBuildCLI] Failed to parse SSE data:',
-                parseError,
-              );
-            }
-          }
-        }
-      });
-
-      reader.on('end', () => {
-        onDone();
-      });
-
-      reader.on('error', (err: Error) => {
-        onError(err);
-      });
-    } catch (error) {
-      onError(
-        error instanceof Error ? error : new Error('Unknown stream error'),
-      );
-    }
-  }
 }
 
 export default new GrokBuildCLIProvider();

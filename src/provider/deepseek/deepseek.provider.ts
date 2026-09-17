@@ -45,6 +45,9 @@ import {
   DeepSeekApiEnvelope,
   DeepSeekChatMessage,
   DeepSeekUserInfo,
+  DeepSeekCredential,
+  CheckDeviceResponse,
+  RenewResult,
   UploadFileInput,
 } from './deepseek.types';
 import { DeepSeekHash, solvePoW } from './deepseek.pow';
@@ -86,6 +89,8 @@ import {
   WASM_FILENAME,
   LOGIN_PARTITION_PREFIX,
   HISTORY_MESSAGES_COUNT,
+  AUTH_RENEW_CONFIG,
+  DEEPSEEK_ERROR_CODES,
 } from './deepseek.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -116,20 +121,25 @@ export class DeepSeekProvider implements Provider {
 
   // ─── Credential Helpers ─────────────────────────────────────────────
 
-  private parseCredential(credential: string): string {
+  /**
+   * Parse credential string thành `{ token, deviceId }`.
+   * Hỗ trợ cả credential JSON mới (`{secretKey, deviceId}`) lẫn raw token cũ.
+   * Nếu credential cũ không có `deviceId` → trả `deviceId: null`.
+   */
+  private parseCredential(credential: string): DeepSeekCredential {
     // Try parsing as JSON first
     if (credential.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(credential);
-        // New format: {secretKey} or fallback: {accessToken, token}
         const token =
           parsed.secretKey ||
           parsed.secret_key ||
           parsed.accessToken ||
           parsed.access_token ||
           parsed.token;
+        const deviceId = parsed.deviceId || parsed.device_id || null;
         if (token) {
-          return token;
+          return { token, deviceId };
         }
       } catch (e) {
         logger.warn(
@@ -140,7 +150,122 @@ export class DeepSeekProvider implements Provider {
     }
 
     // Fallback: treat as raw token
-    return credential;
+    return { token: credential, deviceId: null };
+  }
+
+  /**
+   * Lấy `device_id` từ credential; nếu chưa có thì sinh UUID v4 mới.
+   * KHÔNG persist ở đây — caller chịu trách nhiệm lưu credential mới.
+   *
+   * Lý do: web client DeepSeek lưu device_id trong
+   * `localStorage["deepseek-device-id:chat"]` và dùng cặp
+   * `(token, device_id)` để server quyết định rotate token. Nếu sinh mới
+   * mỗi request → server từ chối rotate → token chết.
+   */
+  private resolveDeviceId(credential: DeepSeekCredential): string {
+    if (credential.deviceId) return credential.deviceId;
+    return randomUUID(); // UUID v4 — khớp hành vi web client
+  }
+
+  /**
+   * Gọi `/api/v0/users/auth_token/check_device` để kiểm tra & rotate token.
+   *
+   * @returns
+   * - `{ token, rotated: true, newCredential }` nếu server cấp token mới.
+   * - `{ token: <token cũ>, rotated: false, newCredential }` nếu không rotate
+   *   (token vẫn còn hạn, `newCredential` chuẩn hóa lại để lưu `deviceId`).
+   * - `null` nếu token đã chết hoàn toàn (cần login lại) hoặc request lỗi.
+   */
+  async renewTokenIfPossible(
+    credential: DeepSeekCredential,
+  ): Promise<RenewResult | null> {
+    const deviceId = this.resolveDeviceId(credential);
+
+    try {
+      const url = `${BASE_URL}${API_PATHS.USERS_AUTH_TOKEN_CHECK_DEVICE}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(),
+        AUTH_RENEW_CONFIG.REQUEST_TIMEOUT_MS,
+      );
+
+      const res = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal as any,
+        headers: {
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${credential.token}`,
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+          [HTTP_HEADER_NAMES.X_DEVICE_ID]: deviceId,
+          [HTTP_HEADER_NAMES.X_DEVICE_MODEL]: '',
+          [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+          [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+          [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
+          [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
+          [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
+          [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]:
+            HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
+          [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
+            HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
+        },
+        body: JSON.stringify({ device_id: deviceId, device_model: '' }),
+      });
+
+      clearTimeout(timeout);
+
+      // Token đã chết hoàn toàn — không thể renew
+      if (res.status === 401 || res.status === 403) {
+        logger.warn('[DeepSeek] check_device rejected token (auth dead)');
+        return null;
+      }
+
+      if (!res.ok) {
+        logger.warn(`[DeepSeek] check_device HTTP ${res.status}`);
+        return null;
+      }
+
+      const json =
+        (await res.json()) as DeepSeekApiEnvelope<CheckDeviceResponse>;
+
+      if (json?.code !== SUCCESS_CODE) {
+        logger.warn(
+          `[DeepSeek] check_device biz error code=${json?.code} msg=${json?.msg}`,
+        );
+        return null;
+      }
+
+      const rotate = json?.data?.biz_data?.rotate ?? null;
+
+      // Không rotate → token cũ vẫn dùng được
+      if (!rotate) {
+        return {
+          token: credential.token,
+          rotated: false,
+          newCredential: JSON.stringify({
+            secretKey: credential.token,
+            deviceId,
+          }),
+        };
+      }
+
+      // Rotate → token mới (string hoặc object { token })
+      const newToken =
+        typeof rotate === 'string'
+          ? rotate
+          : (rotate as { token?: string })?.token;
+
+      if (!newToken) {
+        logger.warn('[DeepSeek] rotate payload shape unexpected:', rotate);
+        return null;
+      }
+
+      const newCredential = JSON.stringify({ secretKey: newToken, deviceId });
+      logger.info('[DeepSeek] Token rotated successfully');
+      return { token: newToken, rotated: true, newCredential };
+    } catch (e: any) {
+      logger.warn('[DeepSeek] check_device request failed:', e?.message || e);
+      return null;
+    }
   }
 
   // ─── Profile ─────────────────────────────────────────────────────────
@@ -148,7 +273,7 @@ export class DeepSeekProvider implements Provider {
   async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
-    const token = this.parseCredential(credential);
+    const { token } = this.parseCredential(credential);
 
     try {
       const url = `${BASE_URL}${API_PATHS.USERS_CURRENT}`;
@@ -218,8 +343,12 @@ export class DeepSeekProvider implements Provider {
           }
 
           if (email) {
-            // Return JSON format credential with secretKey
-            const jsonCredential = JSON.stringify({ secretKey: token });
+            // Sinh device_id 1 lần, dùng cố định cho các lần check_device sau
+            const deviceId = randomUUID();
+            const jsonCredential = JSON.stringify({
+              secretKey: token,
+              deviceId,
+            });
             return { isValid: true, cookies: jsonCredential, email };
           }
           logger.warn(
@@ -332,7 +461,8 @@ export class DeepSeekProvider implements Provider {
       onRaw,
       onSessionCreated,
     } = options;
-    const token = this.parseCredential(credential);
+    const parsedCred = this.parseCredential(credential);
+    let token = parsedCred.token;
 
     const baseHeaders = {
       [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
@@ -401,10 +531,72 @@ export class DeepSeekProvider implements Provider {
           },
         );
 
-        const sessionData = (await sessionRes.json()) as DeepSeekApiEnvelope<{
+        let sessionData = (await sessionRes.json()) as DeepSeekApiEnvelope<{
           chat_session: { id: string };
           id: string;
         }>;
+
+        // Reactive token renew: nếu server trả 40003 (auth failed) → thử
+        // gọi check_device một lần. Nếu rotate thành công → retry session create.
+        if (
+          Number(sessionData?.[API_FIELDS.CODE]) ===
+          DEEPSEEK_ERROR_CODES.AUTHORIZATION_FAILED
+        ) {
+          logger.warn(
+            '[DeepSeek] 40003 detected on session create, attempting token renew...',
+          );
+
+          const renewed = await this.renewTokenIfPossible(parsedCred);
+          if (!renewed) {
+            throw new Error(
+              'DeepSeek token expired and cannot be renewed. Re-login required.',
+            );
+          }
+
+          // Persist credential mới (nếu caller cung cấp hook)
+          if (options.onCredentialRotated) {
+            try {
+              await options.onCredentialRotated(renewed.newCredential);
+            } catch (persistErr: any) {
+              logger.warn(
+                '[DeepSeek] onCredentialRotated callback failed:',
+                persistErr?.message || persistErr,
+              );
+            }
+          }
+
+          token = renewed.token;
+
+          // Tạo lại client với token mới
+          const retryClient = new HttpClient({
+            baseURL: BASE_URL,
+            headers: {
+              ...baseHeaders,
+              [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
+              [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
+              [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.CHAT_SESSION_PREFIX}${newSessionUUID}`,
+            },
+          });
+
+          const retryRes = await retryClient.post(
+            API_PATHS.CHAT_SESSION_CREATE,
+            {
+              [API_FIELDS.CHARACTER_ID]: null,
+            },
+          );
+
+          sessionData =
+            (await retryRes.json()) as typeof sessionData;
+
+          if (
+            Number(sessionData?.[API_FIELDS.CODE]) ===
+            DEEPSEEK_ERROR_CODES.AUTHORIZATION_FAILED
+          ) {
+            throw new Error(
+              `DeepSeek auth still failing after renew (code: ${sessionData?.[API_FIELDS.CODE]}). Re-login required.`,
+            );
+          }
+        }
 
         // Check for API error code (40003 = authorization failed, etc.)
         if (sessionData?.[API_FIELDS.CODE] !== SUCCESS_CODE) {
@@ -695,7 +887,7 @@ export class DeepSeekProvider implements Provider {
   // ─── Stop Stream ────────────────────────────────────────────────────
 
   async stopStream(credential: string, chatId: string, messageId: string) {
-    const token = this.parseCredential(credential);
+    const { token } = this.parseCredential(credential);
     const client = this.createClient(token);
     await client.post(API_PATHS.CHAT_STOP_GENERATION, {
       chat_session_id: chatId,
@@ -709,7 +901,7 @@ export class DeepSeekProvider implements Provider {
     credential: string,
     file: UploadFileInput,
   ): Promise<{ id: string; token_usage: number }> {
-    const token = this.parseCredential(credential);
+    const { token } = this.parseCredential(credential);
     return deepseekUploadFile(token, file, () => this.getDsHash());
   }
 

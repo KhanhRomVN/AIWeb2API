@@ -23,8 +23,13 @@
  * - Thinking ON:  options.reasoning_effort = "REASONING_EFFORT_LOW" | "REASONING_EFFORT_HIGH"
  * - Thinking OFF: options.reasoning_effort = "REASONING_EFFORT_NONE"
  * - Search ON:    tools chứa { type: "TOOL_TYPE_SEARCH", search: {} }
+ *
+ * Elapsed time: wall-clock timer (Kimi không trả về elapsed natively).
  * ------------------------------------------------------------------
  */
+
+// ─── Imports ────────────────────────────────────────────────────────────
+import { ThinkingTimer } from '../../utils/thinking-timer';
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
@@ -45,6 +50,7 @@ export class KimiThinkingParser {
   private buffer = '';
   private isThinkingStarted = false;
   private isThinkingEnded = false;
+  private readonly timer = new ThinkingTimer();
 
   /**
    * Feed một chunk thinking content.
@@ -52,13 +58,14 @@ export class KimiThinkingParser {
    *   - op="set",    mask="block.think"         → block.think.content
    *   - op="append", mask="block.think.content" → block.think.content
    *
-   * Tự động emit opening tag <thinking> ở chunk đầu tiên.
+   * Chunk đầu tiên tự động emit opening tag <thinking> và bắt đầu timer.
    */
   feed(chunk: string): string {
     if (!chunk) return '';
 
     if (!this.isThinkingStarted) {
       this.isThinkingStarted = true;
+      this.timer.start();
       this.buffer = chunk;
       return '<thinking>' + chunk;
     }
@@ -72,12 +79,20 @@ export class KimiThinkingParser {
    * Gọi khi nhận được op="set", mask="block.multiStage"
    * với stages[].status = "STAGE_STATUS_END".
    *
-   * Emit closing tag </thinking>.
+   * Emit closing tag </thinking> với elapsed time.
    */
   end(): string {
     if (this.isThinkingEnded) return '';
     this.isThinkingEnded = true;
-    return '</thinking>';
+
+    const elapsed = this.timer.stop();
+    let result = '</thinking>';
+
+    if (elapsed !== null) {
+      result += `\n<thinking_elapsed>${ThinkingTimer.format(elapsed)}</thinking_elapsed>`;
+    }
+
+    return result;
   }
 
   /**
@@ -118,20 +133,17 @@ export class KimiThinkingParser {
     return null;
   }
 
-  /**
-   * Get accumulated thinking content (không bao gồm tags).
-   */
+  /** Get accumulated thinking content (không bao gồm tags). */
   getBuffer(): string {
     return this.buffer;
   }
 
-  /**
-   * Reset parser state.
-   */
+  /** Reset parser state. */
   reset(): void {
     this.buffer = '';
     this.isThinkingStarted = false;
     this.isThinkingEnded = false;
+    this.timer.reset();
   }
 }
 

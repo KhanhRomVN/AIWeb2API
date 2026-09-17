@@ -5,22 +5,59 @@
  * Type definitions cho Grok Build CLI API.
  *
  * Main exports:
- * - GrokBuildCredentials  : Credential format
- * - GrokBuildRequestBody  : Request body format
- * - GrokBuildReasoning    : Reasoning configuration
+ * - GrokBuildCredentials        : Credential format
+ * - GrokBuildProviderData       : providerSpecificData (team/org/userId)
+ * - GrokBuildRequestBody        : Request body format
+ * - GrokBuildReasoning          : Reasoning configuration
+ * - OAuthTokenResponse          : OAuth token response
  * ------------------------------------------------------------------
  */
 
 // ─── Credentials ────────────────────────────────────────────────────────
 
+/**
+ * Extra identity fields stored inside providerSpecificData.
+ * Follows OmniRoute's credential shape so tokens acquired via the OAuth flow
+ * (device-code / browser PKCE) are compatible.
+ */
+export interface GrokBuildProviderData {
+  userId?: string | null;
+  email?: string | null;
+  teamId?: string | null;
+  tier?: number;
+  principalType?: string | null;
+  principalId?: string | null;
+  organizationId?: string | null;
+  rawAuthJson?: Record<string, unknown>;
+}
+
 export interface GrokBuildCredentials {
+  /** OAuth Bearer access token. */
   accessToken: string;
-  refreshToken?: string;
-  expiresAt?: string;
-  email?: string;
-  userId?: string;
-  principalType?: string;
-  principalId?: string;
+  /** OAuth refresh token — required for auto-refresh. */
+  refreshToken?: string | null;
+  /**
+   * Top-level email kept for backward-compat with legacy stored credentials.
+   * Prefer providerSpecificData.email for new credentials.
+   */
+  email?: string | null;
+  /**
+   * Top-level userId kept for backward-compat.
+   * Prefer providerSpecificData.userId for new credentials.
+   */
+  userId?: string | null;
+  /**
+   * principalType at root — kept for legacy compat.
+   * Prefer providerSpecificData.principalType.
+   */
+  principalType?: string | null;
+  /**
+   * principalId at root — kept for legacy compat.
+   * Prefer providerSpecificData.principalId.
+   */
+  principalId?: string | null;
+  /** Nested identity / tier data following OmniRoute's providerSpecificData shape. */
+  providerSpecificData?: GrokBuildProviderData;
 }
 
 // ─── Request Body ───────────────────────────────────────────────────────
@@ -28,6 +65,8 @@ export interface GrokBuildCredentials {
 export interface GrokBuildRequestBody {
   model?: string;
   messages?: unknown[];
+  /** Responses API input array (alternative to messages). */
+  input?: unknown[];
   stream?: boolean;
   tools?: unknown[];
   reasoning?: GrokBuildReasoning;
@@ -51,4 +90,5 @@ export interface OAuthTokenResponse {
   expires_in?: number;
   token_type?: string;
   error?: string;
+  error_description?: string;
 }

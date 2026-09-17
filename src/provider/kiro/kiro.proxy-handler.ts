@@ -11,15 +11,11 @@
  * ------------------------------------------------------------------
  */
 
-// ─── Imports ────────────────────────────────────────────────────────────
-// ── Services ──
+// ─── Imports ─────────────────────────────────────────────────────────────
 import { ProxyHandler } from '../../services/proxy.service';
 import { proxyEvents } from '../../services/proxy.service';
-
-// ── Utils ──
 import { createLogger } from '../../utils/logger';
 
-// ── Constants ──
 import {
   API_FIELDS,
   HOSTS,
@@ -27,10 +23,10 @@ import {
   KIRO_EVENTS,
 } from './kiro.constant';
 
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────
 const logger = createLogger('KiroProxyHandler');
 
-// ─── Proxy Handler ────────────────────────────────────────────────────
+// ─── Proxy Handler ────────────────────────────────────────────────────────
 
 export const proxyHandler: ProxyHandler = {
   onRequest: (ctx: any, callback: () => void) => {
@@ -48,9 +44,7 @@ export const proxyHandler: ProxyHandler = {
 
   onResponseBody: (ctx: any, body: string) => {
     const host = ctx.clientToProxyRequest.headers.host;
-    const url = ctx.clientToProxyRequest.url;
 
-    // Capture responses từ Kiro và AWS OIDC endpoints
     if (
       host &&
       (host.includes(HOSTS.KIRO) ||
@@ -61,10 +55,7 @@ export const proxyHandler: ProxyHandler = {
         const json = JSON.parse(body) as Record<string, unknown>;
 
         // Capture device code response
-        if (
-          json[API_FIELDS.DEVICE_CODE_SNAKE] &&
-          json[API_FIELDS.USER_CODE_SNAKE]
-        ) {
+        if (json[API_FIELDS.DEVICE_CODE_SNAKE] && json[API_FIELDS.USER_CODE_SNAKE]) {
           proxyEvents.emit(KIRO_EVENTS.DEVICE_CODE, json);
         }
 
@@ -75,8 +66,7 @@ export const proxyHandler: ProxyHandler = {
           proxyEvents.emit(KIRO_EVENTS.ACCESS_TOKEN, accessToken);
 
           const refreshToken =
-            json[API_FIELDS.REFRESH_TOKEN] ||
-            json[API_FIELDS.REFRESH_TOKEN_SNAKE];
+            json[API_FIELDS.REFRESH_TOKEN] || json[API_FIELDS.REFRESH_TOKEN_SNAKE];
           if (refreshToken) {
             proxyEvents.emit(KIRO_EVENTS.REFRESH_TOKEN, refreshToken);
           }
@@ -85,13 +75,11 @@ export const proxyHandler: ProxyHandler = {
         // Capture email
         const user = json[API_FIELDS.USER] as { email?: string } | undefined;
         const email =
-          json[API_FIELDS.EMAIL] ||
-          user?.email ||
-          json[API_FIELDS.USER_EMAIL];
+          json[API_FIELDS.EMAIL] || user?.email || json[API_FIELDS.USER_EMAIL];
         if (email) {
           proxyEvents.emit(KIRO_EVENTS.LOGIN_EMAIL, email);
         }
-      } catch (e) {
+      } catch {
         // Not JSON - skip
       }
     }
