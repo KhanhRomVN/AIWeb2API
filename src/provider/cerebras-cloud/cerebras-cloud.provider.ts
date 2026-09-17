@@ -236,7 +236,6 @@ export class CerebrasCloudProvider implements Provider {
       credential,
       messages,
       model,
-      temperature,
       onContent,
       onThinking,
       onMetadata,
@@ -244,7 +243,6 @@ export class CerebrasCloudProvider implements Provider {
       onError,
       onRaw,
     } = options;
-
     const selectedModel = model;
     const apiKey = this.extractApiKey(credential);
     const accountId = options.accountId || credential.slice(0, 32);
@@ -269,10 +267,6 @@ export class CerebrasCloudProvider implements Provider {
       })),
       model: selectedModel,
       stream: true,
-      temperature:
-        typeof temperature === 'number'
-          ? temperature
-          : PAYLOAD_DEFAULTS.TEMPERATURE,
       max_completion_tokens: PAYLOAD_DEFAULTS.MAX_COMPLETION_TOKENS,
       top_p: PAYLOAD_DEFAULTS.TOP_P,
       tools: [],
@@ -361,14 +355,12 @@ export class CerebrasCloudProvider implements Provider {
       [HTTP_HEADER_NAMES.SEC_CH_UA]: HTTP_HEADERS.SEC_CH_UA,
       [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: HTTP_HEADERS.SEC_CH_UA_MOBILE,
       [HTTP_HEADER_NAMES.SEC_CH_UA_PLATFORM]: HTTP_HEADERS.SEC_CH_UA_PLATFORM,
-      [HTTP_HEADER_NAMES.SEC_FETCH_SITE]:
-        HTTP_HEADERS.SEC_FETCH_SITE_SAME_SITE,
+      [HTTP_HEADER_NAMES.SEC_FETCH_SITE]: HTTP_HEADERS.SEC_FETCH_SITE_SAME_SITE,
       [HTTP_HEADER_NAMES.SEC_FETCH_MODE]: HTTP_HEADERS.SEC_FETCH_MODE_CORS,
       [HTTP_HEADER_NAMES.SEC_FETCH_DEST]: HTTP_HEADERS.SEC_FETCH_DEST_EMPTY,
       [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: HTTP_HEADERS.ACCEPT_LANGUAGE,
       [HTTP_HEADER_NAMES.X_STAINLESS_LANG]: HTTP_HEADERS.X_STAINLESS_LANG,
-      [HTTP_HEADER_NAMES.X_STAINLESS_RUNTIME]:
-        HTTP_HEADERS.X_STAINLESS_RUNTIME,
+      [HTTP_HEADER_NAMES.X_STAINLESS_RUNTIME]: HTTP_HEADERS.X_STAINLESS_RUNTIME,
       [HTTP_HEADER_NAMES.X_STAINLESS_RUNTIME_VERSION]:
         HTTP_HEADERS.X_STAINLESS_RUNTIME_VERSION,
       [HTTP_HEADER_NAMES.X_STAINLESS_PACKAGE_VERSION]:
@@ -377,8 +369,7 @@ export class CerebrasCloudProvider implements Provider {
       [HTTP_HEADER_NAMES.X_STAINLESS_ARCH]: HTTP_HEADERS.X_STAINLESS_ARCH,
       [HTTP_HEADER_NAMES.X_STAINLESS_RETRY_COUNT]:
         HTTP_HEADERS.X_STAINLESS_RETRY_COUNT,
-      [HTTP_HEADER_NAMES.X_STAINLESS_TIMEOUT]:
-        HTTP_HEADERS.X_STAINLESS_TIMEOUT,
+      [HTTP_HEADER_NAMES.X_STAINLESS_TIMEOUT]: HTTP_HEADERS.X_STAINLESS_TIMEOUT,
     };
 
     if (apiKey) {

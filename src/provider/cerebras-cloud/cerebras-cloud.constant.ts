@@ -154,7 +154,6 @@ export const REFERER_PATHS = {
 
 export const PAYLOAD_DEFAULTS = {
   MAX_COMPLETION_TOKENS: 65000,
-  TEMPERATURE: 1,
   TOP_P: '0.95',
 } as const;
 

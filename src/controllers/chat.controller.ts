@@ -58,11 +58,9 @@ export const sendMessage = async (
       stream,
       is_search,
       search,
-      temperature,
       thinking,
       ref_file_ids,
     } = req.body;
-
     if (messages && messages.length > 1) {
       if (!conversationId || conversationId.trim() === '') {
         if (!parent_message_id) {
@@ -88,7 +86,8 @@ export const sendMessage = async (
     const noAuthRequired =
       providerConfig !== undefined &&
       Array.isArray(rawAuthMethod) &&
-      rawAuthMethod.filter((m: any) => typeof m === 'string' && m.length > 0).length === 0;
+      rawAuthMethod.filter((m: any) => typeof m === 'string' && m.length > 0)
+        .length === 0;
 
     if (!accountId && !noAuthRequired) {
       res.status(400).json({
@@ -103,7 +102,12 @@ export const sendMessage = async (
 
     // Với provider cần auth: lấy account từ DB như cũ
     // Với anonymous provider: dùng virtual account (không cần credential)
-    let account: { id: string; provider_id: string; email?: string | null; credential: string } | null = null;
+    let account: {
+      id: string;
+      provider_id: string;
+      email?: string | null;
+      credential: string;
+    } | null = null;
 
     if (accountId) {
       const dbAccount = getAccountById(accountId);
@@ -136,7 +140,9 @@ export const sendMessage = async (
         email: null,
         credential: '',
       };
-      logger.debug(`[SendMessage] Anonymous provider "${providerId}" — using virtual account`);
+      logger.debug(
+        `[SendMessage] Anonymous provider "${providerId}" — using virtual account`,
+      );
     }
 
     // account luôn được set tại đây (null guards đã xử lý ở trên)
@@ -145,7 +151,10 @@ export const sendMessage = async (
     const model = modelId;
 
     // Validate credential — bỏ qua với anonymous provider
-    if (!noAuthRequired && (!resolvedAccount.credential || resolvedAccount.credential.trim() === '')) {
+    if (
+      !noAuthRequired &&
+      (!resolvedAccount.credential || resolvedAccount.credential.trim() === '')
+    ) {
       if (stream !== false) {
         res.writeHead(400, { 'Content-Type': 'text/event-stream' });
         res.write(
@@ -232,7 +241,6 @@ export const sendMessage = async (
         conversationId,
         parent_message_id,
         search: useSearch,
-        temperature,
         thinking,
         ref_file_ids,
         onContent: (content: string) => {
@@ -342,7 +350,12 @@ export const sendMessage = async (
             { stack: error.stack, code: (error as any).code },
           );
           // Record error metric so success_rate reflects failures
-          recordError(resolvedAccount.id, resolvedAccount.provider_id, model, error.message);
+          recordError(
+            resolvedAccount.id,
+            resolvedAccount.provider_id,
+            model,
+            error.message,
+          );
 
           if (stream !== false) {
             if (!res.writableEnded) {

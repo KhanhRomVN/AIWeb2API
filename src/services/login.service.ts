@@ -93,6 +93,15 @@ export class LoginService extends EventEmitter {
     } = options;
     const sessionId = `${providerId}-${Date.now()}`;
 
+    // Host của loginUrl — dùng để query cookie đúng domain và parse
+    // response theo provider. Rỗng nếu loginUrl không parse được.
+    let capturedHost = '';
+    try {
+      capturedHost = new URL(loginUrl).host;
+    } catch {
+      capturedHost = '';
+    }
+
     const cdpService = createCDPService(sessionId);
     let capturedCookies = '';
     let capturedEmail = '';
@@ -274,6 +283,24 @@ export class LoginService extends EventEmitter {
           : data.body;
 
         const json = JSON.parse(body);
+        const responseUrl: string = data.url || '';
+
+        // Claude.ai bootstrap response: parse orgId + email nếu URL match.
+        // Đây là nguồn duy nhất để lấy organizationId của Claude khi login.
+        if (responseUrl.includes('/edge-api/bootstrap/')) {
+          const account = json.account;
+          const membership = account?.memberships?.[0];
+          const orgId = membership?.organization?.uuid;
+          const emailFromBootstrap = account?.email_address;
+          if (orgId) {
+            capturedExtra = { ...capturedExtra, organizationId: orgId };
+          }
+          if (emailFromBootstrap && !capturedEmail) {
+            capturedEmail = emailFromBootstrap;
+          }
+          await checkValidation();
+          return;
+        }
 
         // Extract email from various JSON structures
         if (json.email) {
@@ -384,7 +411,9 @@ export class LoginService extends EventEmitter {
       }
 
       try {
-        // 1. Try evaluating /api/auth/session inside the active browser page
+        // 1. Evaluate session endpoint — chỉ có ý nghĩa với provider có
+        // endpoint `/api/auth/session` (ví dụ Freebuff). Với provider khác
+        // (Claude, DeepSeek), fetch sẽ 404 và trả null — không gây lỗi.
         const evalResult = await cdpService.evaluate(`
           (async () => {
             try {
@@ -400,8 +429,11 @@ export class LoginService extends EventEmitter {
           })()
         `);
 
-        // 2. Query all browser cookies across Freebuff domains
-        const browserCookies = await cdpService.getAllCookies();
+        // 2. Query browser cookies — nếu biết host thì filter theo host đó,
+        // ngược lại lấy toàn bộ cookie của browser.
+        const browserCookies = await cdpService.getAllCookies(
+          capturedHost ? [capturedHost] : undefined,
+        );
         if (browserCookies && browserCookies.length > 0) {
           const cookieStr = browserCookies
             .map((c: any) => `${c.name}=${c.value}`)

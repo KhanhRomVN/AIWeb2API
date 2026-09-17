@@ -30,7 +30,6 @@ import {
 } from '../services/browser-instance-manager';
 import {
   getAccountById,
-  getAccountByEmailAndProvider,
   getAccountByIdOrEmailProvider,
   getAccounts as getAccountsService,
   createAccount,

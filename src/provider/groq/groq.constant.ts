@@ -105,7 +105,6 @@ export const API_FIELDS = {
   ROLE: 'role',
   CONTENT: 'content',
   STREAM: 'stream',
-  TEMPERATURE: 'temperature',
   // SSE
   CHOICES: 'choices',
   DELTA: 'delta',

@@ -136,7 +136,6 @@ export class GroqProvider implements Provider {
       credential,
       messages,
       model,
-      temperature,
       onContent,
       onDone,
       onError,
@@ -150,10 +149,6 @@ export class GroqProvider implements Provider {
       })),
       stream: true,
     };
-
-    if (typeof temperature === 'number') {
-      payload.temperature = temperature;
-    }
 
     try {
       const response = await fetch(API_CHAT_COMPLETIONS_URL, {

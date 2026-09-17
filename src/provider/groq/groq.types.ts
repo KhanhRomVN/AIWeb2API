@@ -34,7 +34,6 @@ export interface GroqChatPayload {
   model: string;
   messages: GroqChatMessage[];
   stream: true;
-  temperature?: number;
 }
 
 // ─── SSE ────────────────────────────────────────────────────────────────

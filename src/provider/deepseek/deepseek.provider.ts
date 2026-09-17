@@ -585,8 +585,7 @@ export class DeepSeekProvider implements Provider {
             },
           );
 
-          sessionData =
-            (await retryRes.json()) as typeof sessionData;
+          sessionData = (await retryRes.json()) as typeof sessionData;
 
           if (
             Number(sessionData?.[API_FIELDS.CODE]) ===

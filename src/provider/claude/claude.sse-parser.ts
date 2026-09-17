@@ -2,9 +2,9 @@
  * ------------------------------------------------------------------
  * Claude SSE Parser
  * ------------------------------------------------------------------
- * Parse Claude SSE response stream (Anthropic Message API).
- * Xử lý content_block_delta (text/thinking), message_stop, và forward
- * raw chunks nếu cần.
+ * Parse Claude SSE response stream (Anthropic Message API format).
+ * Xử lý content_block_delta (text/thinking), message_start (usage),
+ * message_delta (usage + stop_reason), message_stop.
  *
  * Main features:
  * - parseSSEStream() : Parse stream và emit content/thinking/raw chunks
@@ -30,6 +30,7 @@ export interface ParseSSEOptions {
   onContent: (chunk: string) => void;
   onThinking?: (chunk: string) => void;
   onRaw?: (data: string) => void;
+  onMetadata?: (meta: Record<string, unknown>) => void;
 }
 
 export interface ParseSSEResult {
@@ -49,7 +50,7 @@ export async function parseSSEStream(
   responseBody: NodeJS.ReadableStream,
   opts: ParseSSEOptions,
 ): Promise<ParseSSEResult> {
-  const { onContent, onThinking, onRaw } = opts;
+  const { onContent, onThinking, onRaw, onMetadata } = opts;
 
   let buffer = '';
   let accumulatedContent = '';
@@ -63,6 +64,7 @@ export async function parseSSEStream(
     buffer = lines.pop() || '';
 
     for (const line of lines) {
+      // Bỏ qua các dòng rỗng và các field khác (event:, id:, retry:)
       if (!line.startsWith(SSE_PROTOCOL.DATA_PREFIX)) continue;
 
       const data = line.substring(SSE_PROTOCOL.DATA_PREFIX.length).trim();
@@ -91,6 +93,15 @@ export async function parseSSEStream(
       ) {
         if (onThinking) onThinking(json.delta.thinking);
         continue;
+      }
+
+      // Forward usage/stop metadata nếu caller quan tâm
+      if (onMetadata && (json.usage || json.message?.id)) {
+        onMetadata({
+          usage: json.usage,
+          message_id: json.message?.id,
+          stop_reason: json.delta?.stop_reason,
+        });
       }
 
       if (json.type === SSE_EVENT_TYPES.MESSAGE_STOP) {

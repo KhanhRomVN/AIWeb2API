@@ -140,6 +140,8 @@ export class CDPService extends EventEmitter {
   private debugPort = 0;
   private sessionId: string | null = null;
   private profileName: string;
+  /** Map requestId → URL, dùng để emit kèm khi response-body hoàn tất. */
+  private requestUrlMap = new Map<string, string>();
 
   constructor(profileName: string = 'elara-cdp') {
     super();
@@ -387,6 +389,7 @@ export class CDPService extends EventEmitter {
   private handleNetworkEvent(method: string, params: any) {
     switch (method) {
       case 'Network.requestWillBeSent':
+        this.requestUrlMap.set(params.requestId, params.request.url);
         this.emit('request', {
           id: params.requestId,
           url: params.request.url,
@@ -398,6 +401,7 @@ export class CDPService extends EventEmitter {
       case 'Network.responseReceived':
         this.emit('response', {
           id: params.requestId,
+          url: params.response.url || this.requestUrlMap.get(params.requestId),
           statusCode: params.response.status,
           headers: params.response.headers,
           mimeType: params.response.mimeType,
@@ -412,11 +416,15 @@ export class CDPService extends EventEmitter {
   private async getResponseBody(requestId: string) {
     try {
       const result = await this.send('Network.getResponseBody', { requestId });
+      const url = this.requestUrlMap.get(requestId) || '';
       this.emit('response-body', {
         id: requestId,
+        url,
         body: result.body,
         isBinary: result.base64Encoded,
       });
+      // Giải phóng entry sau khi đã emit để tránh leak Map.
+      this.requestUrlMap.delete(requestId);
     } catch (e: any) {}
   }
 
@@ -428,13 +436,6 @@ export class CDPService extends EventEmitter {
       const targetsResponse = await fetch(`http://127.0.0.1:${this.debugPort}/json`);
       if (!targetsResponse.ok) return null;
       const targets = (await targetsResponse.json()) as any[];
-
-      const domainTarget = targets.find(
-        (t: any) => t.type === 'page' && t.url && t.url.includes('freebuff.com'),
-      );
-      if (domainTarget?.webSocketDebuggerUrl) {
-        return domainTarget.webSocketDebuggerUrl;
-      }
 
       const pageTarget = targets.find(
         (t: any) => t.type === 'page' && t.url && !t.url.startsWith('devtools://'),
@@ -471,19 +472,25 @@ export class CDPService extends EventEmitter {
     }
   }
 
-  public async getAllCookies(): Promise<any[]> {
+  /**
+   * Lấy cookie trong browser.
+   * @param hosts Nếu truyền, chỉ query cookie của các host này (dạng
+   *              `['claude.ai', 'deepseek.com']`). Nếu không truyền,
+   *              `Network.getCookies` không kèm `urls` → trả toàn bộ
+   *              cookie của browser (không filter domain).
+   */
+  public async getAllCookies(hosts?: string[]): Promise<any[]> {
     await this.ensureConnection();
     const cookieMap = new Map<string, any>();
 
     try {
-      const res = await this.send('Network.getCookies', {
-        urls: [
-          'https://freebuff.com',
-          'https://freebuff.com/chat',
-          'https://freebuff.com/api/auth/session',
-          'https://freebuff.com/api/chat/stream',
-        ],
-      });
+      const params: { urls?: string[] } = {};
+      if (hosts && hosts.length > 0) {
+        params.urls = hosts.map((h) =>
+          h.startsWith('http') ? h : `https://${h}`,
+        );
+      }
+      const res = await this.send('Network.getCookies', params);
       if (res?.cookies && Array.isArray(res.cookies)) {
         for (const c of res.cookies) {
           cookieMap.set(c.name, c);

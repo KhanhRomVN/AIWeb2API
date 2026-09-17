@@ -27,7 +27,6 @@ export interface CerebrasCompletionPayload {
   messages: CerebrasMessage[];
   model: string;
   stream: boolean;
-  temperature?: number;
   max_completion_tokens?: number;
   top_p?: number | string;
   tools?: unknown[];
