@@ -327,9 +327,14 @@ export class ZAIProvider implements Provider {
 
         if (!createResponse.ok) {
           const errText = await createResponse.text();
-          throw new Error(
-            `Failed to create chat session: ${createResponse.status} - ${errText}`,
-          );
+          const message = `Failed to create chat session: ${createResponse.status} - ${errText}`;
+          if (createResponse.status === 401 || createResponse.status === 403) {
+            const err = new Error(`Session expired or invalid. Please re-login to Z.AI. (${message})`);
+            (err as any).isAuthError = true;
+            (err as any).statusCode = createResponse.status;
+            throw err;
+          }
+          throw new Error(message);
         }
 
         const createJson = await createResponse.json();
@@ -425,7 +430,14 @@ export class ZAIProvider implements Provider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Z.AI API Error ${response.status}: ${errorText}`);
+        const message = `Z.AI API Error ${response.status}: ${errorText}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Z.AI. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
       }
 
       if (!response.body) throw new Error('No response body');

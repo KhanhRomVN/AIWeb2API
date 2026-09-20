@@ -40,7 +40,7 @@ export const uploadFile = async (
       return;
     }
 
-    const account = getAccountById(accountId);
+    const account = await getAccountById(accountId);
     if (!account) {
       logger.warn(`[Upload] Account not found | accountId=${accountId}`);
       res.status(404).json({ error: 'Account not found' });

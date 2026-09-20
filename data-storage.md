@@ -9,14 +9,15 @@ Cấu trúc lưu trữ dữ liệu của AIWeb2API.
 **Thư mục gốc:** `~/.aiweb2api/`
 
 AIWeb2API sử dụng:
-- **SQLite Database** — Metadata, accounts, providers, models, metrics
+- **SQLite Database (chính)** — Metadata, accounts, providers, models, metrics
+- **SQLite Database (managers)** — Cấu hình database manager do user tạo
 - **File System** — Browser profiles (user data dir) cho browser-based providers
 
 ---
 
-## 🗄️ SQLite Database
+## 🗄️ SQLite Database (chính)
 
-**Path:** `~/.aiweb2api/database.sqlite`
+**Path:** `~/.aiweb2api/aiweb2api.sqlite`
 
 ### Nội dung
 
@@ -30,8 +31,25 @@ Xem chi tiết tại [`database-schema.md`](./database-schema.md)
 
 - `accounts`
 - `providers`
-- `models`
+- `model_stats` 
 - `metrics`
+- `config`
+
+---
+
+## 🗂️ Managers Database (riêng)
+
+**Path:** `~/.aiweb2api/database-managers.sqlite`
+
+File SQLite **riêng biệt** lưu cấu hình các database manager do user tạo
+trong Zen Settings > General. Tách khỏi `database.sqlite` chính để migration
+của DB chính không phá vỡ dữ liệu quản lý.
+
+### Bảng
+
+- `database_managers` — mỗi row là 1 manager với `type` = `local-file` (dùng
+  `file_path`) hoặc `connection` (dùng host/port/database_name/username/
+  password/ssl_mode/channel_binding/extra_json).
 
 ---
 
@@ -52,29 +70,6 @@ Mỗi browser-based provider (VD: `zai-browser`) có một thư mục profile ri
 └── temp/
     ├── {tempSessionId}/
     └── ...
-```
-
-> **Lưu ý:** Nếu email chưa capture được trong quá trình login, fallback tên folder là `profile_<timestamp>`.
-
----
-
-## 🔒 Security
-
-### File Permissions
-
-```bash
-chmod 700 ~/.aiweb2api
-chmod 600 ~/.aiweb2api/database.sqlite
-```
-
-### Backup
-
-```bash
-# Backup
-tar -czf aiweb2api-backup-$(date +%Y%m%d).tar.gz ~/.aiweb2api/
-
-# Restore
-tar -xzf aiweb2api-backup-20240101.tar.gz -C ~/
 ```
 
 ---

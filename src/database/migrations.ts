@@ -30,9 +30,45 @@ export const runMigrations = (db: Database.Database): void => {
   migrateProviders(db);
   migrateModelStats(db);
   migrateMetrics(db);
-  migrateBrowserSessions(db);
+  migrateConfig(db);
+  migrateBrowserSessions(db); 
   dropUnusedTables(db);
 };
+
+// ─── Config Table ────────────────────────────────────────────────────
+
+/**
+ * Bảng cấu hình toàn cục (single-row, id luôn = 1).
+ * - chromium_profile_dir : system path tới thư mục chứa các profile Chromium.
+ */
+function migrateConfig(db: Database.Database): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        chromium_profile_dir TEXT
+      )
+    `);
+    // Seed row id=1 nếu chưa có để các API GET luôn có dữ liệu trả về.
+    db.prepare(
+      'INSERT OR IGNORE INTO config (id) VALUES (1)',
+    ).run();
+
+    // Migration: drop legacy `database_path` column if it still exists.
+    const configCols = (db.pragma('table_info(config)') as any[]).map(
+      (c) => c.name,
+    );
+    if (configCols.includes('database_path')) {
+      try {
+        db.exec('ALTER TABLE config DROP COLUMN database_path');
+      } catch (e) {
+        logger.warn('Failed to drop database_path from config', e);
+      }
+    }
+  } catch (e) {
+    logger.error('Failed to migrate config table', e);
+  }
+}
 // ─── Accounts Table ──────────────────────────────────────────────────
 
 function migrateAccounts(db: Database.Database): void {
@@ -429,7 +465,6 @@ function dropUnusedTables(db: Database.Database): void {
     db.exec('DROP TABLE IF EXISTS local_messages');
     db.exec('DROP TABLE IF EXISTS provider_models');
     db.exec('DROP TABLE IF EXISTS provider_models_sync');
-    db.exec('DROP TABLE IF EXISTS config');
     // Migration: models table replaced by model_stats
     db.exec('DROP TABLE IF EXISTS models');
     // Migration: remove old columns if exist

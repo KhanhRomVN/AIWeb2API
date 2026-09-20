@@ -638,10 +638,21 @@ export class KimiProvider implements Provider {
       }
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Kimi API Error ${response.status}: ${errorText.slice(0, 500)}`,
-        );
+        let detail = '';
+        try {
+          const body = await response.json() as any;
+          detail = body?.error?.message ?? body?.message ?? body?.msg ?? JSON.stringify(body);
+        } catch {
+          detail = await response.text().catch(() => '');
+        }
+        const message = `Kimi API Error ${response.status}${detail ? `: ${detail.slice(0, 500)}` : ''}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Kimi. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
       }
 
       if (!response.body) {
@@ -715,95 +726,94 @@ export class KimiProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   async getModels(credential: string, accountId?: string): Promise<any[]> {
-    try {
-      const cred = this.parseCredential(credential);
-      if (!cred.accessToken) return [];
-
-      // Refresh token nếu sắp hết hạn
-      if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
-        await this.refreshCredential(cred, accountId);
-      }
-
-      const buildHeaders = (token: string): Record<string, string> => ({
-        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${token}`,
-        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-        [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
-        [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
-        [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
-        [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
-        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
-        ...MSH_HEADERS,
-        [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
-      });
-
-      let res = await fetch(GET_AVAILABLE_MODELS_URL, {
-        method: 'POST',
-        headers: buildHeaders(cred.accessToken),
-        body: JSON.stringify({}),
-        timeout: 8000,
-      } as any);
-
-      // Retry một lần sau khi refresh nếu 401
-      if (res.status === 401) {
-        const refreshed = await this.refreshCredential(cred, accountId);
-        if (refreshed) {
-          res = await fetch(GET_AVAILABLE_MODELS_URL, {
-            method: 'POST',
-            headers: buildHeaders(refreshed),
-            body: JSON.stringify({}),
-            timeout: 8000,
-          } as any);
-        }
-      }
-
-      if (!res.ok) {
-        logger.warn(`[Kimi] GetAvailableModels returned ${res.status}`);
-        return [];
-      }
-
-      const json = (await res.json()) as KimiAvailableModelsResponse;
-      const apiModels = json.availableModels;
-      if (!apiModels || apiModels.length === 0) {
-        logger.warn('[Kimi] GetAvailableModels returned empty array');
-        return [];
-      }
-
-      return apiModels.map((m: KimiAvailableModel) => {
-        const id = m.id || m.key || '';
-
-        // Model có thinking nếu reasoningEffortOptions có ít nhất 1 option khác NONE
-        const hasThinking = (m.reasoningEffortOptions || []).some(
-          (o) =>
-            o.effort === REASONING_EFFORTS.HIGH ||
-            o.effort === 'REASONING_EFFORT_MAX' ||
-            o.effort === REASONING_EFFORTS.LOW,
-        );
-
-        // Model instant (SCENARIO_CHAT / k2d6) không có agent context, không phải thinking
-        const isInstant = m.scenario === SCENARIOS.CHAT;
-
-        // Tất cả model Kimi đều support search và image upload (từ API test)
-        return {
-          id,
-          name: m.displayName ? `Kimi ${m.displayName}` : id,
-          description: m.description || undefined,
-          is_thinking: !isInstant && hasThinking,
-          max_context_length: 262144,
-          is_search: true,
-          is_image_upload: true,
-          is_video_upload: false,
-          is_audio_upload: false,
-          is_file_upload: false,
-          is_larger_content_paste_upload: false,
-          is_image_generator: false,
-          is_video_generator: false,
-          is_deep_research: false,
-        };
-      });
-    } catch (e) {
-      logger.warn('[Kimi] getModels error:', e);
-      return [];
+    const cred = this.parseCredential(credential);
+    if (!cred.accessToken) {
+      throw new Error('Kimi: no accessToken in credential');
     }
+
+    // Refresh token nếu sắp hết hạn
+    if (isJwtExpiringSoon(cred.accessToken, DEFAULT_REFRESH_THRESHOLD_SEC)) {
+      await this.refreshCredential(cred, accountId);
+    }
+
+    const buildHeaders = (token: string): Record<string, string> => ({
+      [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${token}`,
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.CONNECT_PROTOCOL_VERSION]: '1',
+      [HTTP_HEADER_NAMES.ORIGIN]: KIMI_BASE_URL,
+      [HTTP_HEADER_NAMES.REFERER]: `${KIMI_BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      ...MSH_HEADERS,
+      [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
+    });
+
+    let res = await fetch(GET_AVAILABLE_MODELS_URL, {
+      method: 'POST',
+      headers: buildHeaders(cred.accessToken),
+      body: JSON.stringify({}),
+      timeout: 8000,
+    } as any);
+
+    // Retry một lần sau khi refresh nếu 401
+    if (res.status === 401) {
+      const refreshed = await this.refreshCredential(cred, accountId);
+      if (refreshed) {
+        res = await fetch(GET_AVAILABLE_MODELS_URL, {
+          method: 'POST',
+          headers: buildHeaders(refreshed),
+          body: JSON.stringify({}),
+          timeout: 8000,
+        } as any);
+      }
+    }
+
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json() as any;
+        detail = body?.error?.message || body?.message || body?.msg || JSON.stringify(body);
+      } catch {
+        detail = await res.text().catch(() => '');
+      }
+      throw new Error(`Kimi API returned ${res.status}${detail ? `: ${detail}` : ''}`);
+    }
+
+    const json = (await res.json()) as KimiAvailableModelsResponse;
+    const apiModels = json.availableModels;
+    if (!apiModels || apiModels.length === 0) {
+      throw new Error('Kimi GetAvailableModels returned empty list');
+    }
+
+    return apiModels.map((m: KimiAvailableModel) => {
+      const id = m.id || m.key || '';
+
+      const hasThinking = (m.reasoningEffortOptions || []).some(
+        (o) =>
+          o.effort === REASONING_EFFORTS.HIGH ||
+          o.effort === 'REASONING_EFFORT_MAX' ||
+          o.effort === REASONING_EFFORTS.LOW,
+      );
+
+      const isInstant = m.scenario === SCENARIOS.CHAT;
+
+      return {
+        id,
+        name: m.displayName ? `Kimi ${m.displayName}` : id,
+        description: m.description || undefined,
+        is_thinking: !isInstant && hasThinking,
+        max_context_length: 262144,
+        is_search: true,
+        is_image_upload: true,
+        is_video_upload: false,
+        is_audio_upload: false,
+        is_file_upload: false,
+        is_larger_content_paste_upload: false,
+        is_image_generator: false,
+        is_video_generator: false,
+        is_deep_research: false,
+      };
+    });
   }
 
   // ─── Upload File ────────────────────────────────────────────────────

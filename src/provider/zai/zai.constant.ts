@@ -29,9 +29,10 @@
 
 export const PROVIDER_ID = 'zai';
 export const PROVIDER_NAME = 'ZAI';
-export const PROVIDER_DESCRIPTION = 'GLM series models with enhanced coding and reasoning';
+export const PROVIDER_DESCRIPTION =
+  'GLM series models with enhanced coding and reasoning';
 export const PROVIDER_COLOR = '#7C3AED';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'https';
@@ -70,8 +71,7 @@ export const MODELS = [
     is_image_generator: false,
     is_video_generator: false,
     is_deep_research: false,
-    description:
-      'GLM-5 - Fast and efficient model for general purpose tasks',
+    description: 'GLM-5 - Fast and efficient model for general purpose tasks',
   },
 ] as const;
 

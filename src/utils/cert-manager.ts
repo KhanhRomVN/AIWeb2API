@@ -44,7 +44,7 @@ const getUserDataPath = () => {
     const { app } = require('electron');
     return app.getPath('userData');
   } catch (e) {
-    return path.join(os.homedir(), '.elara');
+    return path.join(os.homedir(), '.aiweb2api');
   }
 };
 

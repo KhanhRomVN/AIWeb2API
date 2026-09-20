@@ -35,6 +35,7 @@ import {
   insertAccountsBatch,
   updateAccountCredential,
   updateAccountCredentialAndRefresh,
+  updateAccountFields,
   updateAccountMemory as updateAccountMemoryRepo,
   updateAccountUsage,
   updateAccountUserDataDir as updateAccountUserDataDirRepo,
@@ -84,32 +85,36 @@ export interface ImportAccountsResult {
 /**
  * Lấy account theo ID
  */
-export function getAccountById(accountId: string): AccountRow | undefined {
-  return findAccountById(accountId) || undefined;
+export async function getAccountById(
+  accountId: string,
+): Promise<AccountRow | undefined> {
+  return (await findAccountById(accountId)) || undefined;
 }
 
 /**
  * Lấy account theo email và provider
  */
-export function getAccountByEmailAndProvider(
+export async function getAccountByEmailAndProvider(
   email: string,
   providerId: string,
-): AccountRow | undefined {
-  return findAccountByEmailAndProvider(email, providerId) || undefined;
+): Promise<AccountRow | undefined> {
+  return (await findAccountByEmailAndProvider(email, providerId)) || undefined;
 }
 
 /**
  * Lấy account theo ID hoặc email+provider
  */
-export function getAccountByIdOrEmailProvider(
+export async function getAccountByIdOrEmailProvider(
   id: string | undefined,
   email: string,
   providerId: string,
-): AccountRow | undefined {
+): Promise<AccountRow | undefined> {
   if (id) {
-    return findAccountByIdOrEmailProvider(id, email, providerId) || undefined;
+    return (
+      (await findAccountByIdOrEmailProvider(id, email, providerId)) || undefined
+    );
   }
-  return findAccountByEmailAndProvider(email, providerId) || undefined;
+  return (await findAccountByEmailAndProvider(email, providerId)) || undefined;
 }
 
 /**
@@ -129,16 +134,16 @@ export function getAccounts(options: ListAccountsOptions) {
 /**
  * Thêm account mới
  */
-export function createAccount(accountData: AccountInput): string {
+export async function createAccount(accountData: AccountInput): Promise<string> {
   const id = accountData.id || require('crypto').randomUUID();
-  insertAccount({
+  await insertAccount({
     id,
     provider_id: accountData.provider_id,
     email: accountData.email,
     credential: accountData.credential || null,
     user_data_dir: accountData.user_data_dir || null,
   });
-  ensureProviderExists(
+  await ensureProviderExists(
     accountData.provider_id.toLowerCase(),
     accountData.provider_id,
   );
@@ -150,6 +155,20 @@ export function createAccount(accountData: AccountInput): string {
  */
 export function updateAccount(accountId: string, credential: string): void {
   updateAccountCredential(accountId, credential);
+}
+
+/**
+ * Cập nhật các field có thể chỉnh sửa của account (email, credential).
+ * Trả về false nếu account không tồn tại.
+ */
+export function updateAccountEditableFields(
+  accountId: string,
+  fields: { email?: string; credential?: string | null },
+): boolean {
+  const existing = findAccountById(accountId);
+  if (!existing) return false;
+  updateAccountFields(accountId, fields);
+  return true;
 }
 
 export function updateAccountUserDataDir(
@@ -172,15 +191,20 @@ export function updateMemoryState(
 /**
  * Xóa account
  */
-export function removeAccount(accountId: string, providerId: string): void {
-  deleteAccountRow(accountId);
-  ensureProviderExists(providerId.toLowerCase(), providerId);
+export async function removeAccount(
+  accountId: string,
+  providerId: string,
+): Promise<void> {
+  await deleteAccountRow(accountId);
+  await ensureProviderExists(providerId.toLowerCase(), providerId);
 }
 
 /**
  * Import hàng loạt accounts
  */
-export function importAccounts(accounts: AccountInput[]): ImportAccountsResult {
+export async function importAccounts(
+  accounts: AccountInput[],
+): Promise<ImportAccountsResult> {
   const duplicates: AccountInput[] = [];
   const toInsert: Array<{
     id: string;
@@ -190,7 +214,7 @@ export function importAccounts(accounts: AccountInput[]): ImportAccountsResult {
   }> = [];
 
   for (const account of accounts) {
-    const existing = findAccountByEmailAndProvider(
+    const existing = await findAccountByEmailAndProvider(
       account.email,
       account.provider_id,
     );
@@ -209,11 +233,11 @@ export function importAccounts(accounts: AccountInput[]): ImportAccountsResult {
   }
 
   if (toInsert.length > 0) {
-    insertAccountsBatch(toInsert);
+    await insertAccountsBatch(toInsert);
 
     const providerIds = [...new Set(toInsert.map((a) => a.provider_id))];
     for (const pid of providerIds) {
-      ensureProviderExists(pid.toLowerCase(), pid);
+      await ensureProviderExists(pid.toLowerCase(), pid);
     }
   }
 
@@ -230,7 +254,7 @@ export function importAccounts(accounts: AccountInput[]): ImportAccountsResult {
 /**
  * Lấy provider config theo ID
  */
-export function getProviderConfig(providerId: string) {
+export async function getProviderConfig(providerId: string) {
   return findProviderById(providerId);
 }
 
@@ -291,9 +315,6 @@ export async function getAccountUsageFromProvider(
 ): Promise<{ usage: number; resetUsageAt: string | null } | null> {
   const provider = providerRegistry.getProvider(providerId);
   if (!provider?.getUsage) {
-    logger.warn(
-      `[getAccountUsageFromProvider] Provider "${providerId}" does not implement getUsage — skipping`,
-    );
     return null;
   }
 
@@ -301,9 +322,6 @@ export async function getAccountUsageFromProvider(
     const result = await provider.getUsage(credential);
     return result;
   } catch (error: any) {
-    logger.error(
-      `[getAccountUsageFromProvider] providerId=${providerId} | error=${error.message}`,
-    );
     throw error;
   }
 }
@@ -347,7 +365,9 @@ export class AccountRefreshService {
    * Kiểm tra và refresh token cho tất cả accounts
    */
   async checkAndRefresh() {
-    const accounts = findAccountsNeedingRefresh(this.AUTO_REFRESH_THRESHOLD);
+    const accounts = await findAccountsNeedingRefresh(
+      this.AUTO_REFRESH_THRESHOLD,
+    );
     for (const account of accounts) {
       try {
         let credential: any;
@@ -438,7 +458,7 @@ export class AccountRefreshService {
    * Cập nhật usage cho một account
    */
   async refreshUsage(accountId: string) {
-    const account = getAccountById(accountId);
+    const account = await getAccountById(accountId);
     if (!account) return;
     try {
       let credential: any;

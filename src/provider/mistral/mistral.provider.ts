@@ -248,8 +248,23 @@ export class MistralProvider implements Provider {
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok)
-      throw new Error(`Mistral Stream Error ${response.status}`);
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const body = await response.json() as any;
+        detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
+      }
+      const message = `Mistral API returned ${response.status}${detail ? `: ${detail}` : ''}`;
+      if (response.status === 401 || response.status === 403) {
+        const err = new Error(`Session expired or invalid. Please re-login to Mistral. (${message})`);
+        (err as any).isAuthError = true;
+        (err as any).statusCode = response.status;
+        throw err;
+      }
+      throw new Error(message);
+    }
 
     if (response.body) {
       await parseSSEStream(response.body as NodeJS.ReadableStream, {

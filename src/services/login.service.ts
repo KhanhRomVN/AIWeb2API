@@ -481,7 +481,7 @@ export class LoginService extends EventEmitter {
     loginUrl: string,
     profileName?: string,
   ): Promise<{ user_data_dir: string }> {
-    const provider = findProviderById(providerId);
+    const provider = await findProviderById(providerId);
     let extensionPath: string | null = null;
 
     if (provider?.browser_extension_folder) {

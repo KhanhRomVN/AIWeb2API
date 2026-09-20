@@ -101,6 +101,7 @@ export const MODELS = [
 export const BASE_URL = 'https://chatgpt.com';
 
 export const API_PATHS = {
+  AUTH_SESSION: '/api/auth/session',
   ME: '/backend-api/me',
   MODELS: '/backend-api/models',
   CONVERSATION: '/backend-api/conversation',
@@ -109,6 +110,9 @@ export const API_PATHS = {
   CHAT_REQUIREMENTS_FINALIZE:
     '/backend-api/sentinel/chat-requirements/finalize',
 } as const;
+
+/** Đường dẫn trang login ChatGPT (Google OAuth bắt đầu từ đây). */
+export const GOOGLE_LOGIN_PATH = '/auth/login';
 
 export const CHATGPT_EVENTS = {
   AUTH_HEADER: 'chatgpt-auth-header',
@@ -136,6 +140,7 @@ export const SEC_CH_UA =
 
 export const HTTP_HEADER_NAMES = {
   AUTHORIZATION: 'Authorization',
+  COOKIE: 'Cookie',
   CONTENT_TYPE: 'Content-Type',
   USER_AGENT: 'User-Agent',
   ORIGIN: 'Origin',

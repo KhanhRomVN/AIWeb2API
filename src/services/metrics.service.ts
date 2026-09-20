@@ -43,7 +43,7 @@ const logger = createLogger('MetricsService');
 
 export async function recordRequest(providerId: string, modelId: string) {
   try {
-    upsertModelStats(providerId, modelId);
+    await upsertModelStats(providerId, modelId);
   } catch (error) {
     logger.error('Error updating request stats:', error);
   }
@@ -56,11 +56,11 @@ export async function recordSuccess(
   tokens: number,
 ) {
   try {
-    upsertModelStats(providerId, modelId);
+    await upsertModelStats(providerId, modelId);
   } catch (error) {
     logger.error('Error updating success stats:', error);
   }
-  recordMetric(accountId, providerId, modelId, tokens, 'success');
+  await recordMetric(accountId, providerId, modelId, tokens, 'success');
 }
 
 export async function recordError(
@@ -70,23 +70,23 @@ export async function recordError(
   errorMessage?: string,
 ) {
   try {
-    upsertModelStats(providerId, modelId);
+    await upsertModelStats(providerId, modelId);
   } catch (error) {
     logger.error('Error updating error stats:', error);
   }
-  recordMetric(accountId || 'anonymous', providerId, modelId, 0, 'error');
+  await recordMetric(accountId || 'anonymous', providerId, modelId, 0, 'error');
   logger.warn(`Recorded error metric for ${providerId}/${modelId}: ${errorMessage || 'unknown error'}`);
 }
 
-export function recordMetric(
+export async function recordMetric(
   accountId: string,
   providerId: string,
   modelId: string,
   tokens: number,
   status: 'success' | 'error' = 'success',
-) {
+): Promise<void> {
   try {
-    insertMetric(providerId, modelId, accountId, tokens, status);
+    await insertMetric(providerId, modelId, accountId, tokens, status);
     updateModelSuccessRateAsync(providerId, modelId);
   } catch (error) {
     logger.error('Error recording metric:', error);
@@ -94,10 +94,10 @@ export function recordMetric(
 }
 
 function updateModelSuccessRateAsync(providerId: string, modelId: string): void {
-  setImmediate(() => {
+  setImmediate(async () => {
     try {
-      const successRate = calculateModelSuccessRate(providerId, modelId);
-      updateModelSuccessRate(providerId, modelId, successRate);
+      const successRate = await calculateModelSuccessRate(providerId, modelId);
+      await updateModelSuccessRate(providerId, modelId, successRate);
 
       invalidateProviderCache();
     } catch (error) {
@@ -174,7 +174,7 @@ function getTimeRange(period: string, offset: number): TimeRange {
   return { startTime, endTime };
 }
 
-export function getUsageHistory(
+export async function getUsageHistory(
   period: 'day' | 'week' | 'month' | 'year' = 'day',
   offset: number = 0,
   accountId?: string,
@@ -249,7 +249,7 @@ export function getUsageHistory(
   }
 
   try {
-    const rows = queryUsageHistory(groupBy, startTime, endTime, accountId);
+    const rows = await queryUsageHistory(groupBy, startTime, endTime, accountId);
     const dataMap = new Map<string, any>();
     rows.forEach((row) => {
       const key = period === 'day' ? row.date.split(' ')[1] : row.date;
@@ -265,7 +265,7 @@ export function getUsageHistory(
   }
 }
 
-export function getAccountStatsByPeriod(
+export async function getAccountStatsByPeriod(
   period: 'day' | 'week' | 'month' | 'year' = 'day',
   offset: number = 0,
   accountId?: string,
@@ -274,7 +274,7 @@ export function getAccountStatsByPeriod(
   return queryAccountStatsByPeriod(startTime, endTime, accountId);
 }
 
-export function getModelStatsByPeriod(
+export async function getModelStatsByPeriod(
   period: 'day' | 'week' | 'month' | 'year' = 'day',
   offset: number = 0,
 ) {

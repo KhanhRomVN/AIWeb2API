@@ -25,6 +25,7 @@ import { Router } from 'express';
 import {
   importAccounts,
   addAccount,
+  updateAccountHandler,
   getAccounts,
   deleteAccount,
   refreshAccountToken,
@@ -43,6 +44,7 @@ const router = Router();
 router.post('/import', importAccounts);
 router.post('/', addAccount);
 router.get('/', getAccounts);
+router.put('/:id', updateAccountHandler);
 router.delete('/:id', deleteAccount);
 router.post('/:id/presence', heartbeatAccountPresence);
 router.delete('/:id/presence', releaseAccountPresence);

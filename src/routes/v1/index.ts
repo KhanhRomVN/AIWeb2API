@@ -21,6 +21,9 @@ import modelRouter from './model.routes';
 import statsRouter from './stats.routes';
 import proxyRouter from './proxy.routes';
 import uploadRouter from './upload.routes';
+import configRouter from './config.routes';
+import databaseManagerRouter from './database-manager.routes';
+import fsRouter from './fs.routes';
 
 // Mount routes
 router.use('/chat', chatRouter);
@@ -31,5 +34,8 @@ router.use('/models', modelRouter);
 router.use('/stats', statsRouter);
 router.use('/proxy', proxyRouter);
 router.use('/uploads', uploadRouter);
+router.use('/config', configRouter);
+router.use('/database-managers', databaseManagerRouter);
+router.use('/fs', fsRouter);
 
 export default router;

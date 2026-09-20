@@ -7,6 +7,10 @@
  * Không lưu metadata model (name, capabilities...) vì các thứ đó
  * lấy từ provider constants hoặc API live.
  *
+ * ĐÃ MIGRATE sang Kysely (async) — chạy được trên cả SQLite lẫn
+ * Postgres thông qua `getDataStore()`. Mọi hàm trả Promise, caller
+ * phải `await`.
+ *
  * Main functions:
  * - upsertModelStats()         : Tạo hoặc cập nhật row cho model
  * - updateModelSuccessRate()   : Cập nhật success rate
@@ -16,7 +20,7 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-import { getDb } from '../database';
+import { getDataStore } from '../database';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -29,19 +33,26 @@ export interface ModelStatsRow {
 
 // ─── Queries ────────────────────────────────────────────────────────────
 
-export const findAllModelStats = (): ModelStatsRow[] => {
-  const db = getDb();
-  return db.prepare('SELECT * FROM model_stats').all() as ModelStatsRow[];
+export const findAllModelStats = async (): Promise<ModelStatsRow[]> => {
+  const db = getDataStore().kysely;
+  return (await db
+    .selectFrom('model_stats')
+    .selectAll()
+    .execute()) as ModelStatsRow[];
 };
 
-export const findModelStats = (
+export const findModelStats = async (
   providerId: string,
   modelId: string,
-): ModelStatsRow | undefined => {
-  const db = getDb();
-  return db
-    .prepare('SELECT * FROM model_stats WHERE provider_id = ? AND model_id = ?')
-    .get(providerId, modelId) as ModelStatsRow | undefined;
+): Promise<ModelStatsRow | undefined> => {
+  const db = getDataStore().kysely;
+  const row = await db
+    .selectFrom('model_stats')
+    .selectAll()
+    .where('provider_id', '=', providerId)
+    .where('model_id', '=', modelId)
+    .executeTakeFirst();
+  return row as ModelStatsRow | undefined;
 };
 
 // ─── Upserts ────────────────────────────────────────────────────────────
@@ -50,29 +61,39 @@ export const findModelStats = (
  * Đảm bảo row tồn tại cho (provider_id, model_id).
  * Không ghi đè success_rate nếu đã có.
  */
-export const upsertModelStats = (
+export const upsertModelStats = async (
   providerId: string,
   modelId: string,
-): void => {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO model_stats (provider_id, model_id, success_rate, updated_at)
-     VALUES (?, ?, NULL, ?)
-     ON CONFLICT(provider_id, model_id) DO UPDATE SET
-       updated_at = excluded.updated_at`,
-  ).run(providerId, modelId, Date.now());
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .insertInto('model_stats')
+    .values({
+      provider_id: providerId,
+      model_id: modelId,
+      success_rate: null,
+      updated_at: Date.now(),
+    })
+    .onConflict((oc) =>
+      oc.columns(['provider_id', 'model_id']).doUpdateSet({
+        updated_at: (eb) => eb.ref('excluded.updated_at'),
+      }),
+    )
+    .execute();
 };
 
 // ─── Updates ────────────────────────────────────────────────────────────
 
-export const updateModelSuccessRate = (
+export const updateModelSuccessRate = async (
   providerId: string,
   modelId: string,
   successRate: number | null,
-): void => {
-  const db = getDb();
-  db.prepare(
-    `UPDATE model_stats SET success_rate = ?, updated_at = ?
-     WHERE provider_id = ? AND model_id = ?`,
-  ).run(successRate, Date.now(), providerId, modelId);
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('model_stats')
+    .set({ success_rate: successRate, updated_at: Date.now() })
+    .where('provider_id', '=', providerId)
+    .where('model_id', '=', modelId)
+    .execute();
 };

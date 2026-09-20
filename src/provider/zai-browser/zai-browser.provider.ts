@@ -199,7 +199,7 @@ export class ZaiBrowserProvider implements Provider {
 
     const isSearch = search === true;
 
-    const sessions = findBrowserAccountsByProvider('zai-browser');
+    const sessions = await findBrowserAccountsByProvider('zai-browser');
     const session = sessions.length > 0 ? sessions[0] : null;
     if (!session) {
       logger.error('[ZaiBrowser] No active browser session found');
@@ -211,7 +211,7 @@ export class ZaiBrowserProvider implements Provider {
       return;
     }
 
-    updateAccountLastUsed(session.id);
+    await updateAccountLastUsed(session.id);
 
     const wsSessionId = session.id;
 

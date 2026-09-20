@@ -5,6 +5,10 @@
  * Repository layer cho bảng accounts. Cung cấp các hàm CRUD
  * và truy vấn cho tài khoản provider.
  *
+ * ĐÃ MIGRATE sang Kysely (async) — chạy được trên cả SQLite lẫn
+ * Postgres thông qua `getDataStore()`. Mọi hàm trả Promise, caller
+ * phải `await`.
+ *
  * Main functions:
  * - findAccountById()                : Tìm account theo id
  * - findAccountByEmailAndProvider()  : Tìm account theo email và provider
@@ -20,14 +24,28 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
+// ── External ──
+import { sql } from 'kysely';
+
 // ── Database ──
-import { getDb } from '../database';
+import { getDataStore } from '../database';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('AccountRepository');
+
+/** Cột được phép dùng trong ORDER BY — whitelist chống SQL injection. */
+const ALLOWED_SORT_COLUMNS = new Set([
+  'id',
+  'provider_id',
+  'email',
+  'usage',
+  'reset_usage_at',
+  'is_memory_enabled',
+  'last_used_at',
+]);
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -36,9 +54,9 @@ export interface AccountRow {
   provider_id: string;
   email: string;
   credential: string | null;
-  usage?: number;
-  reset_usage_at?: string;
-  is_memory_enabled?: number;
+  usage?: number | null;
+  reset_usage_at?: string | null;
+  is_memory_enabled?: number | null;
   user_data_dir?: string | null;
   last_used_at?: number | null;
 }
@@ -54,50 +72,67 @@ export interface ListAccountsOptions {
 
 // ─── Queries ────────────────────────────────────────────────────────────
 
-export const findAccountById = (id: string): AccountRow | null => {
-  const db = getDb();
-  return (db.prepare('SELECT * FROM accounts WHERE id = ?').get(id) as AccountRow) ?? null;
+export const findAccountById = async (
+  id: string,
+): Promise<AccountRow | null> => {
+  const db = getDataStore().kysely;
+  const row = await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where('id', '=', id)
+    .executeTakeFirst();
+  return (row as AccountRow | undefined) ?? null;
 };
 
-export const findAccountByEmailAndProvider = (
+export const findAccountByEmailAndProvider = async (
   email: string,
   providerId: string,
-): AccountRow | null => {
-  const db = getDb();
-  return (
-    (db
-      .prepare('SELECT * FROM accounts WHERE email = ? AND provider_id = ?')
-      .get(email, providerId) as AccountRow) ?? null
-  );
+): Promise<AccountRow | null> => {
+  const db = getDataStore().kysely;
+  const row = await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where('email', '=', email)
+    .where('provider_id', '=', providerId)
+    .executeTakeFirst();
+  return (row as AccountRow | undefined) ?? null;
 };
 
-export const findAccountByIdOrEmailProvider = (
+export const findAccountByIdOrEmailProvider = async (
   id: string,
   email: string,
   providerId: string,
-): AccountRow | null => {
-  const db = getDb();
-  return (
-    (db
-      .prepare(
-        'SELECT * FROM accounts WHERE (email = ? AND provider_id = ?) OR id = ?',
-      )
-      .get(email, providerId, id) as AccountRow) ?? null
-  );
+): Promise<AccountRow | null> => {
+  const db = getDataStore().kysely;
+  const row = await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where((eb) =>
+      eb.or([
+        eb.and([eb('email', '=', email), eb('provider_id', '=', providerId)]),
+        eb('id', '=', id),
+      ]),
+    )
+    .executeTakeFirst();
+  return (row as AccountRow | undefined) ?? null;
 };
 
-export const findFirstAccountByProvider = (providerId: string): AccountRow | null => {
-  const db = getDb();
-  return (
-    (db
-      .prepare('SELECT * FROM accounts WHERE LOWER(provider_id) = ? LIMIT 1')
-      .get(providerId.toLowerCase()) as AccountRow) ?? null
-  );
+export const findFirstAccountByProvider = async (
+  providerId: string,
+): Promise<AccountRow | null> => {
+  const db = getDataStore().kysely;
+  const row = await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where(sql<boolean>`LOWER(provider_id) = ${providerId.toLowerCase()}`)
+    .limit(1)
+    .executeTakeFirst();
+  return (row as AccountRow | undefined) ?? null;
 };
 
-export const listAccounts = (
+export const listAccounts = async (
   options: ListAccountsOptions,
-): { rows: AccountRow[]; total: number } => {
+): Promise<{ rows: AccountRow[]; total: number }> => {
   const {
     page,
     limit,
@@ -107,39 +142,38 @@ export const listAccounts = (
     order = 'ASC',
   } = options;
   const offset = (page - 1) * limit;
-  const db = getDb();
+  const db = getDataStore().kysely;
 
-  const conditions: string[] = [];
-  const params: any[] = [];
+  // Base query dùng chung cho count + select
+  const buildBase = () => {
+    let q = db.selectFrom('accounts');
+    if (email) q = q.where('email', 'like', `%${email}%`);
+    if (provider_id) q = q.where('provider_id', '=', provider_id);
+    return q;
+  };
 
-  if (email) {
-    conditions.push('email LIKE ?');
-    params.push(`%${email}%`);
-  }
-  if (provider_id) {
-    conditions.push('provider_id = ?');
-    params.push(provider_id);
-  }
+  const countRow = await buildBase()
+    .select((eb) => eb.fn.countAll<number>().as('total'))
+    .executeTakeFirst();
+  const total = Number(countRow?.total ?? 0);
 
-  const whereClause =
-    conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+  const sortColumn = ALLOWED_SORT_COLUMNS.has(sort_by) ? sort_by : 'email';
+  // order chỉ nhận 'ASC' | 'DESC' từ type → an toàn để nội suy raw.
+  // sortColumn đã qua whitelist.
+  const direction = order.toLowerCase() === 'desc' ? 'desc' : 'asc';
+  const rows = (await buildBase()
+    .selectAll()
+    .orderBy(sql.ref(sortColumn), direction)
+    .limit(limit)
+    .offset(offset)
+    .execute()) as AccountRow[];
 
-  const countResult = db
-    .prepare(`SELECT COUNT(*) as total FROM accounts ${whereClause}`)
-    .get(...params) as { total: number };
-
-  const rows = db
-    .prepare(
-      `SELECT * FROM accounts ${whereClause} ORDER BY ${sort_by} ${order} LIMIT ? OFFSET ?`,
-    )
-    .all(...params, limit, offset) as AccountRow[];
-
-  return { rows, total: countResult.total };
+  return { rows, total };
 };
 
 // ─── Inserts ────────────────────────────────────────────────────────────
 
-export const insertAccount = (account: {
+export const insertAccount = async (account: {
   id: string;
   provider_id: string;
   email: string;
@@ -148,24 +182,24 @@ export const insertAccount = (account: {
   reset_usage_at?: string;
   is_memory_enabled?: number;
   user_data_dir?: string | null;
-}): void => {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, is_memory_enabled, user_data_dir)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    account.id,
-    account.provider_id,
-    account.email,
-    account.credential,
-    account.usage ?? null,
-    account.reset_usage_at || null,
-    account.is_memory_enabled === 1 ? 1 : 0,
-    account.user_data_dir || null,
-  );
+}): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .insertInto('accounts')
+    .values({
+      id: account.id,
+      provider_id: account.provider_id,
+      email: account.email,
+      credential: account.credential,
+      usage: account.usage ?? null,
+      reset_usage_at: account.reset_usage_at || null,
+      is_memory_enabled: account.is_memory_enabled === 1 ? 1 : 0,
+      user_data_dir: account.user_data_dir || null,
+    })
+    .execute();
 };
 
-export const insertAccountsBatch = (
+export const insertAccountsBatch = async (
   accounts: Array<{
     id: string;
     provider_id: string;
@@ -173,121 +207,148 @@ export const insertAccountsBatch = (
     credential: string;
     is_memory_enabled?: boolean;
   }>,
-): void => {
-  const db = getDb();
-  db.prepare('BEGIN IMMEDIATE').run();
-  try {
-    const stmt = db.prepare(
-      'INSERT INTO accounts (id, provider_id, email, credential, is_memory_enabled) VALUES (?, ?, ?, ?, ?)',
-    );
-    for (const a of accounts) {
-      stmt.run(
-        a.id,
-        a.provider_id,
-        a.email,
-        a.credential,
-        a.is_memory_enabled ? 1 : 0,
-      );
-    }
-    db.prepare('COMMIT').run();
-  } catch (err) {
-    logger.error('Error during batch insert, rolling back:', err);
-    try {
-      db.prepare('ROLLBACK').run();
-    } catch (rollbackErr) {
-      logger.error('Error during rollback', rollbackErr);
-    }
-    throw err;
-  }
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .insertInto('accounts')
+      .values(
+        accounts.map((a) => ({
+          id: a.id,
+          provider_id: a.provider_id,
+          email: a.email,
+          credential: a.credential,
+          is_memory_enabled: a.is_memory_enabled ? 1 : 0,
+        })),
+      )
+      .execute();
+  });
 };
 
 // ─── Updates ────────────────────────────────────────────────────────────
 
-export const updateAccountCredential = (
+export const updateAccountCredential = async (
   id: string,
   credential: string | null,
-): void => {
-  const db = getDb();
-  db.prepare('UPDATE accounts SET credential = ? WHERE id = ?').run(
-    credential,
-    id,
-  );
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('accounts')
+    .set({ credential })
+    .where('id', '=', id)
+    .execute();
 };
 
-export const updateAccountUserDataDir = (
+/**
+ * Cập nhật các field có thể chỉnh sửa của account (email, credential).
+ * Chỉ update những field được truyền vào (khác undefined).
+ */
+export const updateAccountFields = async (
+  id: string,
+  fields: { email?: string; credential?: string | null },
+): Promise<void> => {
+  const patch: { email?: string; credential?: string | null } = {};
+  if (fields.email !== undefined) patch.email = fields.email;
+  if (fields.credential !== undefined) patch.credential = fields.credential;
+  if (Object.keys(patch).length === 0) return;
+
+  const db = getDataStore().kysely;
+  await db.updateTable('accounts').set(patch).where('id', '=', id).execute();
+};
+
+export const updateAccountUserDataDir = async (
   id: string,
   userDataDir: string,
-): void => {
-  const db = getDb();
-  db.prepare('UPDATE accounts SET user_data_dir = ? WHERE id = ?').run(
-    userDataDir,
-    id,
-  );
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('accounts')
+    .set({ user_data_dir: userDataDir })
+    .where('id', '=', id)
+    .execute();
 };
 
-export const updateAccountCredentialAndRefresh = (
+export const updateAccountCredentialAndRefresh = async (
   id: string,
   credential: string,
-): void => {
-  const db = getDb();
-  db.prepare(
-    'UPDATE accounts SET credential = ? WHERE id = ?',
-  ).run(credential, id);
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('accounts')
+    .set({ credential })
+    .where('id', '=', id)
+    .execute();
 };
 
-export const updateAccountMemory = (id: string, isMemoryEnabled: boolean): void => {
-  const db = getDb();
-  db.prepare('UPDATE accounts SET is_memory_enabled = ? WHERE id = ?').run(
-    isMemoryEnabled ? 1 : 0,
-    id,
-  );
+export const updateAccountMemory = async (
+  id: string,
+  isMemoryEnabled: boolean,
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('accounts')
+    .set({ is_memory_enabled: isMemoryEnabled ? 1 : 0 })
+    .where('id', '=', id)
+    .execute();
 };
 
 /**
  * Cập nhật thời điểm account được dùng gần nhất (ms timestamp).
- * Được gọi mỗi khi sendMessage() thực sự dispatch request tới provider.
  */
-export const updateAccountLastUsed = (id: string, ts: number = Date.now()): void => {
-  const db = getDb();
-  db.prepare('UPDATE accounts SET last_used_at = ? WHERE id = ?').run(ts, id);
+export const updateAccountLastUsed = async (
+  id: string,
+  ts: number = Date.now(),
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('accounts')
+    .set({ last_used_at: ts })
+    .where('id', '=', id)
+    .execute();
 };
 
-export const updateAccountUsage = (
+export const updateAccountUsage = async (
   id: string,
   usage: number,
   resetUsageAt: string | null,
-): void => {
-  const db = getDb();
-  db.prepare('UPDATE accounts SET usage = ?, reset_usage_at = ? WHERE id = ?').run(
-    usage,
-    resetUsageAt,
-    id,
-  );
+): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db
+    .updateTable('accounts')
+    .set({ usage, reset_usage_at: resetUsageAt })
+    .where('id', '=', id)
+    .execute();
 };
 
-export const findAccountsNeedingRefresh = (threshold: number): AccountRow[] => {
-  const db = getDb();
-  // Include accounts that have never had usage fetched or need usage refresh
-  return db
-    .prepare(
-      `SELECT * FROM accounts
-       WHERE usage IS NULL`,
-    )
-    .all() as AccountRow[];
+export const findAccountsNeedingRefresh = async (
+  _threshold: number,
+): Promise<AccountRow[]> => {
+  const db = getDataStore().kysely;
+  return (await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where('usage', 'is', null)
+    .execute()) as AccountRow[];
 };
 
 // ─── Delete ────────────────────────────────────────────────────────────
 
-export const deleteAccount = (id: string): void => {
-  const db = getDb();
-  db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
+export const deleteAccount = async (id: string): Promise<void> => {
+  const db = getDataStore().kysely;
+  await db.deleteFrom('accounts').where('id', '=', id).execute();
 };
 
 // ─── Browser Accounts ──────────────────────────────────────────────────
 
-export const findBrowserAccountsByProvider = (providerId: string): AccountRow[] => {
-  const db = getDb();
-  return db
-    .prepare('SELECT * FROM accounts WHERE provider_id = ? AND user_data_dir IS NOT NULL ORDER BY email ASC')
-    .all(providerId.toLowerCase()) as AccountRow[];
+export const findBrowserAccountsByProvider = async (
+  providerId: string,
+): Promise<AccountRow[]> => {
+  const db = getDataStore().kysely;
+  return (await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where(sql<boolean>`LOWER(provider_id) = ${providerId.toLowerCase()}`)
+    .where('user_data_dir', 'is not', null)
+    .orderBy('email', 'asc')
+    .execute()) as AccountRow[];
 };

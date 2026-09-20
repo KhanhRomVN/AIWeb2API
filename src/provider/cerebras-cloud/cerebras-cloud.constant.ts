@@ -25,7 +25,7 @@ export const PROVIDER_NAME = 'Cerebras Cloud';
 export const PROVIDER_DESCRIPTION =
   'World fastest AI inference on custom silicon';
 export const PROVIDER_COLOR = '#00D4FF';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://cloud.cerebras.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';

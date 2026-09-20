@@ -854,9 +854,18 @@ export class GrokBuildCLIProvider implements Provider {
                 status: retryResponse.status,
                 retryErrorBody,
               });
-              throw new Error(
-                `Grok Build API returned ${retryResponse.status}`,
-              );
+              const retryDetail =
+                typeof retryErrorBody === 'object' && retryErrorBody !== null
+                  ? ((retryErrorBody as any)?.error?.message ?? (retryErrorBody as any)?.message ?? JSON.stringify(retryErrorBody))
+                  : String(retryErrorBody ?? '');
+              const retryMsg = `Grok Build API returned ${retryResponse.status}${retryDetail ? `: ${retryDetail}` : ''}`;
+              if (retryResponse.status === 401 || retryResponse.status === 403) {
+                const retryErr = new Error(`Session expired or invalid. Please re-login to Grok Build. (${retryMsg})`);
+                (retryErr as any).isAuthError = true;
+                (retryErr as any).statusCode = retryResponse.status;
+                throw retryErr;
+              }
+              throw new Error(retryMsg);
             }
 
             await parseGrokBuildSSEStream(retryResponse.body as NodeJS.ReadableStream, {
@@ -869,7 +878,18 @@ export class GrokBuildCLIProvider implements Provider {
           }
         }
 
-        throw new Error(`Grok Build API returned ${response.status}`);
+        const errorDetail =
+          typeof errorBody === 'object' && errorBody !== null
+            ? ((errorBody as any)?.error?.message ?? (errorBody as any)?.message ?? JSON.stringify(errorBody))
+            : String(errorBody ?? '');
+        const errorMessage = `Grok Build API returned ${response.status}${errorDetail ? `: ${errorDetail}` : ''}`;
+        if (response.status === 401 || response.status === 403) {
+          const authErr = new Error(`Session expired or invalid. Please re-login to Grok Build. (${errorMessage})`);
+          (authErr as any).isAuthError = true;
+          (authErr as any).statusCode = response.status;
+          throw authErr;
+        }
+        throw new Error(errorMessage);
       }
 
       if (!response.body) {

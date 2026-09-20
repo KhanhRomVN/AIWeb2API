@@ -267,9 +267,14 @@ export class FreebuffProvider implements Provider {
         logger.error(
           `[Freebuff] API error ${response.status}: ${errorText.slice(0, 300)}`,
         );
-        throw new Error(
-          `Freebuff API error (${response.status}): ${errorText.slice(0, 200)}`,
-        );
+        const message = `Freebuff API error (${response.status}): ${errorText.slice(0, 200)}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Freebuff. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
       }
 
       if (!response.body) {

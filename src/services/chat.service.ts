@@ -111,17 +111,19 @@ export const sendMessage = async (
       options.onCredentialRotated ||
       (accountId
         ? (newCredential: string) => {
-            try {
-              updateAccountCredential(accountId, newCredential);
-              logger.info(
-                `[sendMessage] Persisted rotated credential for account ${accountId}`,
-              );
-            } catch (persistErr: any) {
-              logger.warn(
-                `[sendMessage] Failed to persist rotated credential for account ${accountId}:`,
-                persistErr?.message || persistErr,
-              );
-            }
+            // Fire-and-forget: không block stream nếu persist chậm.
+            updateAccountCredential(accountId, newCredential)
+              .then(() => {
+                logger.info(
+                  `[sendMessage] Persisted rotated credential for account ${accountId}`,
+                );
+              })
+              .catch((persistErr: any) => {
+                logger.warn(
+                  `[sendMessage] Failed to persist rotated credential for account ${accountId}:`,
+                  persistErr?.message || persistErr,
+                );
+              });
           }
         : undefined),
   };
@@ -129,7 +131,7 @@ export const sendMessage = async (
   // Ghi nhận thời điểm account được dùng (trước khi dispatch thực tế).
   if (accountId) {
     try {
-      updateAccountLastUsed(accountId);
+      await updateAccountLastUsed(accountId);
     } catch (lastUsedErr: any) {
       logger.warn(
         `[sendMessage] Failed to update last_used_at for account ${accountId}:`,

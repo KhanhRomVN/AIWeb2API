@@ -75,9 +75,9 @@ export const getStats = async (req: Request, res: Response) => {
     const offset = parseInt(req.query.offset as string) || page;
     const accountId = req.query.account_id as string | undefined;
 
-    const usage = getUsageHistory(period, offset, accountId);
-    const accounts = getAccountStatsByPeriod(period, offset, accountId);
-    const models = getModelStatsByPeriod(period, offset);
+    const usage = await getUsageHistory(period, offset, accountId);
+    const accounts = await getAccountStatsByPeriod(period, offset, accountId);
+    const models = await getModelStatsByPeriod(period, offset);
 
     res.json({
       success: true,

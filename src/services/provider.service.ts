@@ -59,6 +59,8 @@ export interface Provider {
     is_audio_upload?: boolean;
     is_file_upload?: boolean;
   }[];
+  /** Error message khi getModels() thất bại — hiển thị trong UI thay vì danh sách rỗng */
+  models_error?: string;
   is_pausable?: boolean;
   is_memory?: boolean;
 }
@@ -85,13 +87,15 @@ const fetchProviderConfig = async (): Promise<any[]> => {
   return configs;
 };
 
-const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
+const fetchModelsFromProvider = async (
+  providerId: string,
+): Promise<{ models: any[]; error?: string }> => {
   const dynamicProvider = providerRegistry.getProvider(providerId);
   if (!dynamicProvider?.getModels) {
-    return [];
+    return { models: [] };
   }
 
-  const account = findFirstAccountByProvider(providerId);
+  const account = await findFirstAccountByProvider(providerId);
 
   // Provider không cần auth (auth_method=[]) — gọi getModels với credential rỗng
   const ProviderClass = (dynamicProvider as any).constructor as any;
@@ -100,7 +104,10 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
     Array.isArray(cfg?.auth_method) && cfg.auth_method.length === 0;
 
   if (!noAuthRequired && (!account || account.credential === null)) {
-    return [];
+    return {
+      models: [],
+      error: `No accounts configured. Add a ${providerId} account to load models.`,
+    };
   }
 
   try {
@@ -108,10 +115,25 @@ const fetchModelsFromProvider = async (providerId: string): Promise<any[]> => {
       account?.credential ?? '',
       account?.id,
     );
-    return models;
-  } catch (error) {
-    logger.error(`Failed to fetch models from provider ${providerId}:`, error);
-    return [];
+    return { models };
+  } catch (error: any) {
+    const accountInfo = account
+      ? `account_id=${account.id}${account.email ? ` email=${account.email}` : ''}`
+      : 'no_account';
+    const isAuthError = error?.isAuthError === true;
+    if (isAuthError) {
+      logger.warn(
+        `[${providerId}] Session expired (${accountInfo}) — user needs to re-login.`,
+      );
+      return {
+        models: [],
+        error: `Session expired. Please re-login your ${providerId} account (${account?.email ?? accountInfo}).`,
+      };
+    }
+    logger.error(
+      `Failed to fetch models from provider ${providerId} (${accountInfo}): ${error?.message ?? error}`,
+    );
+    return { models: [], error: error?.message ?? 'Unknown error fetching models' };
   }
 };
 
@@ -127,11 +149,11 @@ export const getAllProviders = async (): Promise<Provider[]> => {
   }
 
   const config = await fetchProviderConfig();
-  const dbProviders = findAllProviderRows();
+  const dbProviders = await findAllProviderRows();
   const providersMap = new Map(dbProviders.map((p) => [p.id.toLowerCase(), p]));
 
   // Chỉ lấy success_rate từ DB — metadata model (name, capabilities) lấy từ provider constants/API
-  const allModelStats = findAllModelStats();
+  const allModelStats = await findAllModelStats();
   const successRateMap = new Map<string, number | null>(
     allModelStats.map((s) => [
       `${s.provider_id.toLowerCase()}:${s.model_id.toLowerCase()}`,
@@ -149,7 +171,7 @@ export const getAllProviders = async (): Promise<Provider[]> => {
     seenIds.add(pid);
 
     // Upsert provider metadata to database
-    upsertProvider({
+    await upsertProvider({
       id: p.provider_id,
       title: p.provider_name || p.provider_id,
       description: p.description,
@@ -167,15 +189,14 @@ export const getAllProviders = async (): Promise<Provider[]> => {
     });
 
     let models: any[] | undefined = p.models;
+    let modelsError: string | undefined;
     if ((!models || models.length === 0) && p.is_enabled) {
       try {
-        const dynamicModels = await fetchModelsFromProvider(p.provider_id);
-        if (dynamicModels.length > 0) {
-          models = dynamicModels;
-        } else {
-          logger.warn(
-            `[getAllProviders] ${p.provider_id}: dynamic getModels() returned 0 models`,
-          );
+        const result = await fetchModelsFromProvider(p.provider_id);
+        if (result.models.length > 0) {
+          models = result.models;
+        } else if (result.error) {
+          modelsError = result.error;
         }
       } catch (e) {
         logger.warn(`Failed to fetch dynamic models for ${p.provider_id}:`, e);
@@ -188,6 +209,7 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       website_url: p.website_url || (p as any).website,
       website: p.website_url || (p as any).website,
       is_memory: dbProvider?.is_memory === 1 ? true : (p.is_memory ?? false),
+      ...(modelsError ? { models_error: modelsError } : {}),
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,
@@ -232,7 +254,7 @@ export const getProviderModels = async (
   const provider = remoteConfig.find((c: any) => c.provider_id === providerId);
 
   try {
-    const freshModels = await fetchModelsFromProvider(providerId);
+    const { models: freshModels } = await fetchModelsFromProvider(providerId);
     if (freshModels.length > 0) {
       return freshModels;
     }
@@ -255,7 +277,7 @@ export const getProviderModels = async (
 
   const dynamicProvider = providerRegistry.getProvider(providerId);
   if (dynamicProvider?.getModels) {
-    const account = findFirstAccountByProvider(providerId);
+    const account = await findFirstAccountByProvider(providerId);
     if (account && account.credential !== null) {
       try {
         const directModels = await dynamicProvider.getModels(
@@ -302,7 +324,7 @@ export const getAllModelsFromEnabledProviders = async (): Promise<
   for (const provider of enabledProviders) {
     let models: any[] = [];
     try {
-      const freshModels = await fetchModelsFromProvider(provider.provider_id);
+      const { models: freshModels } = await fetchModelsFromProvider(provider.provider_id);
       if (freshModels.length > 0) {
         models = freshModels;
       }
@@ -326,7 +348,7 @@ export const getAllModelsFromEnabledProviders = async (): Promise<
         provider.provider_id,
       );
       if (dynamicProvider?.getModels) {
-        const account = findFirstAccountByProvider(provider.provider_id);
+        const account = await findFirstAccountByProvider(provider.provider_id);
         if (account && account.credential !== null) {
           try {
             const directModels = await dynamicProvider.getModels(

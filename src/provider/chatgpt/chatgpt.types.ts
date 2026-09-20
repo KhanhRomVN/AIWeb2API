@@ -20,12 +20,27 @@
 
 /**
  * Credential ChatGPT đã parse từ JSON string hoặc raw access token.
- * - `accessToken` : bearer access token (thường bắt đầu bằng `eyJ`)
+ * - `accessToken` : bearer access token (JWT, thường bắt đầu bằng `eyJ`)
  * - `deviceId`    : OAI device id; sinh UUID nếu credential không có
+ * - `cookie`      : chuỗi cookie session ChatGPT (dùng để qua Cloudflare
+ *                   và để exchange sang AT mới khi AT hết hạn)
  */
 export interface ChatGPTCredential {
   accessToken: string;
   deviceId: string | null;
+  cookie?: string | null;
+}
+
+/**
+ * Response của `/api/auth/session` (NextAuth endpoint).
+ * Dùng để đổi cookie session → access token mới.
+ */
+export interface ChatGPTSessionResponse {
+  user?: ChatGPTUserInfo;
+  expires?: string;
+  accessToken?: string;
+  authProvider?: string;
+  error?: string;
 }
 
 // ─── User Info ──────────────────────────────────────────────────────────

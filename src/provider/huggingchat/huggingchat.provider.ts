@@ -292,6 +292,24 @@ export class HuggingChatProvider implements Provider {
         body: formBuffer,
       });
 
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const body = await response.json() as any;
+          detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+        } catch {
+          detail = await response.text().catch(() => '');
+        }
+        const message = `HuggingChat API returned ${response.status}${detail ? `: ${detail}` : ''}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to HuggingChat. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
+      }
+
       if (!response.body) throw new Error('No response body');
 
       const promptTokens = countMessagesTokens(messages);
@@ -327,42 +345,49 @@ export class HuggingChatProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   async getModels(credential: string): Promise<HuggingChatModelOutput[]> {
-    try {
-      const client = this.createClient(credential);
-      const res = await client.get(API_PATHS.CHAT_MODELS);
-      const data = (await res.json()) as
-        | HuggingChatModelEntry[]
-        | HuggingChatModelsResponse;
-      const modelsList: HuggingChatModelEntry[] = Array.isArray(data)
-        ? data
-        : data[API_FIELDS.JSON] || data[API_FIELDS.MODELS] || [];
+    const client = this.createClient(credential);
+    const res = await client.get(API_PATHS.CHAT_MODELS);
 
-      return modelsList.map((model) => {
-        let contextLength: number | null = null;
-        const providers = model[API_FIELDS.PROVIDERS];
-        if (providers && Array.isArray(providers)) {
-          for (const provider of providers) {
-            const ctx = provider[API_FIELDS.CONTEXT_LENGTH];
-            if (ctx) {
-              contextLength = ctx;
-              break;
-            }
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json() as any;
+        detail = body?.error?.message || body?.message || JSON.stringify(body);
+      } catch {
+        detail = await res.text().catch(() => '');
+      }
+      throw new Error(`HuggingChat API returned ${res.status}${detail ? `: ${detail}` : ''}`);
+    }
+
+    const data = (await res.json()) as
+      | HuggingChatModelEntry[]
+      | HuggingChatModelsResponse;
+    const modelsList: HuggingChatModelEntry[] = Array.isArray(data)
+      ? data
+      : data[API_FIELDS.JSON] || data[API_FIELDS.MODELS] || [];
+
+    return modelsList.map((model) => {
+      let contextLength: number | null = null;
+      const providers = model[API_FIELDS.PROVIDERS];
+      if (providers && Array.isArray(providers)) {
+        for (const provider of providers) {
+          const ctx = provider[API_FIELDS.CONTEXT_LENGTH];
+          if (ctx) {
+            contextLength = ctx;
+            break;
           }
         }
-        return {
-          id: model[API_FIELDS.ID],
-          name:
-            model[API_FIELDS.DISPLAY_NAME] ||
-            model[API_FIELDS.NAME] ||
-            model[API_FIELDS.ID],
-          is_thinking: false,
-          max_context_length: contextLength,
-        };
-      });
-    } catch (error) {
-      logger.error('Error fetching models from HuggingChat API:', error);
-      return [];
-    }
+      }
+      return {
+        id: model[API_FIELDS.ID],
+        name:
+          model[API_FIELDS.DISPLAY_NAME] ||
+          model[API_FIELDS.NAME] ||
+          model[API_FIELDS.ID],
+        is_thinking: false,
+        max_context_length: contextLength,
+      };
+    });
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────

@@ -41,29 +41,8 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
 
-/**
- * Models fallback dùng khi bootstrap API fail.
- * Danh sách này không được coi là source-of-truth — models thực luôn lấy từ
- * `getModels()` (bootstrap `claude_ai_bootstrap_models_config`).
- */
-export const FALLBACK_MODELS = [
-  {
-    id: 'claude-sonnet-5',
-    name: 'Claude Sonnet 5',
-    is_thinking: true,
-    max_context_length: null,
-    is_search: true,
-    is_image_upload: true,
-    is_video_upload: false,
-    is_audio_upload: false,
-    is_file_upload: false,
-    is_larger_content_paste_upload: false,
-    is_image_generator: false,
-    is_video_generator: false,
-    is_deep_research: false,
-    description: 'Most efficient for everyday tasks',
-  },
-] as const;
+// NOTE: Không có FALLBACK_MODELS. getModels() phải throw error khi fail,
+// không được trả về danh sách giả. Xem NO_FALLBACK_MODELS.md ở thư mục provider.
 
 // ─── API Configuration ───────────────────────────────────────────────
 

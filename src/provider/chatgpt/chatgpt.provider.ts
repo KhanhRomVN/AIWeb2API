@@ -43,6 +43,7 @@ import {
   ConversationMessage,
   SentinelPrepareResponse,
   SentinelFinalizeResponse,
+  ChatGPTSessionResponse,
 } from './chatgpt.types';
 import { proxyHandler } from './chatgpt.proxy-handler';
 import { parseChatGPTSseStream } from './chatgpt.sse-parser';
@@ -80,6 +81,7 @@ import {
   CONVERSATION_MODE_PRIMARY_ASSISTANT,
   SSE_MESSAGE_STATUS,
   ROLE_VALUES,
+  GOOGLE_LOGIN_PATH,
 } from './chatgpt.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -119,8 +121,8 @@ export class ChatGPTProvider implements Provider {
   // ─── Credential Helpers ─────────────────────────────────────────────
 
   /**
-   * Parse credential string thành `{ accessToken, deviceId }`.
-   * Hỗ trợ credential JSON `{ secretKey, deviceId }` hoặc raw access token.
+   * Parse credential string thành `{ accessToken, deviceId, cookie }`.
+   * Hỗ trợ credential JSON `{ secretKey, deviceId, cookie }` hoặc raw access token.
    */
   private parseCredential(credential: string): ChatGPTCredential {
     if (credential.trim().startsWith('{')) {
@@ -133,8 +135,9 @@ export class ChatGPTProvider implements Provider {
           parsed.access_token ||
           parsed.token;
         const deviceId = parsed.deviceId || parsed.device_id || null;
+        const cookie = parsed.cookie || parsed.cookies || null;
         if (accessToken) {
-          return { accessToken, deviceId };
+          return { accessToken, deviceId, cookie };
         }
       } catch (e) {
         logger.warn(
@@ -143,7 +146,7 @@ export class ChatGPTProvider implements Provider {
         );
       }
     }
-    return { accessToken: credential, deviceId: null };
+    return { accessToken: credential, deviceId: null, cookie: null };
   }
 
   /**
@@ -159,7 +162,7 @@ export class ChatGPTProvider implements Provider {
 
   /** Header chung cho request tới backend-api (kèm Authorization + device). */
   private buildBaseHeaders(credential: ChatGPTCredential, deviceId: string) {
-    return {
+    const headers: Record<string, string> = {
       [HTTP_HEADER_NAMES.AUTHORIZATION]: `Bearer ${credential.accessToken}`,
       [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
       [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
@@ -176,7 +179,15 @@ export class ChatGPTProvider implements Provider {
       [HTTP_HEADER_NAMES.OAI_LANGUAGE]: 'zh-CN',
       [HTTP_HEADER_NAMES.OAI_CLIENT_VERSION]: CLIENT_VERSION,
       [HTTP_HEADER_NAMES.OAI_CLIENT_BUILD_NUMBER]: CLIENT_BUILD_NUMBER,
-    } as Record<string, string>;
+    };
+
+    // Cookie session bắt buộc để qua Cloudflare (__cf_bm, __cfuvid) và để
+    // server xác thực đúng session khi AT còn hạn hay vừa exchange.
+    if (credential.cookie) {
+      headers[HTTP_HEADER_NAMES.COOKIE] = credential.cookie;
+    }
+
+    return headers;
   }
 
   /**
@@ -192,6 +203,59 @@ export class ChatGPTProvider implements Provider {
       [HTTP_HEADER_NAMES.X_OPENAI_TARGET_PATH]: path,
       [HTTP_HEADER_NAMES.X_OPENAI_TARGET_ROUTE]: path,
     };
+  }
+
+  // ─── Auth Session Exchange ──────────────────────────────────────────
+
+  /**
+   * Đổi cookie session ChatGPT thành access token mới qua endpoint
+   * `/api/auth/session` (NextAuth). Đây là cách chuẩn để refresh AT vì
+   * ChatGPT web client tự gọi endpoint này khi cần token mới.
+   *
+   * @param cookie Chuỗi cookie session (đã có `__Secure-next-auth.session-token.*`).
+   * @returns Access token (JWT) hoặc null nếu thất bại.
+   */
+  async exchangeCookiesForAccessToken(
+    cookie: string,
+  ): Promise<string | null> {
+    if (!cookie) return null;
+
+    try {
+      const res = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
+        method: 'GET',
+        headers: {
+          [HTTP_HEADER_NAMES.COOKIE]: cookie,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+          [HTTP_HEADER_NAMES.ACCEPT]: 'application/json',
+          [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+        },
+      });
+
+      if (!res.ok) {
+        logger.warn(
+          `[ChatGPT] /api/auth/session returned HTTP ${res.status}`,
+        );
+        return null;
+      }
+
+      const json = (await res.json()) as ChatGPTSessionResponse;
+      if (json?.error) {
+        logger.warn(`[ChatGPT] /api/auth/session error: ${json.error}`);
+        return null;
+      }
+
+      const token = json?.accessToken || null;
+      if (!token) {
+        logger.warn('[ChatGPT] /api/auth/session missing accessToken field');
+      }
+      return token;
+    } catch (e) {
+      const err = e as Error;
+      logger.warn(
+        `[ChatGPT] Failed to exchange cookies for access token: ${err.message}`,
+      );
+      return null;
+    }
   }
 
   // ─── Bootstrap ──────────────────────────────────────────────────────
@@ -422,6 +486,52 @@ export class ChatGPTProvider implements Provider {
     };
   }
 
+  /**
+   * Chuẩn hóa credential trước khi dùng. Nếu `secretKey` không phải JWT
+   * (thường gặp với credential cũ lưu nhầm cookie string vào secretKey),
+   * tự động exchange cookie để lấy AT thật.
+   *
+   * @returns Credential đã chuẩn hóa + JSON credential mới nếu có rotation.
+   */
+  private async resolveActiveCredential(
+    credential: string,
+  ): Promise<{ cred: ChatGPTCredential; newCredential?: string }> {
+    const parsed = this.parseCredential(credential);
+
+    const isJwt =
+      parsed.accessToken.startsWith('eyJ') &&
+      parsed.accessToken.split('.').length === 3;
+    if (isJwt) {
+      return { cred: parsed };
+    }
+
+    // secretKey không phải JWT → coi nó là cookie string, exchange lấy AT.
+    logger.warn(
+      '[ChatGPT] Credential accessToken is not a JWT — attempting cookie exchange',
+    );
+    const cookie = parsed.cookie || parsed.accessToken;
+    const exchanged = await this.exchangeCookiesForAccessToken(cookie);
+    if (!exchanged) {
+      throw new Error(
+        'chatgpt_invalid_credential: accessToken is not a JWT and cookie exchange failed',
+      );
+    }
+
+    const newCred: ChatGPTCredential = {
+      accessToken: exchanged,
+      deviceId: parsed.deviceId,
+      cookie,
+    };
+    return {
+      cred: newCred,
+      newCredential: JSON.stringify({
+        secretKey: exchanged,
+        deviceId: parsed.deviceId,
+        cookie,
+      }),
+    };
+  }
+
   // ─── Handle Message ─────────────────────────────────────────────────
 
   async handleMessage(options: SendMessageOptions): Promise<void> {
@@ -436,13 +546,28 @@ export class ChatGPTProvider implements Provider {
       onError,
       onRaw,
       onSessionCreated,
+      onCredentialRotated,
     } = options;
 
-    const parsedCred = this.parseCredential(credential);
-    const deviceId = this.resolveDeviceId(parsedCred);
-    const baseHeaders = this.buildBaseHeaders(parsedCred, deviceId);
-
     try {
+      const resolved = await this.resolveActiveCredential(credential);
+      const parsedCred = resolved.cred;
+
+      // Nếu credential vừa được phục hồi/rotate, persist lại qua caller.
+      if (resolved.newCredential && onCredentialRotated) {
+        try {
+          await onCredentialRotated(resolved.newCredential);
+        } catch (e: any) {
+          logger.warn(
+            '[ChatGPT] onCredentialRotated callback failed:',
+            e?.message || e,
+          );
+        }
+      }
+
+      const deviceId = this.resolveDeviceId(parsedCred);
+      const baseHeaders = this.buildBaseHeaders(parsedCred, deviceId);
+
       // 1. Bootstrap để lấy script sources cho PoW
       const bootstrap = await this.bootstrap();
 
@@ -486,9 +611,11 @@ export class ChatGPTProvider implements Provider {
 
       if (response.status === 401 || response.status === 403) {
         const text = await response.text();
-        throw new Error(
-          `chatgpt_auth_failed: HTTP ${response.status} — ${text.slice(0, 500)}`,
-        );
+        const message = `chatgpt_auth_failed: HTTP ${response.status} — ${text.slice(0, 500)}`;
+        const err = new Error(`Session expired or invalid. Please re-login to ChatGPT. (${message})`);
+        (err as any).isAuthError = true;
+        (err as any).statusCode = response.status;
+        throw err;
       }
       if (!response.ok) {
         const text = await response.text();
@@ -589,54 +716,52 @@ export class ChatGPTProvider implements Provider {
   // ─── Models ─────────────────────────────────────────────────────────
 
   /**
-   * Liệt kê models từ /backend-api/models. Trả về danh sách slug.
-   * Không throw khi lỗi — trả mảng rỗng để registry vẫn boot được.
+   * Liệt kê models từ /backend-api/models. Throw error khi fail.
    */
   async getModels(credential: string): Promise<any[]> {
     const parsedCred = this.parseCredential(credential);
     const deviceId = this.resolveDeviceId(parsedCred);
 
-    try {
-      const path = `${API_PATHS.MODELS}?history_and_training_disabled=false`;
-      const route = API_PATHS.MODELS;
-      const res = await fetch(`${BASE_URL}${path}`, {
-        method: 'GET',
-        headers: this.withTargetHeaders(
-          this.buildBaseHeaders(parsedCred, deviceId),
-          route,
-        ),
-      });
+    const path = `${API_PATHS.MODELS}?history_and_training_disabled=false`;
+    const route = API_PATHS.MODELS;
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method: 'GET',
+      headers: this.withTargetHeaders(
+        this.buildBaseHeaders(parsedCred, deviceId),
+        route,
+      ),
+    });
 
-      if (!res.ok) {
-        logger.warn(`[ChatGPT] Get Models returned status ${res.status}`);
-        return [];
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json() as any;
+        detail = body?.detail || body?.error?.message || body?.message || JSON.stringify(body);
+      } catch {
+        detail = await res.text().catch(() => '');
       }
-
-      const json = (await res.json()) as { models?: any[] };
-      const list = Array.isArray(json.models) ? json.models : [];
-      return list
-        .filter((item) => item && typeof item.slug === 'string')
-        .map((item) => ({
-          id: item.slug,
-          name: item.title || item.slug,
-        }));
-    } catch (e) {
-      logger.error('[ChatGPT] Get Models Error:', e);
-      return [];
+      throw new Error(`ChatGPT API returned ${res.status}${detail ? `: ${detail}` : ''}`);
     }
+
+    const json = (await res.json()) as { models?: any[] };
+    const list = Array.isArray(json.models) ? json.models : [];
+    return list
+      .filter((item) => item && typeof item.slug === 'string')
+      .map((item) => ({
+        id: item.slug,
+        name: item.title || item.slug,
+      }));
   }
 
   // ─── Login ──────────────────────────────────────────────────────────
 
   /**
-   * Mở browser tới chatgpt.com để user đăng nhập. Access token bắt qua
-   * Authorization header của request tới backend-api; email lấy từ /me.
+   * Mở browser tới trang login ChatGPT để user đăng nhập bằng Google.
+   * Access token bắt qua Authorization header của request tới backend-api
+   * (proxy handler), email lấy từ `/backend-api/me`.
    */
-  async login(options?: { chatgptMethod?: 'basic' | 'google' }) {
-    const loginUrl =
-      options?.chatgptMethod === 'google'
-        ? 'https://chatgpt.com/auth/login'
-        : `${BASE_URL}/auth/login`;
+  async login(_options?: { chatgptMethod?: 'google' }) {
+    const loginUrl = `${BASE_URL}${GOOGLE_LOGIN_PATH}`;
 
     const result = await loginService.captureCredentialsViaCDP({
       providerId: PROVIDER_ID,
@@ -649,14 +774,38 @@ export class ChatGPTProvider implements Provider {
         headers?: any;
         email?: string;
       }) => {
-        const token = data.cookies?.trim();
-        if (!token || token.length < 30) {
+        const raw = data.cookies?.trim();
+        if (!raw || raw.length < 30) {
           return { isValid: false };
+        }
+
+        // `data.cookies` có thể là AT (JWT) từ proxy event LOGIN_TOKEN,
+        // hoặc cookie string từ CDP capture — phải phân biệt để xử lý đúng.
+        const isJwt = raw.startsWith('eyJ') && raw.split('.').length === 3;
+
+        let accessToken = '';
+        let cookie = '';
+
+        if (isJwt) {
+          accessToken = raw;
+        } else {
+          // raw là cookie string → exchange qua /api/auth/session để lấy AT.
+          cookie = raw;
+          const exchanged = await this.exchangeCookiesForAccessToken(cookie);
+          if (!exchanged) {
+            logger.warn(
+              '[ChatGPT] Login validation: cookie exchange returned no access token',
+            );
+            return { isValid: false };
+          }
+          accessToken = exchanged;
         }
 
         let email = data.email;
         if (!email) {
-          const profile = await this.getUserProfile(token);
+          const profile = await this.getUserProfile(
+            JSON.stringify({ secretKey: accessToken, cookie }),
+          );
           email = profile.email || undefined;
         }
 
@@ -669,8 +818,9 @@ export class ChatGPTProvider implements Provider {
 
         const deviceId = randomUUID();
         const jsonCredential = JSON.stringify({
-          secretKey: token,
+          secretKey: accessToken,
           deviceId,
+          cookie,
         });
         return { isValid: true, cookies: jsonCredential, email };
       },

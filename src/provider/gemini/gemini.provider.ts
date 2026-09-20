@@ -335,9 +335,14 @@ export class GeminiProvider implements Provider {
             continue;
           }
 
-          throw new Error(
-            `Gemini API returned ${response.status}: ${errorText.slice(0, ERROR_SLICE_LENGTH)}`,
-          );
+          const message = `Gemini API returned ${response.status}: ${errorText.slice(0, ERROR_SLICE_LENGTH)}`;
+          if (response.status === 401 || response.status === 403) {
+            const err = new Error(`Session expired or invalid. Please re-login to Gemini. (${message})`);
+            (err as any).isAuthError = true;
+            (err as any).statusCode = response.status;
+            throw err;
+          }
+          throw new Error(message);
         }
 
         if (!response.body) {

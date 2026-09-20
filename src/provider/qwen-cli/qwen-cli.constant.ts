@@ -27,7 +27,7 @@
 
 export const PROVIDER_ID = 'qwen-cli';
 export const PROVIDER_NAME = 'Qwen Coder CLI';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://modelscope.cn/';
 export const AUTH_METHOD = ['basic'] as const;
 export const QWEN_AUTH_METHODS = {

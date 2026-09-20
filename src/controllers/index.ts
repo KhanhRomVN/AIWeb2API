@@ -4,3 +4,5 @@ export * from './provider.controller';
 export * from './stats.controller';
 export * from './upload.controller';
 export * from './chat.controller';
+export * from './config.controller';
+export * from './database-manager.controller';

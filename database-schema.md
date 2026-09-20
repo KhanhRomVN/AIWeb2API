@@ -1,10 +1,6 @@
-# Schema Cơ Sở Dữ Liệu Elara Server
+# Schema Cơ Sở Dữ Liệu AIWeb2API
 
-Tài liệu mô tả cấu trúc database SQLite của Elara Server.
-
-## Tổng quan
-
-Elara Server sử dụng **SQLite** làm cơ sở dữ liệu, với file database mặc định nằm tại `~/.elara/database.sqlite`. Cơ chế migration tự động chạy mỗi khi server khởi động để đảm bảo schema luôn cập nhật.
+Tài liệu mô tả cấu trúc database SQLite của AIWeb2API.
 
 ---
 
@@ -83,6 +79,22 @@ Lưu trữ thống kê runtime per-model (hiện tại chỉ có success_rate).
 - Provider hardcode constants → cache là thừa
 - Provider dynamic API → luôn fetch từ live source để đảm bảo cập nhật
 - Chỉ `success_rate` cần persist → đã chuyển sang `model_stats`
+
+---
+
+## Bảng: `config`
+
+Bảng cấu hình toàn cục, chỉ có **1 row duy nhất** (`id = 1`, được seed tự động trong migration).
+
+### Columns
+
+- **`id`** (INTEGER, PRIMARY KEY) — Luôn bằng 1 (`CHECK (id = 1)`), đảm bảo single-row
+- **`chromium_profile_dir`** (TEXT, NULL) — System path tới thư mục chứa các profile Chromium dùng cho browser-based provider
+
+### API
+
+- `GET /v1/config` — Lấy cấu hình hiện tại
+- `PUT /v1/config` — Cập nhật (partial) — body: `{ chromium_profile_dir? }`
 
 ---
 

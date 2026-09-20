@@ -63,8 +63,10 @@ export const proxyHandler: ProxyHandler = {
         ];
       const token = extractBearerToken(auth);
       if (token) {
+        // Chỉ emit AUTH_HEADER để quan sát/audit. KHÔNG emit LOGIN_TOKEN
+        // vì loginService tự capture Cookie header (cần cho Cloudflare);
+        // emit JWT vào đây sẽ ghi đè cookie và làm credential thiếu cookie.
         proxyEvents.emit(CHATGPT_EVENTS.AUTH_HEADER, auth);
-        proxyEvents.emit(CHATGPT_EVENTS.LOGIN_TOKEN, { cookies: token });
       }
     }
     callback();

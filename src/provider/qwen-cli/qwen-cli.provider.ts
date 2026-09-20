@@ -263,10 +263,16 @@ export class QwenCoderCLIProvider implements Provider {
       }),
     });
     if (!response.ok) {
-      logger.error(
-        `[QwenCLI] Token refresh failed with status ${response.status}`,
-      );
-      throw new Error('Failed to refresh Qwen token');
+      let detail = '';
+      try {
+        const body = await response.json() as any;
+        detail = body?.error_description ?? body?.error ?? body?.message ?? JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
+      }
+      const message = `Qwen CLI token refresh failed with status ${response.status}${detail ? `: ${detail}` : ''}`;
+      logger.error(`[QwenCLI] ${message}`);
+      throw new Error(message);
     }
     const json = (await response.json()) as QwenTokenResponse;
     let data: QwenTokenResponse = json;
@@ -371,8 +377,22 @@ export class QwenCoderCLIProvider implements Provider {
         }
       }
 
-      if (!response.ok)
-        throw new Error(`Qwen CLI API Error ${response.status}`);
+      if (!response.ok) {
+        const rawText = await response.text();
+        let detail = rawText.slice(0, 500);
+        try {
+          const body = JSON.parse(rawText);
+          detail = body?.error?.message ?? body?.message ?? detail;
+        } catch { /* keep rawText slice */ }
+        const message = `Qwen CLI API Error ${response.status}: ${detail}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Qwen CLI. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
+      }
 
       if (stream !== false) {
         if (!response.body) throw new Error('No response body');

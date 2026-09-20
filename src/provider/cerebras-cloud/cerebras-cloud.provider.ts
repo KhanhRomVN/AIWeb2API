@@ -169,64 +169,59 @@ export class CerebrasCloudProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   async getModels(credential: string): Promise<CerebrasModelOutput[]> {
-    try {
-      const apiKey = this.extractApiKey(credential);
+    const apiKey = this.extractApiKey(credential);
 
-      const headers: Record<string, string> = {
-        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
-        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
-        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
-        [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-        [HTTP_HEADER_NAMES.SEC_FETCH_SITE]:
-          HTTP_HEADERS.SEC_FETCH_SITE_SAME_SITE,
-        [HTTP_HEADER_NAMES.SEC_FETCH_MODE]: HTTP_HEADERS.SEC_FETCH_MODE_CORS,
-        [HTTP_HEADER_NAMES.SEC_FETCH_DEST]: HTTP_HEADERS.SEC_FETCH_DEST_EMPTY,
-        [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: HTTP_HEADERS.ACCEPT_LANGUAGE,
-      };
+    const headers: Record<string, string> = {
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.SEC_FETCH_SITE]: HTTP_HEADERS.SEC_FETCH_SITE_SAME_SITE,
+      [HTTP_HEADER_NAMES.SEC_FETCH_MODE]: HTTP_HEADERS.SEC_FETCH_MODE_CORS,
+      [HTTP_HEADER_NAMES.SEC_FETCH_DEST]: HTTP_HEADERS.SEC_FETCH_DEST_EMPTY,
+      [HTTP_HEADER_NAMES.ACCEPT_LANGUAGE]: HTTP_HEADERS.ACCEPT_LANGUAGE,
+    };
 
-      if (apiKey) {
-        headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
-          `${HTTP_HEADERS.BEARER_PREFIX}${apiKey}`;
-      } else {
-        headers[HTTP_HEADER_NAMES.COOKIE] = credential;
-      }
-
-      const response = await fetch(`${API_BASE_URL}${API_PATHS.MODELS}`, {
-        method: 'GET',
-        headers,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        logger.error(
-          `Cerebras Models API returned ${response.status}: ${errorText}`,
-        );
-        return [];
-      }
-
-      const json = (await response.json()) as CerebrasModelsResponse;
-      const modelsData = json.data || json.models || [];
-
-      if (!Array.isArray(modelsData)) {
-        logger.warn('[CerebrasCloud] Models API returned invalid format');
-        return [];
-      }
-
-      return modelsData.map((model: CerebrasModelEntry) => ({
-        id: model.id,
-        name: model.id,
-        description: model.description || '',
-        max_context_length:
-          model.context_window ||
-          model.max_tokens ||
-          MODELS_DEFAULTS.MAX_CONTEXT_LENGTH,
-        is_thinking: false,
-      }));
-    } catch (e) {
-      logger.error('Error fetching Cerebras Cloud models:', e);
-      return [];
+    if (apiKey) {
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] = `${HTTP_HEADERS.BEARER_PREFIX}${apiKey}`;
+    } else {
+      headers[HTTP_HEADER_NAMES.COOKIE] = credential;
     }
+
+    const response = await fetch(`${API_BASE_URL}${API_PATHS.MODELS}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const body = await response.json() as any;
+        detail = body?.error?.message || body?.message || JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
+      }
+      throw new Error(`Cerebras API returned ${response.status}${detail ? `: ${detail}` : ''}`);
+    }
+
+    const json = (await response.json()) as CerebrasModelsResponse;
+    const modelsData = json.data || json.models || [];
+
+    if (!Array.isArray(modelsData)) {
+      throw new Error('Cerebras Models API returned invalid format');
+    }
+
+    return modelsData.map((model: CerebrasModelEntry) => ({
+      id: model.id,
+      name: model.id,
+      description: model.description || '',
+      max_context_length:
+        model.context_window ||
+        model.max_tokens ||
+        MODELS_DEFAULTS.MAX_CONTEXT_LENGTH,
+      is_thinking: false,
+    }));
   }
 
   // ─── Handle Message ─────────────────────────────────────────────────
@@ -285,10 +280,21 @@ export class CerebrasCloudProvider implements Provider {
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Cerebras API returned ${response.status}: ${errorText}`,
-        );
+        let detail = '';
+        try {
+          const body = await response.json() as any;
+          detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+        } catch {
+          detail = await response.text().catch(() => '');
+        }
+        const message = `Cerebras API returned ${response.status}${detail ? `: ${detail}` : ''}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Cerebras. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
       }
 
       if (!response.body) {

@@ -110,7 +110,7 @@ export const sendMessage = async (
     } | null = null;
 
     if (accountId) {
-      const dbAccount = getAccountById(accountId);
+      const dbAccount = await getAccountById(accountId);
       if (!dbAccount) {
         res.status(404).json({
           success: false,

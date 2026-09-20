@@ -35,6 +35,9 @@ import {
 // ── Thinking Parser ──
 import { createDeepSeekThinkingParser } from './deepseek.thinking-parser';
 
+// ── DSML Artifact Cleaner ──
+import { cleanDSMLArtifacts } from './deepseek.dsml-cleaner';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DeepSeekSSE');
 
@@ -196,6 +199,10 @@ export async function parseSSEStream(
         const value = json.v;
 
         const emitContentChunk = (text: string, fromSnapshot: boolean) => {
+          // Strip DeepSeek DSML artifact tokens trước khi emit về client
+          text = cleanDSMLArtifacts(text);
+          if (!text) return; // chunk chỉ chứa artifact, không có content thực
+
           if (fromSnapshot && priorContentLength > 0) {
             const alreadySeen = snapshotSeenLength;
             snapshotSeenLength += text.length;

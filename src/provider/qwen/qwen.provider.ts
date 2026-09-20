@@ -358,7 +358,17 @@ export class QwenProvider implements Provider {
               data.cookies;
 
           if (!accessToken || !accessToken.startsWith(AUTH_PREFIXES.JWT)) {
-            logger.warn('[Qwen] Login validation failed: invalid token format');
+            // Silent return — browser cookies are polled continuously before the user
+            // has actually logged in. Logging a warning on every intermediate cookie
+            // state would flood the console with noise. A warning is only meaningful
+            // when we receive something that looks like a real token but has the
+            // wrong format (i.e. extracted via REGEX_PATTERNS.RAW_TOKEN but still
+            // doesn't start with the expected JWT prefix).
+            const extractedViaRegex =
+              (data.cookies.match(REGEX_PATTERNS.RAW_TOKEN) || [])[1];
+            if (extractedViaRegex && !extractedViaRegex.startsWith(AUTH_PREFIXES.JWT)) {
+              logger.warn('[Qwen] Login validation failed: invalid token format');
+            }
             return { isValid: false };
           }
 
@@ -1276,84 +1286,78 @@ export class QwenProvider implements Provider {
     if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
     if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
-    try {
-      const response = await fetch(`${BASE_URL}${API_PATHS.MODELS}`, {
-        headers,
-        timeout: DEFAULT_TIMEOUT_MS,
-      } as any);
+    const response = await fetch(`${BASE_URL}${API_PATHS.MODELS}`, {
+      headers,
+      timeout: DEFAULT_TIMEOUT_MS,
+    } as any);
 
-      if (response.ok) {
-        const json: any = await response.json();
-
-        // Parse structure: {"success": true, "data": {"data": [...]}}
-        const modelList =
-          json?.[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.DATA] ||
-          json?.[AUTH_FIELDS.DATA] ||
-          (Array.isArray(json) ? json : null);
-
-        if (modelList && Array.isArray(modelList) && modelList.length > 0) {
-          return modelList
-            .filter((model: any) => {
-              // Filter active models only
-              const info = model[MODEL_FIELDS.INFO] || {};
-              return info[MODEL_FIELDS.IS_ACTIVE] === true;
-            })
-            .map((model: any) => {
-              const info = model[MODEL_FIELDS.INFO] || {};
-              const meta = info[MODEL_FIELDS.META] || {};
-              const capabilities = meta[MODEL_FIELDS.CAPABILITIES] || {};
-              const chatType = meta[MODEL_FIELDS.CHAT_TYPE] || [];
-
-              // Check chat_type array for generator capabilities
-              const isImageGenerator =
-                Array.isArray(chatType) &&
-                chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2I);
-              const isVideoGenerator =
-                Array.isArray(chatType) &&
-                chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2V);
-              const isDeepResearch =
-                Array.isArray(chatType) &&
-                chatType.includes(
-                  CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_DEEP_RESEARCH,
-                );
-
-              return {
-                id: model[MODEL_FIELDS.ID] || info[MODEL_FIELDS.ID],
-                name:
-                  model[MODEL_FIELDS.NAME] ||
-                  info[MODEL_FIELDS.NAME] ||
-                  model[MODEL_FIELDS.ID],
-                is_thinking: capabilities[MODEL_FIELDS.THINKING] === true,
-                max_context_length:
-                  meta[MODEL_FIELDS.MAX_CONTEXT_LENGTH] ||
-                  DEFAULT_MAX_CONTEXT_LENGTH,
-                is_search: capabilities[MODEL_FIELDS.SEARCH] === true,
-                is_image_upload: capabilities[MODEL_FIELDS.VISION] === true,
-                is_video_upload: capabilities[MODEL_FIELDS.VIDEO] === true,
-                is_audio_upload: capabilities[MODEL_FIELDS.AUDIO] === true,
-                is_file_upload: capabilities[MODEL_FIELDS.DOCUMENT] === true,
-                is_image_generator: isImageGenerator,
-                is_video_generator: isVideoGenerator,
-                is_deep_research: isDeepResearch,
-                description:
-                  meta[MODEL_FIELDS.SHORT_DESCRIPTION] ||
-                  meta[MODEL_FIELDS.DESCRIPTION] ||
-                  undefined,
-              };
-            });
-        }
-      } else {
-        logger.warn(
-          `[Qwen] Failed to fetch models from API: HTTP ${response.status}`,
-        );
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const body = await response.json() as any;
+        detail = body?.message || body?.error?.message || body?.msg || JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
       }
-    } catch (e) {
-      logger.warn('[Qwen] Failed to fetch models from API:', e);
+      throw new Error(`Qwen API returned ${response.status}${detail ? `: ${detail}` : ''}`);
     }
 
-    // Return empty array if API fetch fails - no hardcoded fallback
-    logger.warn('[Qwen] No models available from API');
-    return [];
+    const json: any = await response.json();
+
+    const modelList =
+      json?.[AUTH_FIELDS.DATA]?.[AUTH_FIELDS.DATA] ||
+      json?.[AUTH_FIELDS.DATA] ||
+      (Array.isArray(json) ? json : null);
+
+    if (!modelList || !Array.isArray(modelList) || modelList.length === 0) {
+      throw new Error('Qwen API returned no models');
+    }
+
+    return modelList
+      .filter((model: any) => {
+        const info = model[MODEL_FIELDS.INFO] || {};
+        return info[MODEL_FIELDS.IS_ACTIVE] === true;
+      })
+      .map((model: any) => {
+        const info = model[MODEL_FIELDS.INFO] || {};
+        const meta = info[MODEL_FIELDS.META] || {};
+        const capabilities = meta[MODEL_FIELDS.CAPABILITIES] || {};
+        const chatType = meta[MODEL_FIELDS.CHAT_TYPE] || [];
+
+        const isImageGenerator =
+          Array.isArray(chatType) &&
+          chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2I);
+        const isVideoGenerator =
+          Array.isArray(chatType) &&
+          chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_T2V);
+        const isDeepResearch =
+          Array.isArray(chatType) &&
+          chatType.includes(CHAT_PAYLOAD_CONSTANTS.CHAT_TYPE_DEEP_RESEARCH);
+
+        return {
+          id: model[MODEL_FIELDS.ID] || info[MODEL_FIELDS.ID],
+          name:
+            model[MODEL_FIELDS.NAME] ||
+            info[MODEL_FIELDS.NAME] ||
+            model[MODEL_FIELDS.ID],
+          is_thinking: capabilities[MODEL_FIELDS.THINKING] === true,
+          max_context_length:
+            meta[MODEL_FIELDS.MAX_CONTEXT_LENGTH] ||
+            DEFAULT_MAX_CONTEXT_LENGTH,
+          is_search: capabilities[MODEL_FIELDS.SEARCH] === true,
+          is_image_upload: capabilities[MODEL_FIELDS.VISION] === true,
+          is_video_upload: capabilities[MODEL_FIELDS.VIDEO] === true,
+          is_audio_upload: capabilities[MODEL_FIELDS.AUDIO] === true,
+          is_file_upload: capabilities[MODEL_FIELDS.DOCUMENT] === true,
+          is_image_generator: isImageGenerator,
+          is_video_generator: isVideoGenerator,
+          is_deep_research: isDeepResearch,
+          description:
+            meta[MODEL_FIELDS.SHORT_DESCRIPTION] ||
+            meta[MODEL_FIELDS.DESCRIPTION] ||
+            undefined,
+        };
+      });
   }
 }
 

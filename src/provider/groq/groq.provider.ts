@@ -163,9 +163,21 @@ export class GroqProvider implements Provider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        logger.warn(`Public API failed with cookies: ${response.status}`);
-        throw new Error(`Groq API returned ${response.status}: ${errorText}`);
+        let detail = '';
+        try {
+          const body = await response.json() as any;
+          detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+        } catch {
+          detail = await response.text().catch(() => '');
+        }
+        const message = `Groq API returned ${response.status}${detail ? `: ${detail}` : ''}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Groq. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
       }
 
       if (!response.body) {
@@ -192,87 +204,76 @@ export class GroqProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   async getModels(credential: string): Promise<GroqModelInfo[]> {
-    try {
-      let token = '';
-      const match = credential.match(REGEX_PATTERNS.SESSION_COOKIE);
-      if (match && match[1]) {
-        token = match[1];
-      }
-
-      if (!token && !credential.includes('=')) {
-        token = credential;
-      }
-
-      if (!token) {
-        logger.warn('No session token found in credentials for Groq');
-        return [];
-      }
-
-      let organization = '';
-      const preferencesMatch = credential.match(
-        REGEX_PATTERNS.PREFERENCES_COOKIE,
-      );
-      if (preferencesMatch && preferencesMatch[1]) {
-        try {
-          const preferences = JSON.parse(
-            decodeURIComponent(preferencesMatch[1]),
-          );
-          organization = preferences[PREFERENCES_ORG_KEY];
-        } catch (e) {
-          logger.warn('Failed to parse user-preferences from cookie', e);
-        }
-      }
-
-      const headers: Record<string, string> = {
-        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${BEARER_PREFIX}${token}`,
-        [HTTP_HEADER_NAMES.COOKIE]: credential,
-        [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-        [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
-        [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
-      };
-
-      if (organization) {
-        headers[HTTP_HEADER_NAMES.GROQ_ORGANIZATION] = organization;
-      }
-
-      const response = await fetch(API_MODELS_URL, {
-        method: 'GET',
-        headers,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        logger.error(
-          `Groq Models API returned ${response.status}: ${errorText}`,
-        );
-        return [];
-      }
-
-      const json = (await response.json()) as { data?: GroqModelRaw[] };
-      const modelsData = json[API_FIELDS.DATA] || [];
-
-      if (!Array.isArray(modelsData)) {
-        logger.warn('[Groq] Models API returned invalid format');
-        return [];
-      }
-
-      return modelsData
-        .filter((model) => model[API_FIELDS.ACTIVE] !== false)
-        .map<GroqModelInfo>((model) => ({
-          id: model[API_FIELDS.ID],
-          name:
-            model[API_FIELDS.METADATA]?.[API_FIELDS.DISPLAY_NAME] ||
-            model[API_FIELDS.ID],
-          description: model[API_FIELDS.METADATA]?.[API_FIELDS.MODEL_CARD],
-          max_context_length: model[API_FIELDS.CONTEXT_WINDOW],
-          is_thinking:
-            model[API_FIELDS.FEATURES]?.[API_FIELDS.REASONING] === true,
-        }));
-    } catch (e: any) {
-      logger.error('Error fetching Groq models:', e);
-      return [];
+    let token = '';
+    const match = credential.match(REGEX_PATTERNS.SESSION_COOKIE);
+    if (match && match[1]) {
+      token = match[1];
     }
+
+    if (!token && !credential.includes('=')) {
+      token = credential;
+    }
+
+    if (!token) {
+      throw new Error('Groq: no session token found in credential');
+    }
+
+    let organization = '';
+    const preferencesMatch = credential.match(REGEX_PATTERNS.PREFERENCES_COOKIE);
+    if (preferencesMatch && preferencesMatch[1]) {
+      try {
+        const preferences = JSON.parse(decodeURIComponent(preferencesMatch[1]));
+        organization = preferences[PREFERENCES_ORG_KEY];
+      } catch (e) {
+        logger.warn('Failed to parse user-preferences from cookie', e);
+      }
+    }
+
+    const headers: Record<string, string> = {
+      [HTTP_HEADER_NAMES.AUTHORIZATION]: `${BEARER_PREFIX}${token}`,
+      [HTTP_HEADER_NAMES.COOKIE]: credential,
+      [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+      [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+      [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+    };
+
+    if (organization) {
+      headers[HTTP_HEADER_NAMES.GROQ_ORGANIZATION] = organization;
+    }
+
+    const response = await fetch(API_MODELS_URL, { method: 'GET', headers });
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const body = await response.json() as any;
+        detail = body?.error?.message || body?.message || JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
+      }
+      throw new Error(`Groq API returned ${response.status}${detail ? `: ${detail}` : ''}`);
+    }
+
+    const json = (await response.json()) as { data?: GroqModelRaw[] };
+    const modelsData = json[API_FIELDS.DATA] || [];
+
+    if (!Array.isArray(modelsData)) {
+      throw new Error('Groq Models API returned invalid format');
+    }
+
+    return modelsData
+      .filter((model) => model[API_FIELDS.ACTIVE] !== false)
+      .map<GroqModelInfo>((model) => ({
+        id: model[API_FIELDS.ID],
+        name:
+          model[API_FIELDS.METADATA]?.[API_FIELDS.DISPLAY_NAME] ||
+          model[API_FIELDS.ID],
+        description: model[API_FIELDS.METADATA]?.[API_FIELDS.MODEL_CARD],
+        max_context_length: model[API_FIELDS.CONTEXT_WINDOW],
+        is_thinking:
+          model[API_FIELDS.FEATURES]?.[API_FIELDS.REASONING] === true,
+      }));
   }
 
   // ─── Utility Methods ────────────────────────────────────────────────

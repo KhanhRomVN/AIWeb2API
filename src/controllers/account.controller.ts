@@ -9,6 +9,7 @@
  * Main functions:
  * - importAccounts()           : Import danh sách tài khoản từ file/bulk
  * - addAccount()               : Thêm một tài khoản mới hoặc cập nhật credential
+ * - updateAccountHandler()     : Cập nhật email/credential của tài khoản theo id
  * - getAccounts()              : Lấy danh sách tài khoản với phân trang và filter
  * - deleteAccount()            : Xóa tài khoản theo id
  * - getAccountMemory()         : Lấy trạng thái memory của tài khoản
@@ -34,6 +35,7 @@ import {
   getAccounts as getAccountsService,
   createAccount,
   updateAccount,
+  updateAccountEditableFields,
   updateAccountUserDataDir,
   updateMemoryState,
   removeAccount,
@@ -44,6 +46,7 @@ import {
 } from '../services/account.service';
 import { updateAccountCredential } from '../repositories/account.repository';
 import { providerRegistry } from '../provider/registry';
+import { invalidateProviderCache } from '../services/provider.service';
 import { queryAccountStatsByPeriod } from '../repositories/metrics.repository';
 import {
   heartbeatPresence,
@@ -91,7 +94,10 @@ export const importAccounts = async (
     }
 
     try {
-      const result = importAccountsService(accounts);
+      const result = await importAccountsService(accounts);
+
+      // Invalidate provider cache so model lists are refreshed for newly imported accounts
+      invalidateProviderCache();
 
       res.status(200).json({
         success: true,
@@ -126,7 +132,7 @@ export const getAccountMemory = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const account = getAccountById(id);
+    const account = await getAccountById(id);
 
     if (!account) {
       res.status(404).json({
@@ -244,7 +250,7 @@ export const addAccount = async (
       return;
     }
 
-    const existing = getAccountByIdOrEmailProvider(
+    const existing = await getAccountByIdOrEmailProvider(
       account.id,
       account.email,
       account.provider_id,
@@ -258,6 +264,8 @@ export const addAccount = async (
         if (account.user_data_dir) {
           updateAccountUserDataDir(existing.id, account.user_data_dir);
         }
+        // Invalidate provider cache so model list is refreshed with the updated credential
+        invalidateProviderCache();
         res.status(200).json({
           success: true,
           message: 'Account credential updated successfully',
@@ -281,7 +289,9 @@ export const addAccount = async (
     }
 
     try {
-      const id = createAccount(account);
+      const id = await createAccount(account);
+      // Invalidate provider cache so model list is refreshed for the newly added account
+      invalidateProviderCache();
 
       res.status(201).json({
         success: true,
@@ -313,6 +323,91 @@ export const addAccount = async (
   }
 };
 
+// PUT /v1/accounts/:id
+// Cập nhật email và/hoặc credential của một account đã tồn tại.
+export const updateAccountHandler = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { email, credential } = req.body || {};
+
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        message: 'Account ID is required',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    if (email === undefined && credential === undefined) {
+      res.status(400).json({
+        success: false,
+        message: 'At least one field (email or credential) is required',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    if (email !== undefined && (typeof email !== 'string' || !email.trim())) {
+      res.status(400).json({
+        success: false,
+        message: 'email must be a non-empty string',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    if (credential !== undefined && typeof credential !== 'string') {
+      res.status(400).json({
+        success: false,
+        message: 'credential must be a string',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const fields: { email?: string; credential?: string | null } = {};
+    if (email !== undefined) fields.email = email.trim();
+    if (credential !== undefined) fields.credential = credential;
+
+    const updated = updateAccountEditableFields(id, fields);
+    if (!updated) {
+      res.status(404).json({
+        success: false,
+        message: 'Account not found',
+        error: { code: 'NOT_FOUND' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    // Invalidate provider cache so model list is refreshed with the updated credential
+    invalidateProviderCache();
+
+    res.status(200).json({
+      success: true,
+      message: 'Account updated successfully',
+      data: { id },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error) {
+    logger.error('Error in updateAccount', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: { code: 'INTERNAL_ERROR' },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
 // GET /v1/accounts
 export const getAccounts = async (
   req: Request,
@@ -328,7 +423,7 @@ export const getAccounts = async (
       (req.query.order as string)?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     const clientId = (req.query.clientId as string) || null;
 
-    const { rows, total } = getAccountsService({
+    const { rows, total } = await getAccountsService({
       page,
       limit,
       email,
@@ -344,7 +439,7 @@ export const getAccounts = async (
       now.getDate(),
     ).getTime();
     const endOfDay = startOfDay + 24 * 60 * 60 * 1000 - 1;
-    const periodStats = queryAccountStatsByPeriod(startOfDay, endOfDay);
+    const periodStats = await queryAccountStatsByPeriod(startOfDay, endOfDay);
     const statsMap = new Map(
       periodStats.map((s: any) => [
         s.id,
@@ -421,7 +516,7 @@ export const deleteAccount = async (
       return;
     }
 
-    const account = getAccountById(id);
+    const account = await getAccountById(id);
     if (!account) {
       res.status(404).json({
         success: false,
@@ -432,7 +527,9 @@ export const deleteAccount = async (
       return;
     }
 
-    removeAccount(id, account.provider_id);
+    await removeAccount(id, account.provider_id);
+    // Invalidate provider cache so model lists reflect the removed account
+    invalidateProviderCache();
 
     res.status(200).json({
       success: true,
@@ -545,7 +642,7 @@ export const refreshAccountToken = async (
       return;
     }
 
-    const account = getAccountById(id);
+    const account = await getAccountById(id);
     if (!account) {
       res.status(404).json({
         success: false,
@@ -583,6 +680,8 @@ export const refreshAccountToken = async (
 
     // Update account credential
     updateAccountCredential(id, result.credential);
+    // Invalidate provider cache so model list is refreshed with the new token
+    invalidateProviderCache();
 
     res.status(200).json({
       success: true,
@@ -608,7 +707,7 @@ export const getAccountBrowserStatus = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const account = getAccountById(id);
+    const account = await getAccountById(id);
 
     if (!account) {
       res.status(404).json({ success: false, message: 'Account not found' });
@@ -656,7 +755,7 @@ export const startAccountBrowser = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const account = getAccountById(id);
+    const account = await getAccountById(id);
 
     if (!account) {
       res.status(404).json({ success: false, message: 'Account not found' });
@@ -673,7 +772,7 @@ export const startAccountBrowser = async (
     }
 
     // Get provider config to find extension folder
-    const provider = getProviderConfig(account.provider_id);
+    const provider = await getProviderConfig(account.provider_id);
     let extensionPath: string | null = null;
 
     if (provider?.browser_extension_folder) {

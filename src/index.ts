@@ -14,15 +14,38 @@
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
 import * as dns from 'dns';
+import * as net from 'net';
 
 // ── Env ──
 import './env';
+
+// ─── Network Fix ────────────────────────────────────────────────────────
+// Node 20+ bật `autoSelectFamily` (Happy Eyeballs) mặc định: khi connect,
+// nó thử song song cả IPv4 và IPv6. Trên mạng không có route IPv6 (phổ biến
+// ở VN), các lần thử IPv6 nhận ENETUNREACH ngay lập tức và kết thúc toàn bộ
+// attempt trước khi IPv4 kịp kết nối → ETIMEDOUT dù IPv4 thực tế reachable.
+// `dns.setDefaultResultOrder('ipv4first')` KHÔNG đủ (đã kiểm chứng).
+// Phải tắt autoSelectFamily để Node fallback về hành vi connect tuần tự.
+// Đặt ở top-level (không chỉ trong CLI entry) để áp dụng cho mọi đường vào,
+// bao gồm cả khi `startBackend()` được import từ extension.
+try {
+  if (typeof (net as any).setDefaultAutoSelectFamily === 'function') {
+    (net as any).setDefaultAutoSelectFamily(false);
+  }
+} catch {
+  // Node cũ không có API này — bỏ qua an toàn.
+}
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // ── Server ──
 import { startServer } from './server';
 
 // ── Database ──
 import { initDatabase } from './database';
+import { initManagersDatabase } from './database/managers';
+import { runIntegrityCheck } from './database/integrity-check';
 
 // ── WebSocket ──
 import { startWebSocketServer } from './websocket-server';
@@ -41,6 +64,8 @@ const logger = createLogger('Startup');
 const main = async (options?: { dbPath?: string }) => {
   try {
     initDatabase(options?.dbPath);
+    initManagersDatabase();
+    runIntegrityCheck();
   } catch (error) {
     logger.error('Failed to initialize database', error);
     if (require.main === module) process.exit(1);
@@ -71,11 +96,6 @@ export const startBackend = main;
 // ─── CLI Entry ─────────────────────────────────────────────────────────
 
 if (require.main === module) {
-  // Force IPv4 first to avoid DNS resolution issues
-  if (dns.setDefaultResultOrder) {
-    dns.setDefaultResultOrder('ipv4first');
-  }
-
   const args = process.argv.slice(2);
   let dbPath: string | undefined;
 

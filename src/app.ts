@@ -17,6 +17,7 @@ import cors from 'cors';
 
 // ── Middleware ──
 import { errorHandler } from './middleware/error-handler.middleware';
+import { databaseContextMiddleware } from './middleware/database-context.middleware';
 
 // ── Routes ──
 import v1Router from './routes/v1/index';
@@ -43,6 +44,8 @@ export const createApp = async () => {
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  // Resolve database manager từ header x-database-manager-id
+  app.use(databaseContextMiddleware);
 
   // ─── Health Check ────────────────────────────────────────────────────
   app.get('/health', (req, res) => {

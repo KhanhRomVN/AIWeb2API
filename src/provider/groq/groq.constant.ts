@@ -26,9 +26,10 @@
 
 export const PROVIDER_ID = 'groq';
 export const PROVIDER_NAME = 'Groq';
-export const PROVIDER_DESCRIPTION = 'Ultra-fast AI inference with LPU technology';
+export const PROVIDER_DESCRIPTION =
+  'Ultra-fast AI inference with LPU technology';
 export const PROVIDER_COLOR = '#F55036';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://groq.com';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';

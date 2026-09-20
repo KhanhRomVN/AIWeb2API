@@ -25,7 +25,7 @@
 
 export const PROVIDER_ID = 'gemini-cli';
 export const PROVIDER_NAME = 'Gemini CLI';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://gemini.google.com/';
 export const AUTH_METHOD = ['google'] as const;
 export const CONNECTION_TYPE = 'https';

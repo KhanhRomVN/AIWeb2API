@@ -25,7 +25,7 @@
 
 export const PROVIDER_ID = 'codex-cli';
 export const PROVIDER_NAME = 'Codex CLI';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://google.com/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'https';

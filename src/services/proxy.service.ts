@@ -37,7 +37,7 @@ const DEFAULT_CONFIG: ProxyConfig = {
   interceptSSL: true,
 };
 
-const CONFIG_FILE = path.join(os.homedir(), '.elara', 'proxy-config.json');
+const CONFIG_FILE = path.join(os.homedir(), '.aiweb2api', 'proxy-config.json');
 
 // ─── Types ──────────────────────────────────────────────────────────────
 

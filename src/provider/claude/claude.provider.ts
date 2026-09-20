@@ -51,7 +51,6 @@ import {
   AUTH_METHOD,
   CLAUDE_AUTH_METHODS,
   CONNECTION_TYPE,
-  FALLBACK_MODELS,
   IS_PAUSABLE,
   IS_MEMORY,
   BASE_URL,
@@ -148,8 +147,6 @@ export class ClaudeProvider implements Provider {
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
-    // Để rỗng → getAllProviders sẽ gọi dynamic getModels() (bootstrap).
-    // Fallback tĩnh vẫn dùng khi bootstrap fail (xem getModels()).
     models: [],
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
@@ -159,11 +156,6 @@ export class ClaudeProvider implements Provider {
 
   // ─── Credential Parsing ────────────────────────────────────────────
 
-  /**
-   * Parse credential string thành `{ cookies, organizationId }`.
-   * Hỗ trợ cả credential JSON mới (`{cookies, organizationId}`) lẫn
-   * raw cookie string cũ (không có orgId → `organizationId: null`).
-   */
   private parseCredential(credential: string): ClaudeCredential {
     if (credential.trim().startsWith('{')) {
       try {
@@ -200,29 +192,38 @@ export class ClaudeProvider implements Provider {
    */
   private async fetchBootstrap(
     credential: ClaudeCredential,
-  ): Promise<ClaudeBootstrapResponse | null> {
+  ): Promise<ClaudeBootstrapResponse> {
     if (!credential.organizationId) {
-      logger.warn('[Claude] Missing organizationId, cannot fetch bootstrap');
-      return null;
+      throw new Error('Missing organizationId in credential. Please re-login to Claude.');
     }
 
-    try {
-      const client = new ClaudeHttpClient({
-        baseURL: BASE_URL,
-        headers: buildClaudeHeaders(credential.cookies),
-      });
-      const res = await client.get(
-        API_PATHS.BOOTSTRAP(credential.organizationId),
-      );
-      if (!res.ok) {
-        logger.warn(`[Claude] Bootstrap returned status ${res.status}`);
-        return null;
+    const client = new ClaudeHttpClient({
+      baseURL: BASE_URL,
+      headers: buildClaudeHeaders(credential.cookies),
+    });
+    const res = await client.get(
+      API_PATHS.BOOTSTRAP(credential.organizationId),
+    );
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json();
+        // Lấy message gốc từ claude.ai (e.g. "Invalid authorization")
+        detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+      } catch {
+        detail = await res.text().catch(() => '');
       }
-      return (await res.json()) as ClaudeBootstrapResponse;
-    } catch (e) {
-      logger.error('[Claude] Bootstrap error:', e);
-      return null;
+      const message = `Claude bootstrap API returned ${res.status}${detail ? `: ${detail}` : ''}`;
+      // 401/403 = session hết hạn hoặc cookie invalid → cần re-login
+      if (res.status === 401 || res.status === 403) {
+        const err = new Error(`Session expired or invalid. Please re-login to Claude. (${message})`);
+        (err as any).isAuthError = true;
+        (err as any).statusCode = res.status;
+        throw err;
+      }
+      throw new Error(message);
     }
+    return (await res.json()) as ClaudeBootstrapResponse;
   }
 
   // ─── Get Profile ────────────────────────────────────────────────────
@@ -230,89 +231,99 @@ export class ClaudeProvider implements Provider {
   async getUserProfile(
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
-    const cred = this.parseCredential(credential);
-    const bootstrap = await this.fetchBootstrap(cred);
-    const account = bootstrap?.[API_FIELDS.ACCOUNT];
+    try {
+      const cred = this.parseCredential(credential);
+      const bootstrap = await this.fetchBootstrap(cred);
+      const account = bootstrap[API_FIELDS.ACCOUNT];
 
-    if (!account) {
+      if (!account) {
+        return { email: null };
+      }
+
+      return {
+        email: account[API_FIELDS.EMAIL_ADDRESS] || null,
+        name:
+          account[API_FIELDS.FULL_NAME] ||
+          account[API_FIELDS.DISPLAY_NAME] ||
+          undefined,
+        id: account[API_FIELDS.TAGGED_ID] || account[API_FIELDS.UUID],
+      };
+    } catch (e) {
+      logger.warn('[Claude] getUserProfile error:', e);
       return { email: null };
     }
-
-    return {
-      email: account[API_FIELDS.EMAIL_ADDRESS] || null,
-      name:
-        account[API_FIELDS.FULL_NAME] ||
-        account[API_FIELDS.DISPLAY_NAME] ||
-        undefined,
-      id: account[API_FIELDS.TAGGED_ID] || account[API_FIELDS.UUID],
-    };
   }
 
   // ─── Get Models ─────────────────────────────────────────────────────
 
   /**
-   * Lấy danh sách model từ bootstrap API. Nếu fail → trả FALLBACK_MODELS
-   * đã được map sẵn sang schema chuẩn.
+   * Lấy danh sách model từ bootstrap API. Nếu fail → throw với message rõ ràng
+   * để Zen có thể hiển thị lỗi cho user.
    */
   async getModels(credential: string): Promise<any[]> {
-    const cred = this.parseCredential(credential);
-    const bootstrap = await this.fetchBootstrap(cred);
-    const membership = bootstrap?.[API_FIELDS.ACCOUNT]?.memberships?.[0];
-    const modelsConfig: ClaudeBootstrapModel[] | undefined =
-      membership?.organization?.[API_FIELDS.MODELS_CONFIG];
+    try {
+      const cred = this.parseCredential(credential);
+      // fetchBootstrap throw trực tiếp với message gốc từ claude.ai nếu fail
+      const bootstrap = await this.fetchBootstrap(cred);
+      const membership = bootstrap[API_FIELDS.ACCOUNT]?.memberships?.[0];
+      const modelsConfig: ClaudeBootstrapModel[] | undefined =
+        membership?.organization?.[API_FIELDS.MODELS_CONFIG];
 
-    if (!modelsConfig || modelsConfig.length === 0) {
-      logger.warn('[Claude] No models config from bootstrap, using fallback');
-      logger.info(
-        `[Claude getModels] Dùng fallback models: ${FALLBACK_MODELS.map((m) => m.id).join(', ')}`,
-      );
-      return [...FALLBACK_MODELS];
-    }
-
-    // Nhân mỗi model base với từng mức effort → nhiều entry cùng base.
-    const expanded: any[] = [];
-    for (const m of modelsConfig) {
-      const caps = m.capabilities;
-      const isThinking =
-        Array.isArray(m.thinking_modes) && m.thinking_modes.length > 0;
-      const isImageUpload = caps?.mm_images !== false;
-      const isPdfUpload = caps?.mm_pdf === true;
-      const isSearch = caps?.web_search !== false;
-
-      // Model không hỗ trợ thinking → effort vô nghĩa, chỉ tạo 1 entry.
-      const effortsForModel: Array<string | null> = isThinking
-        ? [...EFFORT_LEVELS]
-        : [null];
-
-      for (const effort of effortsForModel) {
-        const id = effort ? `${m.model}-${effort}` : m.model;
-        const name = effort ? `${m.name} ${capitalize(effort)}` : m.name;
-        expanded.push({
-          id,
-          name,
-          is_thinking: isThinking,
-          max_context_length: m.hard_limit ?? null,
-          is_search: isSearch,
-          is_image_upload: isImageUpload,
-          is_video_upload: false,
-          is_audio_upload: false,
-          is_file_upload: isPdfUpload,
-          is_larger_content_paste_upload: false,
-          is_image_generator: false,
-          is_video_generator: false,
-          is_deep_research: false,
-          description: m.description || m.name,
-        });
+      if (!modelsConfig || modelsConfig.length === 0) {
+        throw new Error(
+          'Bootstrap succeeded but returned no models config. ' +
+            'Your account may not have model access or the organization is missing.',
+        );
       }
+
+      // Nhân mỗi model base với từng mức effort → nhiều entry cùng base.
+      const expanded: any[] = [];
+      for (const m of modelsConfig) {
+        const caps = m.capabilities;
+        const isThinking =
+          Array.isArray(m.thinking_modes) && m.thinking_modes.length > 0;
+        const isImageUpload = caps?.mm_images !== false;
+        const isPdfUpload = caps?.mm_pdf === true;
+        const isSearch = caps?.web_search !== false;
+
+        // Model không hỗ trợ thinking → effort vô nghĩa, chỉ tạo 1 entry.
+        const effortsForModel: Array<string | null> = isThinking
+          ? [...EFFORT_LEVELS]
+          : [null];
+
+        for (const effort of effortsForModel) {
+          const id = effort ? `${m.model}-${effort}` : m.model;
+          const name = effort ? `${m.name} ${capitalize(effort)}` : m.name;
+          expanded.push({
+            id,
+            name,
+            is_thinking: isThinking,
+            max_context_length: m.hard_limit ?? null,
+            is_search: isSearch,
+            is_image_upload: isImageUpload,
+            is_video_upload: false,
+            is_audio_upload: false,
+            is_file_upload: isPdfUpload,
+            is_larger_content_paste_upload: false,
+            is_image_generator: false,
+            is_video_generator: false,
+            is_deep_research: false,
+            description: m.description || m.name,
+          });
+        }
+      }
+
+      logger.info(
+        `[Claude getModels] Lấy được ${modelsConfig.length} model base từ bootstrap, ` +
+          `mở rộng thành ${expanded.length} model (effort levels: ${EFFORT_LEVELS.join(', ')}). ` +
+          `IDs: ${expanded.map((x) => x.id).join(', ')}`,
+      );
+
+      return expanded;
+    } catch (err: any) {
+      logger.error('[Claude] Error in getModels:', err);
+      throw err;
     }
-
-    logger.info(
-      `[Claude getModels] Lấy được ${modelsConfig.length} model base từ bootstrap, ` +
-        `mở rộng thành ${expanded.length} model (effort levels: ${EFFORT_LEVELS.join(', ')}). ` +
-        `IDs: ${expanded.map((x) => x.id).join(', ')}`,
-    );
-
-    return expanded;
   }
 
   // ─── Login ──────────────────────────────────────────────────────────
@@ -347,7 +358,12 @@ export class ClaudeProvider implements Provider {
         // Nếu chưa có orgId (proxy không bắt được bootstrap URL) → thử
         // list organizations qua API để lấy orgId đầu tiên.
         if (!orgId) {
-          orgId = await this.fetchFirstOrganizationId(data.cookies);
+          try {
+            orgId = await this.fetchFirstOrganizationId(data.cookies);
+          } catch (e) {
+            logger.warn('[Claude] Could not fetch orgId during login:', e);
+            orgId = null;
+          }
         }
 
         // Nếu vẫn chưa có email thật (masked hoặc rỗng) và có orgId →
@@ -401,30 +417,31 @@ export class ClaudeProvider implements Provider {
   private async fetchFirstOrganizationId(
     cookies: string,
   ): Promise<string | null> {
-    try {
-      const client = new ClaudeHttpClient({
-        baseURL: BASE_URL,
-        headers: buildClaudeHeaders(cookies),
-      });
-      const res = await client.get('/api/organizations');
-      if (!res.ok) {
-        logger.warn(
-          `[Claude] /api/organizations returned status ${res.status}`,
-        );
-        return null;
+    const client = new ClaudeHttpClient({
+      baseURL: BASE_URL,
+      headers: buildClaudeHeaders(cookies),
+    });
+    const res = await client.get('/api/organizations');
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json();
+        detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+      } catch {
+        detail = await res.text().catch(() => '');
       }
-      const data = (await res.json()) as Array<{ uuid?: string }> | {
-        organizations?: Array<{ uuid?: string }>;
-      };
-      const list = Array.isArray(data)
-        ? data
-        : (data as any)?.organizations || [];
-      const firstId = list[0]?.uuid;
-      return typeof firstId === 'string' ? firstId : null;
-    } catch (e) {
-      logger.warn('[Claude] Failed to fetch /api/organizations:', e);
-      return null;
+      throw new Error(
+        `Claude /api/organizations returned ${res.status}${detail ? `: ${detail}` : ''}`,
+      );
     }
+    const data = (await res.json()) as
+      | Array<{ uuid?: string }>
+      | { organizations?: Array<{ uuid?: string }> };
+    const list = Array.isArray(data)
+      ? data
+      : (data as any)?.organizations || [];
+    const firstId = list[0]?.uuid;
+    return typeof firstId === 'string' ? firstId : null;
   }
 
   // ─── Handle Message ─────────────────────────────────────────────────
@@ -448,26 +465,27 @@ export class ClaudeProvider implements Provider {
 
     // Lazy fetch orgId nếu credential cũ chưa có (login flow không capture được).
     if (!cred.organizationId) {
-      const fetched = await this.fetchFirstOrganizationId(cred.cookies);
-      if (fetched) {
-        cred.organizationId = fetched;
-        // Notify caller để persist credential đã bổ sung orgId.
-        if (options.onCredentialRotated) {
-          try {
-            await options.onCredentialRotated(JSON.stringify(cred));
-          } catch (e) {
-            logger.warn(
-              '[Claude] onCredentialRotated failed when persisting orgId:',
-              e,
-            );
+      try {
+        const fetched = await this.fetchFirstOrganizationId(cred.cookies);
+        if (fetched) {
+          cred.organizationId = fetched;
+          // Notify caller để persist credential đã bổ sung orgId.
+          if (options.onCredentialRotated) {
+            try {
+              await options.onCredentialRotated(JSON.stringify(cred));
+            } catch (e) {
+              logger.warn(
+                '[Claude] onCredentialRotated failed when persisting orgId:',
+                e,
+              );
+            }
           }
+        } else {
+          onError(new Error('Claude credential missing organizationId and /api/organizations returned no organizations.'));
+          return;
         }
-      } else {
-        onError(
-          new Error(
-            'Claude credential missing organizationId and could not be auto-fetched. Please re-login.',
-          ),
-        );
+      } catch (err: any) {
+        onError(err);
         return;
       }
     }
@@ -489,7 +507,11 @@ export class ClaudeProvider implements Provider {
               asAny as ClaudeUploadFileInput,
             );
             fileUuids.push(uploadRes.file_uuid);
-          } else if (typeof ref === 'object' && ref !== null && 'file_uuid' in ref) {
+          } else if (
+            typeof ref === 'object' &&
+            ref !== null &&
+            'file_uuid' in ref
+          ) {
             fileUuids.push((ref as { file_uuid: string }).file_uuid);
           } else if (typeof ref === 'string') {
             fileUuids.push(ref);
@@ -561,14 +583,24 @@ export class ClaudeProvider implements Provider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Claude API returned ${response.status}: ${errorText.slice(0, 500)}`,
-        );
+        const rawText = await response.text();
+        let detail = rawText.slice(0, 500);
+        try {
+          const body = JSON.parse(rawText);
+          detail = body?.error?.message ?? body?.message ?? detail;
+        } catch { /* keep rawText slice */ }
+        const message = `Claude API returned ${response.status}: ${detail}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(`Session expired or invalid. Please re-login to Claude. (${message})`);
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
       }
 
       if (!response.body) {
-        throw new Error('No response body');
+        throw new Error('Claude API returned empty response body (no stream)');
       }
 
       // Emit conversation id để caller lưu lại
@@ -609,9 +641,14 @@ export class ClaudeProvider implements Provider {
     file: ClaudeUploadFileInput,
     conversationId?: string,
   ): Promise<{ file_uuid: string }> {
-    const cred = this.parseCredential(credential);
-    const convId = conversationId || randomUUID();
-    return this.uploadFileRaw(cred, convId, file);
+    try {
+      const cred = this.parseCredential(credential);
+      const convId = conversationId || randomUUID();
+      return await this.uploadFileRaw(cred, convId, file);
+    } catch (err: any) {
+      logger.error('[Claude] Error in uploadFile:', err);
+      throw err;
+    }
   }
 
   /** Internal helper dùng credential đã parse sẵn. */

@@ -18,9 +18,10 @@
 
 export const PROVIDER_ID = 'duckduckgo';
 export const PROVIDER_NAME = 'DuckDuckGo';
-export const PROVIDER_DESCRIPTION = 'Free AI chat powered by DuckDuckGo with multiple models';
+export const PROVIDER_DESCRIPTION =
+  'Free AI chat powered by DuckDuckGo with multiple models';
 export const PROVIDER_COLOR = '#DE5833';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://duck.ai';
 export const AUTH_METHOD = [] as const; // No authentication required
 export const CONNECTION_TYPE = 'https';
@@ -116,7 +117,8 @@ export const HTTP_HEADERS = {
   CACHE_CONTROL: 'no-cache',
   PRAGMA: 'no-cache',
   PRIORITY: 'u=1, i',
-  SEC_CH_UA: '"Chromium";v="149", "Not-A.Brand";v="24", "Google Chrome";v="149"',
+  SEC_CH_UA:
+    '"Chromium";v="149", "Not-A.Brand";v="24", "Google Chrome";v="149"',
   SEC_CH_UA_MOBILE: '?0',
   SEC_CH_UA_PLATFORM: '"Linux"',
   SEC_FETCH_DEST: 'empty',
@@ -175,12 +177,9 @@ export const REASONING_EFFORT = {
  * Khi user BẬT thinking toggle:  dùng giá trị trong map này (low)
  * Khi user TẮT thinking toggle:  override thành "none" dù model hỗ trợ
  */
-export const MODEL_CAPABILITIES: Record<
-  string,
-  { reasoningEffort: string }
-> = {
-  'claude-haiku-4-5':      { reasoningEffort: REASONING_EFFORT.LOW },
-  'tinfoil/gpt-oss-120b':  { reasoningEffort: REASONING_EFFORT.LOW },
+export const MODEL_CAPABILITIES: Record<string, { reasoningEffort: string }> = {
+  'claude-haiku-4-5': { reasoningEffort: REASONING_EFFORT.LOW },
+  'tinfoil/gpt-oss-120b': { reasoningEffort: REASONING_EFFORT.LOW },
 } as const;
 
 // ─── Search / Tool Choice ─────────────────────────────────────────────
@@ -207,7 +206,8 @@ export const TOOL_CHOICE_SEARCH_ON = {
 // ─── Misc ────────────────────────────────────────────────────────────
 
 export const FETCH_TIMEOUT_MS = 30_000;
-export const DEFAULT_FE_VERSION = 'serp_20260424_180649_ET-0bdc33b2a02ebf8f235def65d887787f694720a1';
+export const DEFAULT_FE_VERSION =
+  'serp_20260424_180649_ET-0bdc33b2a02ebf8f235def65d887787f694720a1';
 
 // ─── Circuit Breaker ─────────────────────────────────────────────────
 

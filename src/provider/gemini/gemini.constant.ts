@@ -37,7 +37,7 @@ export const PROVIDER_NAME = 'Gemini';
 export const PROVIDER_DESCRIPTION =
   'Google most capable AI model with multimodal understanding';
 export const PROVIDER_COLOR = '#4285F4';
-export const IS_ENABLED = true;
+export const IS_ENABLED = false;
 export const WEBSITE_URL = 'https://gemini.google.com/';
 export const AUTH_METHOD = ['google'] as const;
 export const CONNECTION_TYPE = 'https';
