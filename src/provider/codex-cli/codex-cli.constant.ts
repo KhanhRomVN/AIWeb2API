@@ -261,7 +261,7 @@ export const TERMINALS = [
 ] as const;
 
 export const LOGIN_CONFIG = {
-  TEMP_DIR_NAME: '.elara',
+  TEMP_DIR_NAME: '.aiweb2api-tmp',
   HOME_PREFIX: 'codex-login-fresh-',
   LOG_FILE_NAME: 'codex-cli.log',
   POLL_INTERVAL_MS: 1000,

@@ -28,20 +28,9 @@ export interface AccountsTable {
 }
 
 // ─── providers ──────────────────────────────────────────────────────────
-export interface ProvidersTable {
-  id: string;
-  title: string;
-  platform: string | null;
-  connection_type: string | null;
-  is_enabled: number | null;
-  website_url: string | null;
-  auth_method: string | null;
-  is_pausable: number | null;
-  is_memory: number | null;
-  browser_extension_folder: string | null;
-  description: string | null;
-  color: string | null;
-}
+// NOTE: Bảng providers đã bị loại bỏ — xem database-schema.md để biết lý do.
+// Provider metadata được lấy trực tiếp từ provider registry (constants/API),
+// không cần persist vào DB.
 
 // ─── model_stats ────────────────────────────────────────────────────────
 export interface ModelStatsTable {
@@ -62,18 +51,10 @@ export interface MetricsTable {
   timestamp: number;
 }
 
-// ─── config ─────────────────────────────────────────────────────────────
-export interface ConfigTable {
-  id: number;
-  chromium_profile_dir: string | null;
-}
-
 // ─── Database (root) ────────────────────────────────────────────────────
 /** Interface root mà Kysely generic nhận — map tên bảng → type của nó. */
 export interface Database {
   accounts: AccountsTable;
-  providers: ProvidersTable;
   model_stats: ModelStatsTable;
   metrics: MetricsTable;
-  config: ConfigTable;
 }

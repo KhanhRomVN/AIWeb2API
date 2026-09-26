@@ -76,7 +76,7 @@ const isDryRun = hasFlag('--dry-run');
 const customDbPath = getArg('--db', null);
 
 // ─── Kết nối Database ──────────────────────────────────────────────────
-const dbPath = customDbPath || path.join(os.homedir(), '.elara', 'database.sqlite');
+const dbPath = customDbPath || path.join(os.homedir(), '.aiweb2api', 'database.sqlite');
 
 if (!fs.existsSync(dbPath)) {
   console.error(`❌ Không tìm thấy database tại: ${dbPath}`);

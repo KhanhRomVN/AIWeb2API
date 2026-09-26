@@ -55,7 +55,10 @@ import {
   CB_THRESHOLD,
   CB_COOLDOWN_MS,
 } from './duckduckgo.constant';
-import { solveDuckDuckGoChallenge, makeDuckDuckGoFeSignals } from './duckduckgo.vm-challenge';
+import {
+  solveDuckDuckGoChallenge,
+  makeDuckDuckGoFeSignals,
+} from './duckduckgo.vm-challenge';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DuckDuckGoProvider');
@@ -79,9 +82,14 @@ function cbIsOpen(): boolean {
 
 function cbRecordFailure(): void {
   circuitBreaker.failures++;
-  if (circuitBreaker.failures >= CB_THRESHOLD && circuitBreaker.openedAt === 0) {
+  if (
+    circuitBreaker.failures >= CB_THRESHOLD &&
+    circuitBreaker.openedAt === 0
+  ) {
     circuitBreaker.openedAt = Date.now();
-    logger.warn(`[DDG-CB] Circuit breaker opened after ${circuitBreaker.failures} failures`);
+    logger.warn(
+      `[DDG-CB] Circuit breaker opened after ${circuitBreaker.failures} failures`,
+    );
   }
 }
 
@@ -100,13 +108,16 @@ function normalizeModel(model: string): string {
 }
 
 function getModelCapabilities(model: string) {
-  return MODEL_CAPABILITIES[model] || { reasoningEffort: REASONING_EFFORT.NONE };
+  return (
+    MODEL_CAPABILITIES[model] || { reasoningEffort: REASONING_EFFORT.NONE }
+  );
 }
 
 function normalizeMessages(value: unknown): DuckDuckGoRequestMessage[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((message) => {
-    if (!message || typeof message !== 'object' || Array.isArray(message)) return [];
+    if (!message || typeof message !== 'object' || Array.isArray(message))
+      return [];
     const record = message as Record<string, unknown>;
     if (typeof record.role !== 'string') return [];
     return [{ ...record, role: record.role, content: record.content }];
@@ -171,11 +182,19 @@ function extractContent(data: unknown): string {
 
 function parseDataLine(line: string): unknown | null {
   if (!line.startsWith('data: ')) return null;
-  try { return JSON.parse(line.slice(6)); } catch { return null; }
+  try {
+    return JSON.parse(line.slice(6));
+  } catch {
+    return null;
+  }
 }
 
 function parseDdgError(body: string): { type?: unknown } | null {
-  try { return JSON.parse(body) as { type?: unknown }; } catch { return null; }
+  try {
+    return JSON.parse(body) as { type?: unknown };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Provider Class ────────────────────────────────────────────────────
@@ -237,7 +256,9 @@ export class DuckDuckGoProvider implements Provider {
 
   // ─── Header / Cookie Helpers ──────────────────────────────────────
 
-  private buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  private buildHeaders(
+    extra: Record<string, string> = {},
+  ): Record<string, string> {
     const cookie = Array.from(this.cookieJar.entries())
       .map(([k, v]) => `${k}=${v}`)
       .join('; ');
@@ -246,7 +267,8 @@ export class DuckDuckGoProvider implements Provider {
 
   private rememberCookies(headers: any): void {
     // node-fetch Headers
-    const raw = typeof headers.raw === 'function' ? headers.raw()['set-cookie'] : null;
+    const raw =
+      typeof headers.raw === 'function' ? headers.raw()['set-cookie'] : null;
     const cookies: string[] = Array.isArray(raw) ? raw : [];
     for (const c of cookies) {
       const pair = c.split(';', 1)[0]?.trim();
@@ -268,7 +290,10 @@ export class DuckDuckGoProvider implements Provider {
     if (this.warmed || signal.aborted) return;
     this.warmed = true;
 
-    const warmFetch = async (url: string, extra: Record<string, string> = {}): Promise<void> => {
+    const warmFetch = async (
+      url: string,
+      extra: Record<string, string> = {},
+    ): Promise<void> => {
       try {
         const resp = await fetch(url, {
           headers: this.buildHeaders(extra),
@@ -281,9 +306,13 @@ export class DuckDuckGoProvider implements Provider {
             const html = await resp.text();
             const match = html.match(FE_VERSION_PATTERN);
             if (match) this.feVersion = match[0];
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
-      } catch { /* ignore warm errors */ }
+      } catch {
+        /* ignore warm errors */
+      }
     };
 
     await warmFetch(`${BASE_URL}/`, {
@@ -306,7 +335,9 @@ export class DuckDuckGoProvider implements Provider {
 
   // ─── VQD / Auth Headers ───────────────────────────────────────────
 
-  private async acquireVqdHeaders(signal: AbortSignal): Promise<DuckDuckGoVqdHeaders> {
+  private async acquireVqdHeaders(
+    signal: AbortSignal,
+  ): Promise<DuckDuckGoVqdHeaders> {
     try {
       if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
       const resp = await fetch(STATUS_URL, {
@@ -320,7 +351,12 @@ export class DuckDuckGoProvider implements Provider {
       });
       this.rememberCookies(resp.headers);
       if (!resp.ok) {
-        return { vqd4: null, vqdHash1: null, status: resp.status, retryAfter: resp.headers.get('Retry-After') };
+        return {
+          vqd4: null,
+          vqdHash1: null,
+          status: resp.status,
+          retryAfter: resp.headers.get('Retry-After'),
+        };
       }
       return {
         vqd4: resp.headers.get('x-vqd-4'),
@@ -329,12 +365,15 @@ export class DuckDuckGoProvider implements Provider {
         retryAfter: null,
       };
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      if (error instanceof DOMException && error.name === 'AbortError')
+        throw error;
       return { vqd4: null, vqdHash1: null, status: null, retryAfter: null };
     }
   }
 
-  private async acquireAuthHeaders(signal: AbortSignal): Promise<DuckDuckGoVqdHeaders> {
+  private async acquireAuthHeaders(
+    signal: AbortSignal,
+  ): Promise<DuckDuckGoVqdHeaders> {
     // Use cached pending challenge from previous response first
     if (this.pendingVqdHash1) {
       const challenge = this.pendingVqdHash1;
@@ -342,11 +381,16 @@ export class DuckDuckGoProvider implements Provider {
       try {
         return {
           vqd4: null,
-          vqdHash1: await solveDuckDuckGoChallenge(challenge, USER_AGENTS.LINUX_CHROME),
+          vqdHash1: await solveDuckDuckGoChallenge(
+            challenge,
+            USER_AGENTS.LINUX_CHROME,
+          ),
           status: null,
           retryAfter: null,
         };
-      } catch { /* fall through to fresh acquire */ }
+      } catch {
+        /* fall through to fresh acquire */
+      }
     }
 
     const headers = await this.acquireVqdHeaders(signal);
@@ -354,7 +398,10 @@ export class DuckDuckGoProvider implements Provider {
       try {
         return {
           vqd4: headers.vqd4,
-          vqdHash1: await solveDuckDuckGoChallenge(headers.vqdHash1, USER_AGENTS.LINUX_CHROME),
+          vqdHash1: await solveDuckDuckGoChallenge(
+            headers.vqdHash1,
+            USER_AGENTS.LINUX_CHROME,
+          ),
           status: headers.status,
           retryAfter: headers.retryAfter,
         };
@@ -365,11 +412,16 @@ export class DuckDuckGoProvider implements Provider {
           try {
             return {
               vqd4: retry.vqd4,
-              vqdHash1: await solveDuckDuckGoChallenge(retry.vqdHash1, USER_AGENTS.LINUX_CHROME),
+              vqdHash1: await solveDuckDuckGoChallenge(
+                retry.vqdHash1,
+                USER_AGENTS.LINUX_CHROME,
+              ),
               status: retry.status,
               retryAfter: retry.retryAfter,
             };
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
         return {
           vqd4: retry.vqd4 ?? headers.vqd4,
@@ -384,9 +436,14 @@ export class DuckDuckGoProvider implements Provider {
 
   // ─── Live Model IDs ───────────────────────────────────────────────
 
-  private async getLiveModelIds(signal: AbortSignal): Promise<Set<string> | null> {
+  private async getLiveModelIds(
+    signal: AbortSignal,
+  ): Promise<Set<string> | null> {
     const now = Date.now();
-    if (this.modelsCache && now - this.modelsCache.fetchedAt < MODEL_IDS_CACHE_TTL_MS) {
+    if (
+      this.modelsCache &&
+      now - this.modelsCache.fetchedAt < MODEL_IDS_CACHE_TTL_MS
+    ) {
       return this.modelsCache.ids;
     }
     try {
@@ -401,7 +458,10 @@ export class DuckDuckGoProvider implements Provider {
       if (!Array.isArray(models)) return null;
       const ids = new Set<string>(
         models
-          .filter((m: any) => Array.isArray(m?.accessTier) && m.accessTier.includes('free'))
+          .filter(
+            (m: any) =>
+              Array.isArray(m?.accessTier) && m.accessTier.includes('free'),
+          )
           .map((m: any) => String(m.id ?? ''))
           .filter(Boolean),
       );
@@ -419,10 +479,10 @@ export class DuckDuckGoProvider implements Provider {
     const { messages, model, onContent, onMetadata, onDone, onError } = options;
 
     const requestedModel = normalizeModel(model);
-    logger.debug(`[DuckDuckGo] handleMessage: model=${requestedModel} messages=${messages.length}`);
-
     if (cbIsOpen()) {
-      onError(new Error('DuckDuckGo circuit breaker open — upstream unavailable'));
+      onError(
+        new Error('DuckDuckGo circuit breaker open — upstream unavailable'),
+      );
       return;
     }
 
@@ -433,7 +493,8 @@ export class DuckDuckGoProvider implements Provider {
 
     try {
       const normalizedMessages = normalizeMessages(messages);
-      if (normalizedMessages.length === 0) throw new Error('No messages provided');
+      if (normalizedMessages.length === 0)
+        throw new Error('No messages provided');
 
       await this.warmSession(controller.signal);
 
@@ -445,11 +506,13 @@ export class DuckDuckGoProvider implements Provider {
         if (!liveIds.has(aliased)) {
           throw new Error(
             `Model "${upstreamModel}" not available in DuckDuckGo catalog. ` +
-            `Available models: ${Array.from(liveIds).join(', ')}`,
+              `Available models: ${Array.from(liveIds).join(', ')}`,
           );
         }
         if (aliased !== upstreamModel) {
-          logger.warn(`[DuckDuckGo] model "${upstreamModel}" aliased to "${aliased}"`);
+          logger.warn(
+            `[DuckDuckGo] model "${upstreamModel}" aliased to "${aliased}"`,
+          );
           upstreamModel = aliased;
         }
       }
@@ -494,7 +557,7 @@ export class DuckDuckGoProvider implements Provider {
         const bodyText = await response.text();
         const parsed = parseDdgError(bodyText);
         const errorType = typeof parsed?.type === 'string' ? parsed.type : '';
-        
+
         if (errorType !== 'ERR_BN_LIMIT') {
           this.pendingVqdHash1 = null;
           const freshVqd = await this.acquireAuthHeaders(controller.signal);
@@ -504,7 +567,9 @@ export class DuckDuckGoProvider implements Provider {
         } else {
           clearTimeout(timeout);
           cbRecordFailure();
-          onError(new Error(`DuckDuckGo: ${errorType} — IP/session rate limited`));
+          onError(
+            new Error(`DuckDuckGo: ${errorType} — IP/session rate limited`),
+          );
           return;
         }
       }
@@ -513,7 +578,9 @@ export class DuckDuckGoProvider implements Provider {
         const errText = await response.text().catch(() => '');
         if (response.status === 429) cbRecordFailure();
         else if (response.status >= 500) cbRecordFailure();
-        throw new Error(`DuckDuckGo API returned ${response.status}: ${errText.slice(0, 200)}`);
+        throw new Error(
+          `DuckDuckGo API returned ${response.status}: ${errText.slice(0, 200)}`,
+        );
       }
 
       if (!response.body) throw new Error('No response body');
@@ -529,10 +596,10 @@ export class DuckDuckGoProvider implements Provider {
 
         for (const line of lines) {
           if (!line.trim() || line.trim() === 'data: [DONE]') continue;
-          
+
           const data = parseDataLine(line);
           const content = extractContent(data);
-          
+
           if (content) {
             onContent(content);
           }
@@ -549,7 +616,8 @@ export class DuckDuckGoProvider implements Provider {
 
         clearTimeout(timeout);
         cbRecordSuccess();
-        if (onMetadata) onMetadata({ model: upstreamModel, finish_reason: 'stop' });
+        if (onMetadata)
+          onMetadata({ model: upstreamModel, finish_reason: 'stop' });
         onDone();
       });
 

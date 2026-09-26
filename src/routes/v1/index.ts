@@ -7,7 +7,7 @@ const router = Router();
 router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    elara: 'khanhromvn/elara',
+    aiweb2api: 'khanhromvn/AIWeb2API',
     timestamp: new Date().toISOString(),
   });
 });

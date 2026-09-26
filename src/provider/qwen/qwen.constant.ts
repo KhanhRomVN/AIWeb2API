@@ -88,6 +88,7 @@ export const API_PATHS = {
 } as const;
 
 export const CHATS_LIST_QUERY = '?page=1&exclude_project=true';
+export const CHAT_HISTORY_QUERY = '?direction=up&limit=10';
 
 // ─── HTTP Headers / User Agents ──────────────────────────────────────
 

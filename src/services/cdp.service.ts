@@ -143,7 +143,7 @@ export class CDPService extends EventEmitter {
   /** Map requestId → URL, dùng để emit kèm khi response-body hoàn tất. */
   private requestUrlMap = new Map<string, string>();
 
-  constructor(profileName: string = 'elara-cdp') {
+  constructor(profileName: string = 'aiweb2api-cdp') {
     super();
     this.profileName = profileName;
   }
@@ -168,7 +168,7 @@ export class CDPService extends EventEmitter {
     if (!userDataDir) {
       userDataDir = path.join(
         os.tmpdir(),
-        `elara-cdp-${this.profileName}-${Date.now()}`,
+        `aiweb2api-cdp-${this.profileName}-${Date.now()}`,
       );
     }
 
@@ -197,7 +197,11 @@ export class CDPService extends EventEmitter {
       stdio: 'ignore',
     });
 
-    this.browserProcess.on('exit', (code) => {
+    this.browserProcess.on('exit', (code, signal) => {
+      // [DEBUG] tạm thời — gỡ sau khi xác định nguyên nhân browser thoát khi login kèm profile
+      logger.warn(
+        `[DEBUG][CDP] Browser exited: code=${code} signal=${signal} executable=${executable} userDataDir=${userDataDir}`,
+      );
       this.isConnected = false;
       this.ws = null;
       this.emit('browser-exit');

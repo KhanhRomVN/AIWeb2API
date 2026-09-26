@@ -19,7 +19,10 @@ import { Request, Response } from 'express';
 import { sendMessage as sendMessageService } from '../services/chat.service';
 import { recordRequest, recordError } from '../services/metrics.service';
 import { getAllProviders } from '../services/provider.service';
-import { getAccountById } from '../services/account.service';
+import {
+  getAccountById,
+  updateAccountUsageInfo,
+} from '../services/account.service';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -55,6 +58,9 @@ export const sendMessage = async (
       messages,
       conversationId,
       parent_message_id,
+      user_action,
+      edit_message_id,
+      message_fid,
       stream,
       is_search,
       search,
@@ -140,9 +146,6 @@ export const sendMessage = async (
         email: null,
         credential: '',
       };
-      logger.debug(
-        `[SendMessage] Anonymous provider "${providerId}" — using virtual account`,
-      );
     }
 
     // account luôn được set tại đây (null guards đã xử lý ở trên)
@@ -240,6 +243,9 @@ export const sendMessage = async (
         messages,
         conversationId,
         parent_message_id,
+        user_action,
+        edit_message_id,
+        message_fid,
         search: useSearch,
         thinking,
         ref_file_ids,
@@ -356,6 +362,18 @@ export const sendMessage = async (
             model,
             error.message,
           );
+
+          // Nếu là lỗi hết usage tạm thời (Claude 429 exceeded_limit), lưu thời điểm reset
+          if ((error as any).isUsageLimitError && (error as any).resetsAt) {
+            logger.warn(
+              `[UsageLimit] account_id=${resolvedAccount.id} usage limit exceeded, resets_at=${(error as any).resetsAt}`,
+            );
+            updateAccountUsageInfo(
+              resolvedAccount.id,
+              100,
+              (error as any).resetsAt,
+            );
+          }
 
           if (stream !== false) {
             if (!res.writableEnded) {

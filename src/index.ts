@@ -45,10 +45,14 @@ import { startServer } from './server';
 // ── Database ──
 import { initDatabase } from './database';
 import { initManagersDatabase } from './database/managers';
+import { initConfigDatabase } from './database/config-db';
 import { runIntegrityCheck } from './database/integrity-check';
 
 // ── WebSocket ──
 import { startWebSocketServer } from './websocket-server';
+
+// ── Middleware ──
+import { preconnectAllManagers } from './middleware/database-context.middleware';
 
 // ── Services ──
 import { accountRefreshService } from './services/account.service';
@@ -65,6 +69,7 @@ const main = async (options?: { dbPath?: string }) => {
   try {
     initDatabase(options?.dbPath);
     initManagersDatabase();
+    initConfigDatabase();
     runIntegrityCheck();
   } catch (error) {
     logger.error('Failed to initialize database', error);
@@ -77,6 +82,9 @@ const main = async (options?: { dbPath?: string }) => {
   if (result.success) {
     startWebSocketServer();
     accountRefreshService.start();
+    // Kết nối trước toàn bộ database managers để Zen lấy status ngay
+    // khi mở tab Database (không cần chạy health check lần đầu).
+    preconnectAllManagers().catch(() => {});
   } else {
     logger.error(`Failed to start server: ${result.error}`);
     if (require.main === module) process.exit(1);
@@ -89,6 +97,19 @@ const main = async (options?: { dbPath?: string }) => {
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+
+  // Prevent unhandled promise rejections (e.g. browser closed mid-login)
+  // from crashing the entire server process.
+  process.on('unhandledRejection', (reason: any) => {
+    logger.error(
+      '[Server] Unhandled promise rejection (server kept alive):',
+      reason,
+    );
+  });
+
+  process.on('uncaughtException', (err: Error) => {
+    logger.error('[Server] Uncaught exception (server kept alive):', err);
+  });
 };
 
 export const startBackend = main;

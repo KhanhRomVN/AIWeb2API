@@ -75,11 +75,13 @@ export const queryUsageHistory = async (
   const store = getDataStore();
   const db = store.kysely;
 
-  // Expression tính cột `date` khác nhau theo dialect.
+  // Với Postgres, `groupBy(expression)` trong Kysely không sinh ra GROUP BY
+  // cùng expression đủ để Postgres chấp nhận. Dùng GROUP BY 1 (ordinal) là
+  // cách portable nhất cho cả hai dialect.
   const dateExpr =
     store.dialect === 'sqlite'
       ? sql<string>`strftime(${groupBy}, datetime(timestamp / 1000, 'unixepoch', 'localtime'))`
-      : sql<string>`to_char(to_timestamp(timestamp / 1000), ${toPgDateFormat(groupBy)})`;
+      : sql<string>`to_char(to_timestamp(timestamp / 1000.0), ${toPgDateFormat(groupBy)})`;
 
   let query = db
     .selectFrom('metrics')
@@ -95,9 +97,10 @@ export const queryUsageHistory = async (
     query = query.where('account_id', '=', accountId);
   }
 
+  // GROUP BY 1 = group by cột đầu tiên (date) — hoạt động trên cả SQLite lẫn Postgres.
   const rows = await query
-    .groupBy(dateExpr)
-    .orderBy(dateExpr, 'asc')
+    .groupBy(sql`1`)
+    .orderBy(sql`1`, 'asc')
     .execute();
 
   return rows as Array<{ date: string; requests: number; tokens: number }>;

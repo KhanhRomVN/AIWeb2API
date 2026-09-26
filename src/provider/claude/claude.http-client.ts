@@ -23,6 +23,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import FormData from 'form-data';
 
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
@@ -38,6 +39,17 @@ import {
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ClaudeHttpClient');
 
+/** Timeout cho request thông thường (bootstrap, conversation, v.v.) */
+const DEFAULT_TIMEOUT_SECONDS = 120;
+
+/**
+ * Timeout cho SSE completion request — cần lớn hơn nhiều vì thinking models
+ * (medium/high effort) có thể mất 5–10 phút mới trả xong response.
+ * cycletls buffer toàn bộ body trước khi return nên timeout phải cover
+ * thời gian Claude xử lý + truyền tải toàn bộ stream.
+ */
+const SSE_TIMEOUT_SECONDS = 600; // 10 phút
+
 // ─── Types ──────────────────────────────────────────────────────────────
 
 export interface ClaudeHttpClientOptions {
@@ -47,9 +59,11 @@ export interface ClaudeHttpClientOptions {
 
 export interface ClaudeHttpRequestOptions {
   headers?: Record<string, string>;
-  body?: string | Buffer;
+  body?: string | Buffer | FormData;
   method?: string;
   responseType?: 'json' | 'text' | 'arraybuffer' | 'stream';
+  /** Timeout tính bằng giây, truyền thẳng vào cycletls. Mặc định DEFAULT_TIMEOUT_SECONDS. */
+  timeoutSeconds?: number;
 }
 
 /**
@@ -91,7 +105,11 @@ let initPromise: Promise<CycleTLSClient> | null = null;
 const PLATFORM_BINARIES: Record<string, Record<string, string>> = {
   win32: { x64: 'index.exe' },
   linux: { arm: 'index-arm', arm64: 'index-arm64', x64: 'index' },
-  darwin: { x64: 'index-mac', arm: 'index-mac-arm64', arm64: 'index-mac-arm64' },
+  darwin: {
+    x64: 'index-mac',
+    arm: 'index-mac-arm64',
+    arm64: 'index-mac-arm64',
+  },
   freebsd: { x64: 'index-freebsd' },
 };
 
@@ -112,8 +130,7 @@ function resolveCycletlsExecutablePath(): string | undefined {
     return undefined;
   }
 
-  const binName =
-    PLATFORM_BINARIES[process.platform]?.[os.arch()];
+  const binName = PLATFORM_BINARIES[process.platform]?.[os.arch()];
   if (!binName) return undefined;
 
   const srcPath = path.join(cycletlsPkgDir, binName);
@@ -129,7 +146,7 @@ function resolveCycletlsExecutablePath(): string | undefined {
     const stat = fs.statSync(srcPath);
     const cacheDir = path.join(
       os.tmpdir(),
-      `elara-cycletls-${process.platform}-${os.arch()}-${stat.mtimeMs}`,
+      `aiweb2api-cycletls-${process.platform}-${os.arch()}-${stat.mtimeMs}`,
     );
     const dstPath = path.join(cacheDir, binName);
 
@@ -139,16 +156,10 @@ function resolveCycletlsExecutablePath(): string | undefined {
       if (process.platform !== 'win32') {
         fs.chmodSync(dstPath, 0o755);
       }
-      logger.info(
-        `[ClaudeHttpClient] Copied cycletls binary to ${dstPath} (source path had spaces)`,
-      );
     }
     return dstPath;
   } catch (e) {
-    logger.warn(
-      '[ClaudeHttpClient] Failed to copy cycletls binary to tmp:',
-      e,
-    );
+    logger.warn('[ClaudeHttpClient] Failed to copy cycletls binary to tmp:', e);
     return undefined;
   }
 }
@@ -183,7 +194,6 @@ async function getClient(): Promise<CycleTLSClient> {
       ...(executablePath ? { executablePath } : {}),
     })) as CycleTLSClient;
     sharedClient = client;
-    logger.info('[ClaudeHttpClient] cycletls initialized');
     return client;
   })();
 
@@ -229,26 +239,33 @@ export class ClaudeHttpClient {
       ...(options.headers || {}),
     };
 
-    // cycletls nhận `body` dạng string cho JSON. Buffer (multipart) không
-    // hỗ trợ trực tiếp ở field body — upload file phải convert qua string
-    // nhị phân; hiện tại Claude upload dùng JSON base64 → giữ string.
-    const body =
-      typeof options.body === 'string'
+    // cycletls nhận `body` dạng string, URLSearchParams, hoặc FormData.
+    // Buffer không hỗ trợ trực tiếp — nếu cần truyền binary phải dùng FormData.
+    const body: string | FormData | undefined =
+      options.body instanceof FormData
         ? options.body
-        : options.body?.toString('utf-8');
+        : typeof options.body === 'string'
+          ? options.body
+          : options.body !== undefined
+            ? options.body.toString('utf-8')
+            : undefined;
 
-    const response = await client(fullURL, {
-      body,
-      headers: mergedHeaders,
-      ja3: CHROME_JA3,
-      http2Fingerprint: CHROME_HTTP2_FINGERPRINT,
-      headerOrder: [...CHROME_HEADER_ORDER],
-      orderAsProvided: false,
-      userAgent: USER_AGENT,
-      disableRedirect: false,
-      responseType: 'text',
-      timeout: 120,
-    }, (options.method || 'GET').toLowerCase() as any);
+    const response = await client(
+      fullURL,
+      {
+        body,
+        headers: mergedHeaders,
+        ja3: CHROME_JA3,
+        http2Fingerprint: CHROME_HTTP2_FINGERPRINT,
+        headerOrder: [...CHROME_HEADER_ORDER],
+        orderAsProvided: false,
+        userAgent: USER_AGENT,
+        disableRedirect: false,
+        responseType: 'text',
+        timeout: options.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
+      },
+      (options.method || 'GET').toLowerCase() as any,
+    );
 
     // cycletls có thể trả `data` là string (text/SSE) hoặc object (JSON đã
     // parse sẵn). Giữ cả 2 đường đi để `text()` trả raw string và `json()`
@@ -263,8 +280,7 @@ export class ClaudeHttpClient {
       headers: responseHeaders,
       text: async () =>
         typeof rawData === 'string' ? rawData : JSON.stringify(rawData),
-      json: async () =>
-        isObjectData ? rawData : JSON.parse(String(rawData)),
+      json: async () => (isObjectData ? rawData : JSON.parse(String(rawData))),
     };
   }
 
@@ -307,6 +323,7 @@ export class ClaudeHttpClient {
     const res = await this.request(url, {
       ...options,
       method: 'POST',
+      timeoutSeconds: SSE_TIMEOUT_SECONDS,
       headers: {
         Accept: 'text/event-stream',
         ...options.headers,

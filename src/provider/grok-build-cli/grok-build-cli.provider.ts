@@ -145,9 +145,7 @@ function getUserAgent(): string {
   return `${CLIENT_IDENTIFIER}/${DEFAULT_CLIENT_VERSION} (${platform}; ${arch})`;
 }
 
-function getClientHeaders(
-  clientMode = 'headless',
-): Record<string, string> {
+function getClientHeaders(clientMode = 'headless'): Record<string, string> {
   return {
     [HTTP_HEADER_NAMES.X_GROK_CLIENT_VERSION]: DEFAULT_CLIENT_VERSION,
     [HTTP_HEADER_NAMES.X_GROK_CLIENT_IDENTIFIER]: CLIENT_IDENTIFIER,
@@ -181,7 +179,10 @@ function buildSessionHeaders(
   model?: string,
   stream = true,
 ): Record<string, string> {
-  const wireEmail = getWireEmail(providerData.email, providerData.principalType);
+  const wireEmail = getWireEmail(
+    providerData.email,
+    providerData.principalType,
+  );
 
   const headers: Record<string, string> = {
     [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
@@ -249,9 +250,7 @@ function normalizeReasoning(
   );
 
   if (
-    !REASONING_EFFORT_SET.has(
-      reasoning.effort as 'low' | 'medium' | 'high',
-    )
+    !REASONING_EFFORT_SET.has(reasoning.effort as 'low' | 'medium' | 'high')
   ) {
     delete reasoning.effort;
   }
@@ -290,10 +289,7 @@ function sanitizeFunctionCallOutput(output: unknown): string {
       // fall through
     }
     // Drop incomplete \u escapes (0-3 hex digits) that break strict JSON parsers.
-    const repaired = value.replace(
-      /\\u([0-9A-Fa-f]{0,3})(?![0-9A-Fa-f])/g,
-      '',
-    );
+    const repaired = value.replace(/\\u([0-9A-Fa-f]{0,3})(?![0-9A-Fa-f])/g, '');
     try {
       return JSON.stringify(JSON.parse(repaired));
     } catch {
@@ -406,9 +402,6 @@ function transformRequestBody(
   // promote it to `input` and normalize each item to Responses format.
   // Matches OmniRoute translator/index.ts normalizeOpenAIResponsesRequest logic.
   if (transformed.input == null && Array.isArray(transformed.messages)) {
-    logger.debug('[GrokBuildCLI] transformRequestBody: promoting messages → input', {
-      messageCount: (transformed.messages as unknown[]).length,
-    });
     transformed.input = (transformed.messages as unknown[]).map(
       normalizeResponsesInputItem,
     );
@@ -519,13 +512,15 @@ export class GrokBuildCLIProvider implements Provider {
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({})) as any;
+        const errData = (await response.json().catch(() => ({}))) as any;
         throw new Error(
-          errData.error_description || errData.error || `Device code request failed: ${response.status}`,
+          errData.error_description ||
+            errData.error ||
+            `Device code request failed: ${response.status}`,
         );
       }
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         device_code: string;
         user_code: string;
         verification_uri: string;
@@ -547,7 +542,8 @@ export class GrokBuildCLIProvider implements Provider {
         email: '',
         tempSessionId: pollContext,
         user_code: data.user_code,
-        verification_url: data.verification_uri_complete || data.verification_uri,
+        verification_url:
+          data.verification_uri_complete || data.verification_uri,
         expires_in: data.expires_in,
         poll_interval: data.interval ?? 5,
       };
@@ -591,7 +587,9 @@ export class GrokBuildCLIProvider implements Provider {
         signal: AbortSignal.timeout(15_000),
       });
 
-      const data = await response.json().catch(() => ({})) as OAuthTokenResponse & {
+      const data = (await response
+        .json()
+        .catch(() => ({}))) as OAuthTokenResponse & {
         error?: string;
         error_description?: string;
       };
@@ -610,7 +608,10 @@ export class GrokBuildCLIProvider implements Provider {
             signal: AbortSignal.timeout(10_000),
           });
           if (userInfoRes.ok) {
-            const userInfo = await userInfoRes.json() as { email?: string; sub?: string };
+            const userInfo = (await userInfoRes.json()) as {
+              email?: string;
+              sub?: string;
+            };
             email = userInfo.email || '';
           }
         } catch {
@@ -634,7 +635,10 @@ export class GrokBuildCLIProvider implements Provider {
         return { done: false, error: 'Device code expired. Please try again.' };
       }
 
-      return { done: false, error: data.error_description || errCode || 'Token polling failed' };
+      return {
+        done: false,
+        error: data.error_description || errCode || 'Token polling failed',
+      };
     } catch (error) {
       logger.warn('[GrokBuildCLI] pollOnce error:', error);
       return { done: false };
@@ -700,8 +704,6 @@ export class GrokBuildCLIProvider implements Provider {
         return attempt === REFRESH_MAX_ATTEMPTS ? null : undefined;
       }
 
-      logger.info('[GrokBuildCLI] Token refreshed successfully');
-
       return {
         accessToken,
         refreshToken:
@@ -722,9 +724,6 @@ export class GrokBuildCLIProvider implements Provider {
     for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
       if (attempt > 1) {
         const delayMs = getRefreshRetryDelayMs(attempt - 1);
-        logger.debug(
-          `[GrokBuildCLI] Retrying token refresh (${attempt}/${REFRESH_MAX_ATTEMPTS})`,
-        );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
 
@@ -778,20 +777,6 @@ export class GrokBuildCLIProvider implements Provider {
         true,
       );
 
-      logger.debug('[GrokBuildCLI] Sending request', {
-        url: RESPONSES_URL,
-        model: requestModel,
-        inputCount: Array.isArray(transformedBody.input)
-          ? transformedBody.input.length
-          : null,
-        messagesCount: Array.isArray(transformedBody.messages)
-          ? transformedBody.messages.length
-          : null,
-        hasInput: transformedBody.input != null,
-        hasMessages: transformedBody.messages != null,
-        bodyKeys: Object.keys(transformedBody),
-      });
-
       const response = await fetch(RESPONSES_URL, {
         method: 'POST',
         headers,
@@ -832,7 +817,6 @@ export class GrokBuildCLIProvider implements Provider {
               true,
             );
 
-            logger.debug('[GrokBuildCLI] Retrying after token refresh');
             const retryResponse = await fetch(RESPONSES_URL, {
               method: 'POST',
               headers: retryHeaders,
@@ -856,11 +840,18 @@ export class GrokBuildCLIProvider implements Provider {
               });
               const retryDetail =
                 typeof retryErrorBody === 'object' && retryErrorBody !== null
-                  ? ((retryErrorBody as any)?.error?.message ?? (retryErrorBody as any)?.message ?? JSON.stringify(retryErrorBody))
+                  ? ((retryErrorBody as any)?.error?.message ??
+                    (retryErrorBody as any)?.message ??
+                    JSON.stringify(retryErrorBody))
                   : String(retryErrorBody ?? '');
               const retryMsg = `Grok Build API returned ${retryResponse.status}${retryDetail ? `: ${retryDetail}` : ''}`;
-              if (retryResponse.status === 401 || retryResponse.status === 403) {
-                const retryErr = new Error(`Session expired or invalid. Please re-login to Grok Build. (${retryMsg})`);
+              if (
+                retryResponse.status === 401 ||
+                retryResponse.status === 403
+              ) {
+                const retryErr = new Error(
+                  `Session expired or invalid. Please re-login to Grok Build. (${retryMsg})`,
+                );
                 (retryErr as any).isAuthError = true;
                 (retryErr as any).statusCode = retryResponse.status;
                 throw retryErr;
@@ -868,11 +859,14 @@ export class GrokBuildCLIProvider implements Provider {
               throw new Error(retryMsg);
             }
 
-            await parseGrokBuildSSEStream(retryResponse.body as NodeJS.ReadableStream, {
-              onContent,
-              onThinking,
-              onMetadata,
-            });
+            await parseGrokBuildSSEStream(
+              retryResponse.body as NodeJS.ReadableStream,
+              {
+                onContent,
+                onThinking,
+                onMetadata,
+              },
+            );
             onDone();
             return;
           }
@@ -880,11 +874,15 @@ export class GrokBuildCLIProvider implements Provider {
 
         const errorDetail =
           typeof errorBody === 'object' && errorBody !== null
-            ? ((errorBody as any)?.error?.message ?? (errorBody as any)?.message ?? JSON.stringify(errorBody))
+            ? ((errorBody as any)?.error?.message ??
+              (errorBody as any)?.message ??
+              JSON.stringify(errorBody))
             : String(errorBody ?? '');
         const errorMessage = `Grok Build API returned ${response.status}${errorDetail ? `: ${errorDetail}` : ''}`;
         if (response.status === 401 || response.status === 403) {
-          const authErr = new Error(`Session expired or invalid. Please re-login to Grok Build. (${errorMessage})`);
+          const authErr = new Error(
+            `Session expired or invalid. Please re-login to Grok Build. (${errorMessage})`,
+          );
           (authErr as any).isAuthError = true;
           (authErr as any).statusCode = response.status;
           throw authErr;
@@ -910,7 +908,6 @@ export class GrokBuildCLIProvider implements Provider {
       onError(err);
     }
   }
-
 }
 
 export default new GrokBuildCLIProvider();

@@ -10,11 +10,12 @@
  *
  * Migration functions:
  * - migrateAccounts()          : Tạo/migrate bảng accounts
- * - migrateProviders()         : Tạo/migrate bảng providers
- * - migrateModels()            : Tạo/migrate bảng models
+ * - migrateModelStats()        : Tạo/migrate bảng model_stats
  * - migrateMetrics()           : Tạo/migrate bảng metrics
  * - migrateBrowserSessions()   : Tích hợp browser sessions vào accounts
  * - dropUnusedTables()         : Xóa các bảng không còn sử dụng
+ *
+ * NOTE: Bảng `providers` và `models` đã bị loại bỏ — xem database-schema.md
  * ------------------------------------------------------------------
  */
 
@@ -27,48 +28,11 @@ const logger = createLogger('Database');
 
 export const runMigrations = (db: Database.Database): void => {
   migrateAccounts(db);
-  migrateProviders(db);
   migrateModelStats(db);
   migrateMetrics(db);
-  migrateConfig(db);
   migrateBrowserSessions(db); 
   dropUnusedTables(db);
 };
-
-// ─── Config Table ────────────────────────────────────────────────────
-
-/**
- * Bảng cấu hình toàn cục (single-row, id luôn = 1).
- * - chromium_profile_dir : system path tới thư mục chứa các profile Chromium.
- */
-function migrateConfig(db: Database.Database): void {
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS config (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        chromium_profile_dir TEXT
-      )
-    `);
-    // Seed row id=1 nếu chưa có để các API GET luôn có dữ liệu trả về.
-    db.prepare(
-      'INSERT OR IGNORE INTO config (id) VALUES (1)',
-    ).run();
-
-    // Migration: drop legacy `database_path` column if it still exists.
-    const configCols = (db.pragma('table_info(config)') as any[]).map(
-      (c) => c.name,
-    );
-    if (configCols.includes('database_path')) {
-      try {
-        db.exec('ALTER TABLE config DROP COLUMN database_path');
-      } catch (e) {
-        logger.warn('Failed to drop database_path from config', e);
-      }
-    }
-  } catch (e) {
-    logger.error('Failed to migrate config table', e);
-  }
-}
 // ─── Accounts Table ──────────────────────────────────────────────────
 
 function migrateAccounts(db: Database.Database): void {
@@ -182,131 +146,6 @@ function migrateAccounts(db: Database.Database): void {
   } catch (err) {
     logger.error('Error initializing accounts table', err);
     throw err;
-  }
-}
-
-// ─── Providers Table ──────────────────────────────────────────────────
-
-function migrateProviders(db: Database.Database): void {
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS providers (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        platform TEXT DEFAULT 'web',
-        connection_type TEXT DEFAULT 'https',
-        is_enabled INTEGER DEFAULT 1,
-        website_url TEXT,
-        auth_method TEXT,
-        is_pausable INTEGER DEFAULT 0,
-        is_memory INTEGER DEFAULT 0
-      )
-    `);
-
-    const providerCols = (db.pragma('table_info(providers)') as any[]).map(
-      (c) => c.name,
-    );
-
-    // Migration for existing databases: add platform column if missing
-    if (!providerCols.includes('platform')) {
-      try {
-        db.exec("ALTER TABLE providers ADD COLUMN platform TEXT DEFAULT 'web'");
-      } catch (e) {
-        logger.warn('Failed to add platform column to providers', e);
-      }
-    }
-    if (!providerCols.includes('connection_type')) {
-      try {
-        db.exec(
-          "ALTER TABLE providers ADD COLUMN connection_type TEXT DEFAULT 'https'",
-        );
-      } catch (e) {
-        logger.warn('Failed to add connection_type to providers', e);
-      }
-    }
-    if (!providerCols.includes('is_enabled')) {
-      try {
-        db.exec(
-          'ALTER TABLE providers ADD COLUMN is_enabled INTEGER DEFAULT 1',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_enabled to providers', e);
-      }
-    }
-    // Rename website → website_url
-    if (
-      providerCols.includes('website') &&
-      !providerCols.includes('website_url')
-    ) {
-      try {
-        db.exec('ALTER TABLE providers RENAME COLUMN website TO website_url');
-      } catch (e) {
-        logger.warn('Failed to rename website to website_url in providers', e);
-      }
-    }
-    if (
-      !providerCols.includes('website_url') &&
-      !providerCols.includes('website')
-    ) {
-      try {
-        db.exec('ALTER TABLE providers ADD COLUMN website_url TEXT');
-      } catch (e) {
-        logger.warn('Failed to add website_url to providers', e);
-      }
-    }
-    if (!providerCols.includes('auth_method')) {
-      try {
-        db.exec('ALTER TABLE providers ADD COLUMN auth_method TEXT');
-      } catch (e) {
-        logger.warn('Failed to add auth_method to providers', e);
-      }
-    }
-    if (!providerCols.includes('is_pausable')) {
-      try {
-        db.exec(
-          'ALTER TABLE providers ADD COLUMN is_pausable INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_pausable to providers', e);
-      }
-    }
-    if (!providerCols.includes('is_memory')) {
-      try {
-        db.exec('ALTER TABLE providers ADD COLUMN is_memory INTEGER DEFAULT 0');
-      } catch (e) {
-        logger.warn('Failed to add is_memory to providers', e);
-      }
-    }
-
-    if (!providerCols.includes('browser_extension_folder')) {
-      try {
-        db.exec(
-          'ALTER TABLE providers ADD COLUMN browser_extension_folder TEXT',
-        );
-      } catch (e) {
-        logger.warn('Failed to add browser_extension_folder to providers', e);
-      }
-    }
-
-    // Add description column
-    if (!providerCols.includes('description')) {
-      try {
-        db.exec('ALTER TABLE providers ADD COLUMN description TEXT');
-      } catch (e) {
-        logger.warn('Failed to add description to providers', e);
-      }
-    }
-
-    // Add color column
-    if (!providerCols.includes('color')) {
-      try {
-        db.exec('ALTER TABLE providers ADD COLUMN color TEXT');
-      } catch (e) {
-        logger.warn('Failed to add color to providers', e);
-      }
-    }
-  } catch (err) {
-    logger.error('Error initializing providers table', err);
   }
 }
 
@@ -467,20 +306,13 @@ function dropUnusedTables(db: Database.Database): void {
     db.exec('DROP TABLE IF EXISTS provider_models_sync');
     // Migration: models table replaced by model_stats
     db.exec('DROP TABLE IF EXISTS models');
-    // Migration: remove old columns if exist
-    const providerCols = (db.pragma('table_info(providers)') as any[]).map(
-      (c) => c.name,
-    );
-    if (providerCols.includes('name')) {
-      db.exec('ALTER TABLE providers RENAME COLUMN name TO title');
-    }
-    // Keep platform column - do not drop
+    // Migration: providers table không còn cần thiết — metadata lấy từ registry
+    db.exec('DROP TABLE IF EXISTS providers');
     // Remove conversation_id column from metrics if exists
     const metricsCols = (db.pragma('table_info(metrics)') as any[]).map(
       (c) => c.name,
     );
     if (metricsCols.includes('conversation_id')) {
-      // Drop the index first (SQLite requires this before dropping a column with an index)
       try {
         db.exec('DROP INDEX IF EXISTS idx_metrics_conversation_id');
       } catch (_) {}

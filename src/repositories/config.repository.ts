@@ -5,9 +5,9 @@
  * Repository layer cho bảng `config` (single-row, id = 1). Lưu
  * đường dẫn hệ thống tới thư mục chứa profile Chromium.
  *
- * ĐÃ MIGRATE sang Kysely (async) — chạy được trên cả SQLite lẫn
- * Postgres thông qua `getDataStore()`. Mọi hàm trả Promise, caller
- * phải `await`.
+ * Bảng `config` nằm trong file SQLite riêng (aiweb2api-config.sqlite),
+ * truy cập trực tiếp qua better-sqlite3 (không đi qua Kysely/DataStore).
+ * Các hàm vẫn trả Promise để giữ nguyên chữ ký cho caller.
  *
  * Main functions:
  * - getConfig()    : Lấy row config hiện tại (id = 1)
@@ -17,7 +17,7 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── Database ──
-import { getDataStore } from '../database';
+import { getConfigDb } from '../database/config-db';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -29,28 +29,19 @@ export interface ConfigRow {
 // ─── Queries ────────────────────────────────────────────────────────────
 
 /**
- * Lấy row config hiện tại. Luôn trả về row (đã seed id=1 trong migration).
+ * Lấy row config hiện tại. Luôn trả về row (đã seed id=1 khi init).
  */
 export const getConfig = async (): Promise<ConfigRow> => {
-  const db = getDataStore().kysely;
-  const row = await db
-    .selectFrom('config')
-    .selectAll()
-    .where('id', '=', 1)
-    .executeTakeFirst();
-  if (row) return row as ConfigRow;
-  // Fallback phòng khi migration không kịp chạy (không nên xảy ra).
-  await db
-    .insertInto('config')
-    .values({ id: 1 })
-    .onConflict((oc) => oc.column('id').doNothing())
-    .execute();
-  const created = await db
-    .selectFrom('config')
-    .selectAll()
-    .where('id', '=', 1)
-    .executeTakeFirst();
-  return created as ConfigRow;
+  const db = getConfigDb();
+  const row = db
+    .prepare('SELECT id, chromium_profile_dir FROM config WHERE id = 1')
+    .get() as ConfigRow | undefined;
+  if (row) return row;
+  // Fallback phòng khi seed không kịp chạy (không nên xảy ra).
+  db.prepare('INSERT OR IGNORE INTO config (id) VALUES (1)').run();
+  return db
+    .prepare('SELECT id, chromium_profile_dir FROM config WHERE id = 1')
+    .get() as ConfigRow;
 };
 
 /**
@@ -60,22 +51,16 @@ export const getConfig = async (): Promise<ConfigRow> => {
 export const updateConfig = async (patch: {
   chromium_profile_dir?: string | null;
 }): Promise<void> => {
-  const db = getDataStore().kysely;
+  const db = getConfigDb();
 
-  const set: { chromium_profile_dir?: string | null } = {};
-  if (patch.chromium_profile_dir !== undefined) {
-    set.chromium_profile_dir =
-      patch.chromium_profile_dir === '' ? null : patch.chromium_profile_dir;
-  }
+  if (patch.chromium_profile_dir === undefined) return;
 
-  if (Object.keys(set).length === 0) return;
+  const value =
+    patch.chromium_profile_dir === '' ? null : patch.chromium_profile_dir;
 
   // Đảm bảo row id=1 tồn tại trước khi UPDATE.
-  await db
-    .insertInto('config')
-    .values({ id: 1 })
-    .onConflict((oc) => oc.column('id').doNothing())
-    .execute();
-
-  await db.updateTable('config').set(set).where('id', '=', 1).execute();
+  db.prepare('INSERT OR IGNORE INTO config (id) VALUES (1)').run();
+  db.prepare('UPDATE config SET chromium_profile_dir = ? WHERE id = 1').run(
+    value,
+  );
 };

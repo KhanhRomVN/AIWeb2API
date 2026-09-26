@@ -260,7 +260,6 @@ export class DeepSeekProvider implements Provider {
       }
 
       const newCredential = JSON.stringify({ secretKey: newToken, deviceId });
-      logger.info('[DeepSeek] Token rotated successfully');
       return { token: newToken, rotated: true, newCredential };
     } catch (e: any) {
       logger.warn('[DeepSeek] check_device request failed:', e?.message || e);

@@ -50,20 +50,6 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'user_data_dir',
     'last_used_at',
   ],
-  providers: [
-    'id',
-    'title',
-    'platform',
-    'connection_type',
-    'is_enabled',
-    'website_url',
-    'auth_method',
-    'is_pausable',
-    'is_memory',
-    'browser_extension_folder',
-    'description',
-    'color',
-  ],
   model_stats: ['provider_id', 'model_id', 'success_rate', 'updated_at'],
   metrics: [
     'id',
@@ -74,7 +60,6 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'total_tokens',
     'timestamp',
   ],
-  config: ['id', 'chromium_profile_dir'],
 };
 
 /**
@@ -92,7 +77,7 @@ const MIGRATION_STATEMENTS: string[] = [
     reset_usage_at TEXT,
     is_memory_enabled INTEGER DEFAULT 0,
     user_data_dir TEXT,
-    last_used_at INTEGER
+    last_used_at BIGINT
   )`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS provider_id TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email TEXT`,
@@ -101,45 +86,21 @@ const MIGRATION_STATEMENTS: string[] = [
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS reset_usage_at TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_memory_enabled INTEGER DEFAULT 0`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS user_data_dir TEXT`,
-  `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS last_used_at INTEGER`,
+  `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS last_used_at BIGINT`,
 
-  // ── providers ──
-  `CREATE TABLE IF NOT EXISTS providers (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    platform TEXT DEFAULT 'web',
-    connection_type TEXT DEFAULT 'https',
-    is_enabled INTEGER DEFAULT 1,
-    website_url TEXT,
-    auth_method TEXT,
-    is_pausable INTEGER DEFAULT 0,
-    is_memory INTEGER DEFAULT 0,
-    browser_extension_folder TEXT,
-    description TEXT,
-    color TEXT
-  )`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS title TEXT`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS platform TEXT DEFAULT 'web'`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS connection_type TEXT DEFAULT 'https'`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_enabled INTEGER DEFAULT 1`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS website_url TEXT`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS auth_method TEXT`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_pausable INTEGER DEFAULT 0`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_memory INTEGER DEFAULT 0`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS browser_extension_folder TEXT`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS description TEXT`,
-  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS color TEXT`,
+  // NOTE: bảng providers đã bị loại bỏ — metadata lấy từ provider registry.
+  // Nếu bảng đã tồn tại trong DB cũ, để nguyên (không drop để tránh mất data lịch sử).
 
   // ── model_stats ──
   `CREATE TABLE IF NOT EXISTS model_stats (
     provider_id TEXT NOT NULL,
     model_id TEXT NOT NULL,
     success_rate DOUBLE PRECISION DEFAULT NULL,
-    updated_at INTEGER NOT NULL,
+    updated_at BIGINT NOT NULL,
     PRIMARY KEY (provider_id, model_id)
   )`,
   `ALTER TABLE model_stats ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION DEFAULT NULL`,
-  `ALTER TABLE model_stats ADD COLUMN IF NOT EXISTS updated_at INTEGER`,
+  `ALTER TABLE model_stats ADD COLUMN IF NOT EXISTS updated_at BIGINT`,
 
   // ── metrics ──
   `CREATE TABLE IF NOT EXISTS metrics (
@@ -149,26 +110,20 @@ const MIGRATION_STATEMENTS: string[] = [
     account_id TEXT NOT NULL,
     status TEXT DEFAULT 'success',
     total_tokens INTEGER DEFAULT 0,
-    timestamp INTEGER NOT NULL
+    timestamp BIGINT NOT NULL
   )`,
   `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS provider_id TEXT`,
   `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS model_id TEXT`,
   `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS account_id TEXT`,
   `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'success'`,
   `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS total_tokens INTEGER DEFAULT 0`,
-  `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS timestamp INTEGER`,
+  `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS timestamp BIGINT`,
+  // Migrate existing INTEGER columns to BIGINT (idempotent — no-op if already BIGINT)
+  `DO $$ BEGIN IF (SELECT data_type FROM information_schema.columns WHERE table_name='metrics' AND column_name='timestamp' AND table_schema=current_schema()) = 'integer' THEN ALTER TABLE metrics ALTER COLUMN timestamp TYPE BIGINT; END IF; END $$`,
   `CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp)`,
   `CREATE INDEX IF NOT EXISTS idx_metrics_account_time ON metrics(account_id, timestamp)`,
   `CREATE INDEX IF NOT EXISTS idx_metrics_provider_model_time ON metrics(provider_id, model_id, timestamp)`,
   `CREATE INDEX IF NOT EXISTS idx_metrics_status ON metrics(status)`,
-
-  // ── config ──
-  `CREATE TABLE IF NOT EXISTS config (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    chromium_profile_dir TEXT
-  )`,
-  `ALTER TABLE config ADD COLUMN IF NOT EXISTS chromium_profile_dir TEXT`,
-  `INSERT INTO config (id) VALUES (1) ON CONFLICT (id) DO NOTHING`,
 ];
 
 // ─── Functions ──────────────────────────────────────────────────────────
@@ -182,7 +137,7 @@ const verifyColumns = async (db: Kysely<DbSchema>): Promise<void> => {
     SELECT table_name, column_name
     FROM information_schema.columns
     WHERE table_schema = current_schema()
-      AND table_name IN ('accounts','providers','model_stats','metrics','config')
+      AND table_name IN ('accounts','providers','model_stats','metrics')
   `.execute(db);
 
   const actual = new Map<string, Set<string>>();
@@ -218,5 +173,4 @@ export const runPostgresMigrations = async (
     await sql.raw(stmt).execute(db);
   }
   await verifyColumns(db);
-  logger.info('Postgres migrations completed.');
 };

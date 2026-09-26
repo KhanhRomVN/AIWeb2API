@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./resources/icon.png" width="128" height="128" alt="Elara Logo">
+  <img src="./resources/icon.png" width="128" height="128" alt="AIWeb2API Logo">
 </p>
 
-<h1 align="center">🚀 Elara Server</h1>
+<h1 align="center">🚀 AIWeb2API Server</h1>
 
 <p align="center">
   <strong>AI Backend Proxy & Manager — Unified API for 20+ AI Providers</strong>
@@ -42,7 +42,7 @@
 
 ## ✨ Giới Thiệu
 
-**Elara Server** là một backend proxy nhẹ nhưng mạnh mẽ, cung cấp unified API cho **20+ AI providers** (Claude, DeepSeek, Mistral, Groq, Qwen, Gemini, ...) với khả năng lưu trữ dữ liệu hội thoại local an toàn.
+**AIWeb2API Server** là một backend proxy nhẹ nhưng mạnh mẽ, cung cấp unified API cho **20+ AI providers** (Claude, DeepSeek, Mistral, Groq, Qwen, Gemini, ...) với khả năng lưu trữ dữ liệu hội thoại local an toàn.
 
 > ⚡ **Chỉ ~8MB bundle**, khởi động dưới 1 giây — tối ưu cho cả development và production.
 
@@ -54,7 +54,7 @@
 | --------- | ----- |
 | 🚀 **Multi-Provider** | Hỗ trợ 20+ AI providers qua unified API |
 | 🔌 **Single Endpoint** | Một endpoint duy nhất cho tất cả nhu cầu AI |
-| 💾 **Local Storage** | SQLite tự động quản lý trong `~/.elara/` |
+| 💾 **Local Storage** | SQLite tự động quản lý trong `~/.aiweb2api/` |
 | ⚡ **Siêu Nhẹ** | Bundle ~8MB, khởi động ngay lập tức |
 | 🔒 **HTTPS + TLS** | Hỗ trợ HTTPS với tự động tạo certificate |
 | 🧠 **Thinking Mode** | Hỗ trợ deepseek-reasoner, thinking models |
@@ -72,15 +72,13 @@
 ### Cài đặt toàn cầu
 
 ```bash
-npm install -g @khanhromvn/elara-server
+npm install -g @khanhromvn/aiweb2api
 ```
 
 ### Chạy server
 
-```bash
-elara-server
-```
 
+aiweb2api
 ### Hoặc chạy từ source
 
 ```bash
@@ -97,18 +95,17 @@ npm run dev
 ### Command Options
 
 ```bash
-elara-server [options]
+aiweb2api [options]
 ```
 
 | Option | Mô tả | Mặc định |
 | ------ | ----- | -------- |
 | `--port, -p <number>` | Cổng server | `8888` |
-| `--db-path <path>` | Đường dẫn database SQLite | `~/.elara/database.sqlite` |
-
+| `--db-path <path>` | Đường dẫn database SQLite | `~/.aiweb2api/database.sqlite` |
 **Ví dụ:**
 
 ```bash
-elara-server --port 9000 --db-path ./my-data.sqlite
+aiweb2api --port 9000 --db-path ./my-data.sqlite
 ```
 
 ### Cơ chế xử lý Port Conflict
@@ -231,7 +228,7 @@ Port 8888 is already in use. Do you want to kill the process using this port? (y
 
 ## 🗄️ Database Schema
 
-Elara Server sử dụng **SQLite** với file database mặc định tại `~/.elara/database.sqlite`.
+AIWeb2API Server sử dụng **SQLite** với file database mặc định tại `~/.aiweb2api/database.sqlite`.
 
 ### Các bảng chính
 

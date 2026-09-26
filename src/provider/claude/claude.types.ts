@@ -27,6 +27,8 @@
 export interface ClaudeCredential {
   cookies: string;
   organizationId: string | null;
+  /** Unix timestamp (giây) khi sessionKey hết hạn. Null nếu không xác định được. */
+  sessionKeyExpiresAt?: number | null;
 }
 
 // ─── User ───────────────────────────────────────────────────────────────
@@ -93,6 +95,58 @@ export interface ClaudeBootstrapModel {
 /** Response của `/edge-api/bootstrap/{org}/app_start`. */
 export interface ClaudeBootstrapResponse {
   account?: ClaudeBootstrapAccount;
+  /**
+   * Nguồn dữ liệu ĐÚNG cho effort/capabilities/trạng thái disabled (mới),
+   * thay thế `claude_ai_bootstrap_models_config` (legacy, xem claude.md).
+   * Nằm ở root response, không phải trong `account.memberships[]`.
+   */
+  model_selector_config?: ClaudeModelSelectorSurface[];
+}
+
+// ─── Model Selector Config (nguồn effort/capabilities đúng — xem claude.md) ─
+
+/** 1 mức effort trong `thinking.effort_options[]`. */
+export interface ClaudeEffortOption {
+  /** `low` | `medium` | `high` | `xhigh` (hiển thị "Extra") | `max` | `ultracode` (chỉ surface code). */
+  id: string;
+  name: string;
+  /** `true` nếu đây là effort mặc định của model này (khác nhau giữa các model). */
+  recommended?: boolean;
+}
+
+/** Cấu hình thinking/effort của 1 model trong `model_selector_config`. */
+export interface ClaudeThinkingConfig {
+  /**
+   * `effort` | `effort_and_mode` → model có effort (dùng `effort_options[]`).
+   * `mode` → chỉ có thinking mode (auto/extended/off), không có effort.
+   * `none` → không hỗ trợ thinking.
+   */
+  type: 'effort' | 'effort_and_mode' | 'mode' | 'none';
+  effort_options?: ClaudeEffortOption[];
+}
+
+/** Model item trong `model_selector_config[].models[]` (nguồn mới, thay legacy). */
+export interface ClaudeModelSelectorModel {
+  id: string;
+  name: string;
+  description?: string;
+  /** `true` nếu model bị khóa (cần upgrade plan) — nguồn duy nhất đáng tin để filter. */
+  disabled?: boolean;
+  capabilities?: {
+    mm_pdf?: boolean;
+    mm_images?: boolean;
+    web_search?: boolean;
+    gsuite_tools?: boolean;
+    compass?: boolean;
+  };
+  thinking?: ClaudeThinkingConfig;
+  hard_limit?: number;
+}
+
+/** 1 surface trong `model_selector_config[]` (vd: `chat`, `code`, `cowork`...). */
+export interface ClaudeModelSelectorSurface {
+  id: string;
+  models: ClaudeModelSelectorModel[];
 }
 
 // ─── Chat Completion ────────────────────────────────────────────────────
@@ -134,6 +188,56 @@ export interface ClaudeCompletionPayload {
   create_conversation_params?: ClaudeCreateConversationParams;
 }
 
+/**
+ * Body gửi lên `POST /api/organizations/{org}/chat_conversations/{conv}/retry_completion`.
+ * Dùng để regenerate response hoặc edit+regenerate từ 1 parent message cụ thể.
+ */
+export interface ClaudeRetryCompletionPayload {
+  /** Prompt mới (rỗng nếu regenerate không đổi nội dung). */
+  prompt: string;
+  /**
+   * UUID của human message mà assistant sẽ reply lại.
+   * Đây là parent của assistant message muốn regenerate.
+   */
+  parent_message_uuid: string;
+  timezone: string;
+  locale: string;
+  model: string;
+  effort?: string;
+  thinking_mode?: string;
+  tools?: Array<Record<string, unknown>>;
+  /**
+   * Chỉ có `assistant_message_uuid` (không có `human_message_uuid`).
+   * Claude sẽ tạo assistant message mới với UUID này.
+   */
+  turn_message_uuids: {
+    assistant_message_uuid: string;
+  };
+  attachments?: string[];
+  files?: string[];
+  sync_sources?: string[];
+  completion_request_id: string;
+  rendering_mode: string;
+}
+
+/** Message item trong response của GET conversation. */
+export interface ClaudeConversationMessage {
+  uuid: string;
+  sender: 'human' | 'assistant';
+  index: number;
+  parent_message_uuid?: string;
+  content?: Array<{ type: string; text?: string }>;
+  files?: Array<{ file_uuid: string }>;
+  input_mode?: string;
+}
+
+/** Response của GET conversation endpoint. */
+export interface ClaudeConversationResponse {
+  uuid: string;
+  current_leaf_message_uuid?: string;
+  chat_messages?: ClaudeConversationMessage[];
+}
+
 // ─── Upload ─────────────────────────────────────────────────────────────
 
 /**
@@ -159,7 +263,9 @@ export interface ClaudeUploadResponse {
 /**
  * Event payload của Claude SSE stream.
  * Format tương tự Anthropic Message API:
- * - `content_block_delta` với `delta.text` / `delta.thinking`
+ * - `content_block_start` với `content_block.type = "tool_use"` (bắt đầu tool call)
+ * - `content_block_delta` với `delta.text` / `delta.thinking` (text/thinking chunk)
+ * - `content_block_delta` với `delta.type = "input_json_delta"` (tool input chunk)
  * - `message_stop` khi kết thúc
  */
 export interface ClaudeSSEEvent {
@@ -169,6 +275,7 @@ export interface ClaudeSSEEvent {
     type?: string;
     text?: string;
     thinking?: string;
+    partial_json?: string;
     stop_reason?: string;
   };
   message?: {
@@ -181,7 +288,10 @@ export interface ClaudeSSEEvent {
   };
   content_block?: {
     type?: string;
+    id?: string;
+    name?: string;
     text?: string;
+    input?: Record<string, unknown>;
   };
 }
 

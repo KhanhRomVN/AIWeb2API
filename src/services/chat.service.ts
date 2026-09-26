@@ -113,11 +113,7 @@ export const sendMessage = async (
         ? (newCredential: string) => {
             // Fire-and-forget: không block stream nếu persist chậm.
             updateAccountCredential(accountId, newCredential)
-              .then(() => {
-                logger.info(
-                  `[sendMessage] Persisted rotated credential for account ${accountId}`,
-                );
-              })
+              .then(() => {})
               .catch((persistErr: any) => {
                 logger.warn(
                   `[sendMessage] Failed to persist rotated credential for account ${accountId}:`,

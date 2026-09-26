@@ -17,11 +17,10 @@
 // ── Providers ──
 import { providerRegistry } from '../provider/registry';
 
+// ── Database ──
+import { dbContext } from '../database/connection';
+
 // ── Repositories ──
-import {
-  findAllProviders as findAllProviderRows,
-  upsertProvider,
-} from '../repositories/provider.repository';
 import { findAllModelStats } from '../repositories/model-stats.repository';
 import { findFirstAccountByProvider } from '../repositories/account.repository';
 
@@ -32,6 +31,8 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('ProviderService');
 
 let cachedProviders: Provider[] | null = null;
+/** DataStore reference dùng để detect khi user đổi DB active — invalidate cache khi khác. */
+let cachedDataStore: object | null | undefined = undefined;
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -63,6 +64,12 @@ export interface Provider {
   models_error?: string;
   is_pausable?: boolean;
   is_memory?: boolean;
+  /**
+   * Provider tự inject system prompt nội bộ — Zen không nên gửi thêm
+   * system prompt sẽ conflict. Khi true: PromptLength chỉ cho phép "none",
+   * StyleCode chỉ cho phép "none".
+   */
+  anti_system_prompt_injection?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -81,6 +88,10 @@ const fetchProviderConfig = async (): Promise<any[]> => {
         seenIds.add(id);
         configs.push(cfg);
       }
+    } else {
+      logger.warn(
+        `[fetchProviderConfig] Provider has no config or provider_id: ${provider?.constructor?.name ?? typeof provider}`,
+      );
     }
   }
 
@@ -104,10 +115,8 @@ const fetchModelsFromProvider = async (
     Array.isArray(cfg?.auth_method) && cfg.auth_method.length === 0;
 
   if (!noAuthRequired && (!account || account.credential === null)) {
-    return {
-      models: [],
-      error: `No accounts configured. Add a ${providerId} account to load models.`,
-    };
+    const msg = `No accounts configured. Add a ${providerId} account to load models.`;
+    return { models: [], error: msg };
   }
 
   try {
@@ -115,6 +124,7 @@ const fetchModelsFromProvider = async (
       account?.credential ?? '',
       account?.id,
     );
+
     return { models };
   } catch (error: any) {
     const accountInfo = account
@@ -133,7 +143,10 @@ const fetchModelsFromProvider = async (
     logger.error(
       `Failed to fetch models from provider ${providerId} (${accountInfo}): ${error?.message ?? error}`,
     );
-    return { models: [], error: error?.message ?? 'Unknown error fetching models' };
+    return {
+      models: [],
+      error: error?.message ?? 'Unknown error fetching models',
+    };
   }
 };
 
@@ -141,19 +154,34 @@ const fetchModelsFromProvider = async (
 
 export const invalidateProviderCache = (): void => {
   cachedProviders = null;
+  cachedDataStore = undefined;
 };
 
 export const getAllProviders = async (): Promise<Provider[]> => {
+  // Detect khi user đổi DB active: dùng dataStore reference làm cache key.
+  // Nếu dataStore khác với lần build cache trước, invalidate để fetch lại.
+  const ctx = dbContext.getStore();
+  const currentDataStore = ctx?.dataStore ?? null;
+  if (cachedProviders !== null && currentDataStore !== cachedDataStore) {
+    cachedProviders = null;
+  }
+
   if (cachedProviders !== null) {
     return cachedProviders;
   }
+  // Lưu dataStore reference để so sánh lần sau.
+  cachedDataStore = currentDataStore;
 
   const config = await fetchProviderConfig();
-  const dbProviders = await findAllProviderRows();
-  const providersMap = new Map(dbProviders.map((p) => [p.id.toLowerCase(), p]));
+  // Chỉ lấy success_rate từ DB — provider metadata lấy từ registry (constants/API).
+  let allModelStats: any[] = [];
+  try {
+    allModelStats = await findAllModelStats();
+  } catch (err) {
+    logger.warn('Could not fetch model stats from DB:', (err as any)?.message);
+  }
 
   // Chỉ lấy success_rate từ DB — metadata model (name, capabilities) lấy từ provider constants/API
-  const allModelStats = await findAllModelStats();
   const successRateMap = new Map<string, number | null>(
     allModelStats.map((s) => [
       `${s.provider_id.toLowerCase()}:${s.model_id.toLowerCase()}`,
@@ -165,28 +193,14 @@ export const getAllProviders = async (): Promise<Provider[]> => {
   const seenIds = new Set<string>();
 
   for (const p of config) {
-    if (!p?.provider_id) continue;
+    if (!p?.provider_id) {
+      continue;
+    }
     const pid = p.provider_id.toLowerCase();
-    if (seenIds.has(pid)) continue;
+    if (seenIds.has(pid)) {
+      continue;
+    }
     seenIds.add(pid);
-
-    // Upsert provider metadata to database
-    await upsertProvider({
-      id: p.provider_id,
-      title: p.provider_name || p.provider_id,
-      description: p.description,
-      color: p.color,
-      platform: p.platform,
-      connection_type: p.connection_type,
-      is_enabled: p.is_enabled !== false ? 1 : 0,
-      website_url: p.website_url,
-      auth_method: Array.isArray(p.auth_method)
-        ? JSON.stringify(p.auth_method)
-        : (p.auth_method ?? null),
-      is_pausable: p.is_pausable ? 1 : 0,
-      is_memory: p.is_memory ? 1 : 0,
-      browser_extension_folder: p.browser_extension_folder,
-    });
 
     let models: any[] | undefined = p.models;
     let modelsError: string | undefined;
@@ -203,12 +217,11 @@ export const getAllProviders = async (): Promise<Provider[]> => {
       }
     }
 
-    const dbProvider = providersMap.get(p.provider_id.toLowerCase());
-    providersWithModels.push({
+    const entry: Provider = {
       ...p,
       website_url: p.website_url || (p as any).website,
       website: p.website_url || (p as any).website,
-      is_memory: dbProvider?.is_memory === 1 ? true : (p.is_memory ?? false),
+      is_memory: p.is_memory ?? false,
       ...(modelsError ? { models_error: modelsError } : {}),
       models: models?.map((m: any) => ({
         ...m,
@@ -230,7 +243,9 @@ export const getAllProviders = async (): Promise<Provider[]> => {
           m.success_rate ??
           null,
       })),
-    });
+    };
+
+    providersWithModels.push(entry);
   }
 
   cachedProviders = providersWithModels;
@@ -324,7 +339,9 @@ export const getAllModelsFromEnabledProviders = async (): Promise<
   for (const provider of enabledProviders) {
     let models: any[] = [];
     try {
-      const { models: freshModels } = await fetchModelsFromProvider(provider.provider_id);
+      const { models: freshModels } = await fetchModelsFromProvider(
+        provider.provider_id,
+      );
       if (freshModels.length > 0) {
         models = freshModels;
       }

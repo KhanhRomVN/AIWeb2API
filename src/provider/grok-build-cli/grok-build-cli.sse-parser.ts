@@ -113,7 +113,6 @@ export async function parseGrokBuildSSEStream(
 
       // ── [DONE] sentinel ──────────────────────────────────────────
       if (trimmed === 'data: [DONE]') {
-        logger.debug('[GrokBuildSSE] stream [DONE] received');
         currentEventType = '';
         continue;
       }
@@ -135,19 +134,6 @@ export async function parseGrokBuildSSEStream(
 
       eventCount++;
       const type = (data.type as string) || currentEventType;
-
-      // ── Log sample events ────────────────────────────────────────
-      if (eventCount <= 5) {
-        logger.debug('[GrokBuildSSE] event sample', {
-          eventCount,
-          type,
-          dataKeys: Object.keys(data),
-          deltaPreview:
-            typeof data.delta === 'string'
-              ? data.delta.slice(0, 60)
-              : undefined,
-        });
-      }
 
       // ── Thinking delta ───────────────────────────────────────────
       if (
@@ -252,7 +238,6 @@ export async function parseGrokBuildSSEStream(
 
       // ── Info events (bỏ qua) ─────────────────────────────────────
       if (INFO_EVENT_TYPES.has(type)) {
-        logger.debug('[GrokBuildSSE] info event', { type });
         currentEventType = '';
         continue;
       }
@@ -283,13 +268,6 @@ export async function parseGrokBuildSSEStream(
       currentEventType = '';
     }
   }
-
-  logger.debug('[GrokBuildSSE] stream ended', {
-    totalContentLength,
-    totalEvents: eventCount,
-    hasUsage: usage !== null,
-    finishReason,
-  });
 
   if (totalContentLength === 0) {
     logger.warn(

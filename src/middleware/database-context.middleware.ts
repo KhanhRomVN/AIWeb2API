@@ -124,6 +124,7 @@ const getOrCreateDataStore = (
 /** Shape của row trong bảng `database_managers`. */
 interface ManagerRow {
   id: string;
+  name: string;
   type: string;
   file_path: string | null;
   db_type: string;
@@ -285,6 +286,60 @@ export const databaseContextMiddleware = async (
   // Chạy toàn bộ downstream (bao gồm next handler) trong ALS context
   // để mọi `getDb()` / `getDataStore()` gọi sau đây trả về đúng DB.
   dbContext.run({ db, dataStore }, next);
+};
+
+/**
+ * Kết nối trước toàn bộ database managers đã lưu khi server khởi động.
+ * Mục đích: warm-up cache connection + cập nhật `last_test_status` để
+ * Zen hiển thị status ngay khi mở tab Database mà không cần chạy lại
+ * health check.
+ *
+ * Không throw — lỗi từng manager chỉ log WARN.
+ */
+export const preconnectAllManagers = async (): Promise<void> => {
+  try {
+    const managersDb = getManagersDb();
+    const managers = managersDb
+      .prepare('SELECT * FROM database_managers ORDER BY created_at ASC')
+      .all() as ManagerRow[];
+
+    if (managers.length === 0) return;
+    const now = Date.now();
+
+    for (const manager of managers) {
+      try {
+        const ctx = await resolveRequestDb(manager.id);
+        // resolveRequestDb trả defaultContext khi lỗi, không phải throw.
+        // Kiểm tra bằng cách xem DataStore có khác global không.
+        const isConnected = ctx.managerId === manager.id;
+        const status = isConnected ? 'success' : 'error';
+        managersDb
+          .prepare(
+            'UPDATE database_managers SET last_test_status = ?, last_test_at = ? WHERE id = ?',
+          )
+          .run(status, now, manager.id);
+        if (isConnected) {
+        } else {
+          logger.warn(
+            `[preconnect] ✗ ${manager.name} (${manager.id}) — could not connect`,
+          );
+        }
+      } catch (err) {
+        logger.warn(
+          `[preconnect] ✗ ${manager.name} (${manager.id}): ${(err as any)?.message}`,
+        );
+        try {
+          managersDb
+            .prepare(
+              'UPDATE database_managers SET last_test_status = ?, last_test_at = ? WHERE id = ?',
+            )
+            .run('error', now, manager.id);
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    logger.warn('preconnectAllManagers failed (non-fatal):', err);
+  }
 };
 
 /**

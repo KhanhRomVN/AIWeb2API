@@ -43,7 +43,11 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { createLogger } from '../utils/logger';
-import { getManagersDb, initManagersDatabase, resetManagersDb } from './managers';
+import {
+  getManagersDb,
+  initManagersDatabase,
+  resetManagersDb,
+} from './managers';
 
 const logger = createLogger('DBIntegrity');
 
@@ -92,7 +96,8 @@ function backupCorrupt(filePath: string): void {
 
 /** Upsert seed record mặc định vào managers db. */
 function upsertDefaultRecord(db: Database.Database, now: number): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO database_managers
       (id, name, type, db_type, file_path, last_test_status, last_test_at, created_at, updated_at)
     VALUES
@@ -102,15 +107,13 @@ function upsertDefaultRecord(db: Database.Database, now: number): void {
       last_test_status = excluded.last_test_status,
       last_test_at     = excluded.last_test_at,
       updated_at       = excluded.updated_at
-  `).run(DEFAULT_RECORD_ID, AIWEB2API_DB_PATH, now, now, now);
+  `,
+  ).run(DEFAULT_RECORD_ID, AIWEB2API_DB_PATH, now, now, now);
 }
 
 // ─── Main Check ─────────────────────────────────────────────────────────
 
 export function runIntegrityCheck(): void {
-  logger.info('Running database integrity check...');
-
-  // ── [C6] Kiểm tra database-managers.sqlite có bị corrupt không ─────────
   if (fs.existsSync(MANAGERS_DB_PATH) && !isSqliteFile(MANAGERS_DB_PATH)) {
     logger.error('[C6] database-managers.sqlite is corrupt. Recreating...');
     backupCorrupt(MANAGERS_DB_PATH);
@@ -118,7 +121,6 @@ export function runIntegrityCheck(): void {
     // Reinitialize managers database từ đầu
     resetManagersDb();
     initManagersDatabase();
-    logger.info('[C6] Recreated database-managers.sqlite successfully.');
   }
 
   // Từ đây getManagersDb() luôn hợp lệ
@@ -143,7 +145,6 @@ export function runIntegrityCheck(): void {
     // [C4] User xóa record này thủ công
     logger.warn(`[C1/C3/C4] Default record missing. Re-seeding...`);
     upsertDefaultRecord(db, now);
-    logger.info('[C1/C3/C4] Default record re-seeded.');
   } else {
     // ── [C5] file_path trong record không khớp path chuẩn ─────────────────
     if (defaultRecord.file_path !== AIWEB2API_DB_PATH) {
@@ -167,7 +168,6 @@ export function runIntegrityCheck(): void {
          SET last_test_status = 'success', last_test_at = ?, updated_at = ?
          WHERE id = ?`,
       ).run(now, now, DEFAULT_RECORD_ID);
-      logger.info('[C2] aiweb2api.sqlite restored, updated record status.');
     }
   }
 
@@ -186,7 +186,12 @@ export function runIntegrityCheck(): void {
   }
 
   // ── [C7] Các record local-file khác trỏ tới file không tồn tại ──────────
-  type ManagerRow = { id: string; name: string; file_path: string | null; last_test_status: string | null };
+  type ManagerRow = {
+    id: string;
+    name: string;
+    file_path: string | null;
+    last_test_status: string | null;
+  };
   const localFileRecords = db
     .prepare(
       `SELECT id, name, file_path, last_test_status
@@ -205,7 +210,8 @@ export function runIntegrityCheck(): void {
     if (!record.file_path) continue;
 
     const exists = fs.existsSync(record.file_path);
-    const wasOk = record.last_test_status === 'success' || record.last_test_status === null;
+    const wasOk =
+      record.last_test_status === 'success' || record.last_test_status === null;
 
     if (!exists && wasOk) {
       logger.warn(
@@ -213,10 +219,6 @@ export function runIntegrityCheck(): void {
       );
       updateStatus.run('file_missing', now, now, record.id);
     } else if (exists && record.last_test_status === 'file_missing') {
-      // File xuất hiện trở lại (user restore)
-      logger.info(
-        `[C7] local-file record "${record.name}" (${record.id}): file restored. Updating status to success.`,
-      );
       updateStatus.run('success', now, now, record.id);
     }
   }
@@ -229,6 +231,4 @@ export function runIntegrityCheck(): void {
       `[C8] No read/write permission on ${BASE_DIR}. Some features may not work correctly.`,
     );
   }
-
-  logger.info('Database integrity check completed.');
 }

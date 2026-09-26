@@ -23,7 +23,8 @@ export interface SendMessageOptions {
   stream?: boolean;
   // Edit message support
   edit_message_id?: string; // ID của message cần edit (fid trong Qwen)
-  user_action?: 'chat' | 'edit'; // Action type: chat (mới) hoặc edit (sửa)
+  user_action?: 'chat' | 'edit'; // Action type: chat (mới), edit (sửa nội dung hoặc regenerate)
+  message_fid?: string; // Pre-generated fid for normal chat (Qwen) to ensure UI/server UUID match
   onContent: (chunk: string) => void;
   onThinking?: (chunk: string) => void;
   onMetadata?: (meta: any) => void;
@@ -41,7 +42,7 @@ export interface SendMessageOptions {
 export interface Provider {
   name: string;
   handleMessage(options: SendMessageOptions): Promise<void>;
-  uploadFile?(credential: string, file: any): Promise<any>;
+  uploadFile?(credential: string, file: any, conversationId?: string): Promise<any>;
   getModels?(credential: string, accountId?: string): Promise<any[]>;
   login?(options?: any): Promise<any>;
   getUserProfile?(credential: string): Promise<{ email: string | null }>;

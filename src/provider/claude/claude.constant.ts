@@ -41,6 +41,15 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
 
+/**
+ * Claude.ai tự động inject system-prompt của platform vào mọi conversation
+ * (bao gồm các hướng dẫn mặc định về tone, safety, v.v.).
+ * Flag này báo cho Zen biết provider có hành vi anti-injection — tức là
+ * system prompt do user/Zen gửi có thể bị override hoặc conflict với
+ * system prompt nội bộ của Claude, nên cần thận trọng khi combine prompt.
+ */
+export const ANTI_SYSTEM_PROMPT_INJECTION = true;
+
 // NOTE: Không có FALLBACK_MODELS. getModels() phải throw error khi fail,
 // không được trả về danh sách giả. Xem NO_FALLBACK_MODELS.md ở thư mục provider.
 
@@ -125,6 +134,9 @@ export const API_PATHS = {
   /** Load conversation (dùng cho tiếp tục hội thoại cũ). */
   CONVERSATION: (orgId: string, convId: string) =>
     `/api/organizations/${orgId}/chat_conversations/${convId}?tree=True&rendering_mode=messages&render_all_tools=true&include_inline_comparison=true&consistency=eventual`,
+  /** Regenerate/retry last assistant response (SSE stream). */
+  RETRY_COMPLETION: (orgId: string, convId: string) =>
+    `/api/organizations/${orgId}/chat_conversations/${convId}/retry_completion`,
 } as const;
 
 /**
@@ -263,21 +275,26 @@ export const DEFAULT_RENDERING_MODE = 'messages';
 export const DEFAULT_CHAT_MEMORY_MODE = 'enabled';
 
 /**
- * Các mức effort claude.ai chấp nhận cho completion request.
- * `getModels()` nhân mỗi model base với từng mức này để tạo model id
- * dạng `<base>-<effort>` (ví dụ `claude-sonnet-5-medium`).
+ * Danh sách ID effort có thể xuất hiện trên surface `chat` của claude.ai,
+ * lấy từ `model_selector_config[].models[].thinking.effort_options[].id`
+ * (xem claude.md). Dùng để tách `effort` khỏi model id dạng `<base>-<effort>`
+ * trong `splitModelAndEffort()` — KHÔNG dùng để tự sinh effort cho model,
+ * vì không phải model nào cũng có đủ các mức này (getModels() nay đọc
+ * trực tiếp `effort_options[]` của từng model).
  *
- * Lưu ý: hiện chỉ `low` và `medium` được xác nhận trong traffic capture.
- * `high` / `extra` / `max` theo yêu cầu — nếu API từ chối, chỉ cần rút gọn
- * mảng này, phần còn lại tự thích nghi.
+ * Lưu ý: `xhigh` hiển thị trên UI là "Extra" — dễ nhầm với chuỗi "extra".
+ * `ultracode` chỉ xuất hiện ở surface `code`/`cc`/`ccr`/`ccd`, không có ở `chat`.
  */
 export const EFFORT_LEVELS = [
   'low',
   'medium',
   'high',
-  'extra',
+  'xhigh',
   'max',
 ] as const;
+
+/** Surface dùng cho chat completion thông thường trong `model_selector_config[]`. */
+export const MODEL_SELECTOR_SURFACE_CHAT = 'chat';
 
 /** Giá trị `thinking_mode` trong completion payload. */
 export const THINKING_MODES = {
@@ -302,7 +319,18 @@ export const SSE_PROTOCOL = {
 
 export const SSE_EVENT_TYPES = {
   CONTENT_BLOCK_DELTA: 'content_block_delta',
+  CONTENT_BLOCK_START: 'content_block_start',
   MESSAGE_STOP: 'message_stop',
+} as const;
+
+/**
+ * Marker bao quanh tool call JSON được emit vào onContent.
+ * Format: \n__CLAUDE_TOOL__:{...json...}__END_TOOL__\n
+ * Zen dùng để detect và parse tool call, map path, rồi convert sang Zen XML.
+ */
+export const CLAUDE_TOOL_MARKER = {
+  START: '__CLAUDE_TOOL__:',
+  END: '__END_TOOL__',
 } as const;
 
 // ─── Path / Partition ────────────────────────────────────────────────

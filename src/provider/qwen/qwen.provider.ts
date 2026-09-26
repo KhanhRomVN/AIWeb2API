@@ -98,6 +98,7 @@ import {
   MODEL_PREFIX_QWEN_DASH,
   MODEL_PREFIX_QWEN_3,
   CHATS_LIST_QUERY,
+  CHAT_HISTORY_QUERY,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
 } from './qwen.constant';
@@ -127,7 +128,17 @@ function acquireLock(key: string): {
 
 // ─── Parent ID Cache ───────────────────────────────────────────────────
 
+/**
+ * lastParentIdCache  : response_id của assistant message cuối cùng (dùng làm parent_id cho normal chat tiếp theo)
+ * prevParentIdCache  : response_id của assistant message TRƯỚC ĐÓ (dùng làm parent_id khi regenerate/edit)
+ *
+ * Ví dụ timeline:
+ *   msg1 chat → assistant1 (id=A1) → cache: last=A1, prev=null
+ *   msg2 chat → assistant2 (id=A2) → cache: last=A2, prev=A1
+ *   regenerate msg2  → parent_id=A1 (prev), childrenIds=[A2] (last)
+ */
 const lastParentIdCache = new Map<string, string>();
+const prevParentIdCache = new Map<string, string>();
 
 // ─── Provider Class ────────────────────────────────────────────────────
 
@@ -364,10 +375,16 @@ export class QwenProvider implements Provider {
             // when we receive something that looks like a real token but has the
             // wrong format (i.e. extracted via REGEX_PATTERNS.RAW_TOKEN but still
             // doesn't start with the expected JWT prefix).
-            const extractedViaRegex =
-              (data.cookies.match(REGEX_PATTERNS.RAW_TOKEN) || [])[1];
-            if (extractedViaRegex && !extractedViaRegex.startsWith(AUTH_PREFIXES.JWT)) {
-              logger.warn('[Qwen] Login validation failed: invalid token format');
+            const extractedViaRegex = (data.cookies.match(
+              REGEX_PATTERNS.RAW_TOKEN,
+            ) || [])[1];
+            if (
+              extractedViaRegex &&
+              !extractedViaRegex.startsWith(AUTH_PREFIXES.JWT)
+            ) {
+              logger.warn(
+                '[Qwen] Login validation failed: invalid token format',
+              );
             }
             return { isValid: false };
           }
@@ -615,7 +632,7 @@ export class QwenProvider implements Provider {
     if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
     const response = await fetch(
-      `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/`,
+      `${BASE_URL}${API_PATHS.CHATS}${conversationId}${CHAT_HISTORY_QUERY}`,
       { headers },
     );
     if (!response.ok) {
@@ -626,8 +643,14 @@ export class QwenProvider implements Provider {
     }
 
     const json = await response.json();
-    const messages =
-      json[RESPONSE_FIELDS.MESSAGES] || json[RESPONSE_FIELDS.DATA] || [];
+    // Response structure: { data: { chat: { history: { messages: {...}, currentId } } } }
+    const chatData = json[RESPONSE_FIELDS.DATA];
+    const historyMessages = chatData?.chat?.history?.messages;
+    const messages: any[] = historyMessages
+      ? Object.values(historyMessages)
+      : chatData?.[RESPONSE_FIELDS.MESSAGES] ||
+        chatData?.[RESPONSE_FIELDS.DATA] ||
+        [];
     if (messages.length > 0) {
       const lastAssistant = [...messages]
         .reverse()
@@ -689,61 +712,84 @@ export class QwenProvider implements Provider {
       const timezone = `${new Date().toDateString()} ${new Date().toTimeString().split(' ')[0]} GMT+0700`;
 
       const lastMsg = messages[messages.length - 1];
-      const msgFid = options.edit_message_id || crypto.randomUUID();
       const userAction =
         options.user_action || CHAT_PAYLOAD_CONSTANTS.USER_ACTION_CHAT;
 
-      // Khi edit message, cần lấy childrenIds từ message cũ
+      // edit_message_id = fid cũ của message cần overwrite (dùng để lookup childrenIds)
+      // message_fid     = pre-generated fid cho normal chat (đảm bảo UI/server dùng cùng UUID)
+      // Với edit: fid trong payload là UUID MỚI (server dùng fid mới + childrenIds để overwrite)
+      //           Để regenerate response (không đổi nội dung), caller truyền edit với content giống hệt.
+      // Với chat: dùng message_fid nếu có, không thì generate mới
+      const msgFid: string = options.message_fid || crypto.randomUUID();
+
+      // Với edit/regenerate: childrenIds = [last assistant response ID]
+      // Qwen dùng childrenIds để biết response nào cần overwrite.
+      // Server sẽ tạo branch mới thay vì append message mới.
       let childrenIds: string[] = [];
+
       if (
         userAction === CHAT_PAYLOAD_CONSTANTS.USER_ACTION_EDIT &&
-        conversationId &&
-        msgFid
+        conversationId
       ) {
-        try {
-          const response = await fetch(
-            `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/`,
-            {
-              headers: {
-                [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${token}`,
-                [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
-                [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
-                [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
-              },
-            },
-          );
-          if (response.ok) {
-            const json = await response.json();
-            const messages =
-              json[RESPONSE_FIELDS.MESSAGES] ||
-              json[RESPONSE_FIELDS.DATA] ||
-              [];
-            const oldMessage = messages.find(
-              (m: any) => m[CHAT_PAYLOAD_FIELDS.FID] === msgFid,
-            );
-            if (oldMessage && oldMessage[CHAT_PAYLOAD_FIELDS.CHILDREN_IDS]) {
-              childrenIds = oldMessage[CHAT_PAYLOAD_FIELDS.CHILDREN_IDS];
-            }
-          }
-        } catch (e) {
+        const cachedAssistantId = lastParentIdCache.get(conversationId);
+        if (cachedAssistantId) {
+          childrenIds = [cachedAssistantId];
+        } else {
           logger.warn(
-            '[Qwen] Failed to fetch childrenIds for edit message:',
-            e,
+            `[Qwen] edit — no cached assistantId for conversationId=${conversationId}, childrenIds=[]`,
           );
         }
       }
 
       let parentId: string | null = options.parent_message_id ?? null;
 
+      // Với edit/regenerate: parent_id phải là parent của user message cần regenerate.
+      // Đó là assistant response CỦA LẦN TRƯỚC (prevParentIdCache), không phải lần cuối (lastParentIdCache).
+      //
+      // Ví dụ: msg1 → A1(cache prev=null, last=A1) → msg2 → A2(cache prev=A1, last=A2)
+      //   regenerate msg2: parent_id = A1 (prev), childrenIds = [A2] (last)
+      //
+      // Với normal chat: parent_id = last assistant ID (lastParentIdCache) → đúng như trước.
       if (!parentId && conversationId && !isNewChat) {
-        const cached = lastParentIdCache.get(conversationId);
-        if (cached) {
-          parentId = cached;
+        if (userAction === CHAT_PAYLOAD_CONSTANTS.USER_ACTION_EDIT) {
+          // Regenerate: dùng prev (parent của user message cần overwrite)
+          const prevCached = prevParentIdCache.get(conversationId);
+          if (prevCached) {
+            parentId = prevCached;
+          } else {
+            // Nếu chưa có prev (chỉ có 1 turn), dùng last hoặc fetch
+            const lastCached = lastParentIdCache.get(conversationId);
+            if (lastCached) {
+              // prev không có nghĩa là đây là message đầu tiên → parent_id = null (root)
+              parentId = null;
+              logger.warn(
+                `[Qwen] edit — no prevParentIdCache, this may be the first message. Setting parent_id=null`,
+              );
+            } else {
+              try {
+                parentId = await this.getLastMessageId(
+                  conversationId,
+                  credential,
+                );
+              } catch (e) {
+                logger.warn('[Qwen] Failed to fetch last message ID for edit');
+              }
+            }
+          }
         } else {
-          try {
-            parentId = await this.getLastMessageId(conversationId, credential);
-          } catch (e) {
-            logger.warn('[Qwen] Failed to fetch last message ID');
+          // Normal chat: dùng last (append sau assistant cuối)
+          const cached = lastParentIdCache.get(conversationId);
+          if (cached) {
+            parentId = cached;
+          } else {
+            try {
+              parentId = await this.getLastMessageId(
+                conversationId,
+                credential,
+              );
+            } catch (e) {
+              logger.warn('[Qwen] Failed to fetch last message ID');
+            }
           }
         }
       }
@@ -922,6 +968,10 @@ export class QwenProvider implements Provider {
       let currentResponseId: string | null = null;
       let firstResponseId: string | null = null; // Response đầu tiên để select
       let isInThinkingPhase = false;
+      // Collect parsed chunks for debugging empty responses (capped to avoid memory bloat)
+      const debugChunks: any[] = [];
+      // Set when a top-level error is detected inside SSE stream; thrown after exiting the loop
+      let sseStreamError: Error | null = null;
 
       for await (const chunk of response.body as any) {
         chunkCounter++;
@@ -955,6 +1005,31 @@ export class QwenProvider implements Provider {
           try {
             const json = JSON.parse(jsonStr);
             totalChunksProcessed++;
+
+            // Collect for empty-response diagnostics (cap at 30 chunks)
+            if (debugChunks.length < 30) {
+              debugChunks.push(json);
+            }
+
+            // Detect top-level error returned inside the SSE stream
+            // e.g. { "error": { "code": "quota_limit", "details": "..." }, "response_id": "..." }
+            if (json.error?.code || json.error_code) {
+              const errCode = json.error?.code ?? json.error_code;
+              const errDetails =
+                json.error?.details ??
+                json.error?.message ??
+                json.message ??
+                '';
+              logger.error(
+                `[Qwen] SSE stream error — code=${errCode}: ${errDetails}`,
+              );
+              // Assign to sseStreamError to throw after exiting the try/catch
+              sseStreamError = new Error(
+                errDetails || `Qwen API error: ${errCode}`,
+              );
+              (sseStreamError as any).code = errCode;
+              break;
+            }
 
             let responseCreated = null;
             if (json[SSE_EVENT_FIELDS.RESPONSE_CREATED_KEY]) {
@@ -1010,6 +1085,11 @@ export class QwenProvider implements Provider {
                 const chatIdForCache =
                   responseCreated[SSE_EVENT_FIELDS.CHAT_ID] || conversationId;
                 if (chatIdForCache && capturedParentId) {
+                  // Trước khi update last → lưu last hiện tại vào prev
+                  const currentLast = lastParentIdCache.get(chatIdForCache);
+                  if (currentLast) {
+                    prevParentIdCache.set(chatIdForCache, currentLast);
+                  }
                   lastParentIdCache.set(chatIdForCache, capturedParentId);
                 }
                 if (onMetadata)
@@ -1105,6 +1185,13 @@ export class QwenProvider implements Provider {
             );
           }
         }
+        // Propagate SSE-level error out of the outer chunk loop
+        if (sseStreamError) break;
+      }
+
+      // Throw SSE stream error detected during parsing (e.g. quota_limit)
+      if (sseStreamError) {
+        throw sseStreamError;
       }
 
       // If we have remaining buffer content and no chunks were processed, it might be an error response
@@ -1143,6 +1230,63 @@ export class QwenProvider implements Provider {
         logger.warn(
           `[Qwen] No content received from API for model=${modelToUse}, conversationId=${conversationId}`,
         );
+        logger.warn(
+          `[Qwen] Empty response diagnostics — chunks processed: ${totalChunksProcessed}, seenResponseIds: [${Array.from(seenResponseIds).join(', ')}]`,
+        );
+        if (buffer.length > 0) {
+          logger.warn(
+            `[Qwen] Remaining unparsed buffer: ${buffer.slice(0, 500)}`,
+          );
+        }
+        if (debugChunks.length > 0) {
+          // Summarise each chunk: extract status, phase, finish_reason, error fields
+          const summaries = debugChunks.map((c, i) => {
+            const choices = c?.choices;
+            const delta = choices?.[0]?.delta;
+            const finishReason = choices?.[0]?.finish_reason;
+            const status = delta?.status;
+            const phase = delta?.phase;
+            const content = delta?.content;
+            const errorCode = c?.error_code ?? c?.code ?? c?.error?.code;
+            const errorMsg =
+              c?.message ?? c?.error?.message ?? c?.error_message;
+            const responseCreated =
+              c?.['response.created'] ?? c?.response?.created;
+            return {
+              i,
+              status,
+              phase,
+              finish_reason: finishReason,
+              has_content: typeof content === 'string' && content.length > 0,
+              error_code: errorCode,
+              error_msg: errorMsg,
+              response_id: responseCreated?.response_id,
+            };
+          });
+          logger.warn(
+            `[Qwen] Chunk summaries:`,
+            JSON.stringify(summaries, null, 2),
+          );
+          // Also dump first and last chunk in full for context
+          logger.warn(
+            `[Qwen] First chunk (full):`,
+            JSON.stringify(debugChunks[0], null, 2).slice(0, 1000),
+          );
+          if (debugChunks.length > 1) {
+            logger.warn(
+              `[Qwen] Last chunk (full):`,
+              JSON.stringify(
+                debugChunks[debugChunks.length - 1],
+                null,
+                2,
+              ).slice(0, 1000),
+            );
+          }
+        } else {
+          logger.warn(
+            `[Qwen] No chunks were successfully parsed (totalChunksProcessed=${totalChunksProcessed}, chunkCounter=${chunkCounter})`,
+          );
+        }
       }
 
       // Nếu có nhiều response, tự động gọi select API để chọn response đầu tiên
@@ -1294,12 +1438,18 @@ export class QwenProvider implements Provider {
     if (!response.ok) {
       let detail = '';
       try {
-        const body = await response.json() as any;
-        detail = body?.message || body?.error?.message || body?.msg || JSON.stringify(body);
+        const body = (await response.json()) as any;
+        detail =
+          body?.message ||
+          body?.error?.message ||
+          body?.msg ||
+          JSON.stringify(body);
       } catch {
         detail = await response.text().catch(() => '');
       }
-      throw new Error(`Qwen API returned ${response.status}${detail ? `: ${detail}` : ''}`);
+      throw new Error(
+        `Qwen API returned ${response.status}${detail ? `: ${detail}` : ''}`,
+      );
     }
 
     const json: any = await response.json();
@@ -1342,8 +1492,7 @@ export class QwenProvider implements Provider {
             model[MODEL_FIELDS.ID],
           is_thinking: capabilities[MODEL_FIELDS.THINKING] === true,
           max_context_length:
-            meta[MODEL_FIELDS.MAX_CONTEXT_LENGTH] ||
-            DEFAULT_MAX_CONTEXT_LENGTH,
+            meta[MODEL_FIELDS.MAX_CONTEXT_LENGTH] || DEFAULT_MAX_CONTEXT_LENGTH,
           is_search: capabilities[MODEL_FIELDS.SEARCH] === true,
           is_image_upload: capabilities[MODEL_FIELDS.VISION] === true,
           is_video_upload: capabilities[MODEL_FIELDS.VIDEO] === true,

@@ -22,35 +22,14 @@ Lưu trữ thông tin tài khoản của các provider AI.
 
 ---
 
-## Bảng: `providers`
+## ~~Bảng: `providers`~~ (KHÔNG DÙNG DATABASE)
 
-Danh sách các provider đã được đăng ký trong hệ thống.
+**⚠️ Bảng này KHÔNG được lưu vào database.** Provider metadata được lấy trực tiếp từ provider registry (`src/provider/*/` constants) mỗi lần cần — không persist. Lý do:
+- Provider metadata (name, platform, auth_method, models...) luôn cần là **live data** từ source code
+- Lưu vào DB tạo nguy cơ stale data khi code provider được cập nhật
+- `is_memory` per-provider: vì không có DB table, field này lấy từ config constant của từng provider
 
-### Columns
-
-- **`id`** (TEXT, PRIMARY KEY) — ID provider (viết thường)
-- **`title`** (TEXT, NOT NULL) — Tên hiển thị của provider
-- **`description`** (TEXT) — Mô tả ngắn về provider
-- **`color`** (TEXT) — Màu sắc đại diện cho provider (hex code, VD: #1E90FF)
-- **`platform`** (TEXT, DEFAULT 'web') — Loại provider: `web`, `cli`, `api`
-- **`connection_type`** (TEXT, DEFAULT 'https') — Loại kết nối: `https` (gọi HTTPS trực tiếp), `browser` (dùng browser thật qua CDP + extension)
-- **`is_enabled`** (INTEGER, DEFAULT 1) — Trạng thái bật/tắt (1 = enabled, 0 = disabled)
-- **`website_url`** (TEXT) — URL website chính thức của provider
-- **`auth_method`** (TEXT) — Phương thức xác thực (JSON array: `["basic","google"]`)
-- **`is_pausable`** (INTEGER, DEFAULT 0) — Có thể tạm dừng conversation không
-- **`is_memory`** (INTEGER, DEFAULT 0) — Tham khảo bộ nhớ đã lưu (Memory) - history memory tự động theo logic
-- **`browser_extension_folder`** (TEXT) — Thư mục chứa extension cho browser-based provider (VD: 'zai-bridge'). NULL nếu không dùng browser
-
-**Giá trị platform:**
-
-- `web` - Provider dạng website (cần capture request qua MITM hoặc CDP)
-- `cli` - Provider dạng command-line (chỉ cần MITM khi login)
-- `api` - Provider API thuần (gọi trực tiếp, không cần proxy)
-
-**Giá trị connection_type:**
-
-- `https` - Provider gọi trực tiếp API qua HTTPS (VD: Claude, DeepSeek, Gemini API)
-- `browser` - Provider dùng browser thật qua CDP + extension (VD: Z.AI Browser)
+**Nếu cần đọc thông tin provider:** dùng `providerRegistry.getAllProviders()` hoặc `fetchProviderConfig()` trong `provider.service.ts`.
 
 ---
 
@@ -73,28 +52,28 @@ Lưu trữ thống kê runtime per-model (hiện tại chỉ có success_rate).
 
 ---
 
-## ~~Bảng: `models`~~ (DEPRECATED - ĐÃ XÓA)
+## ~~Bảng: `models`~~ (THAM KHẢO — KHÔNG DÙNG DATABASE)
 
-**⚠️ Bảng này đã bị loại bỏ hoàn toàn.** Model list không còn được lưu vào database nữa. Lý do:
-- Provider hardcode constants → cache là thừa
-- Provider dynamic API → luôn fetch từ live source để đảm bảo cập nhật
-- Chỉ `success_rate` cần persist → đã chuyển sang `model_stats`
+**⚠️ Bảng này KHÔNG được lưu vào database.** Ghi chú tham khảo về schema nếu cần implement trong tương lai.
 
----
+Lý do không dùng:
+- Provider hardcode constants → cache là thừa, data có thể stale
+- Provider dynamic API (`getModels()`) → luôn fetch từ live source để đảm bảo mới nhất
+- Chỉ `success_rate` cần persist → đã chuyển sang bảng `model_stats`
 
-## Bảng: `config`
+**Nếu cần danh sách models:** fetch trực tiếp từ `fetchModelsFromProvider(providerId)` trong `provider.service.ts`.
 
-Bảng cấu hình toàn cục, chỉ có **1 row duy nhất** (`id = 1`, được seed tự động trong migration).
-
-### Columns
-
-- **`id`** (INTEGER, PRIMARY KEY) — Luôn bằng 1 (`CHECK (id = 1)`), đảm bảo single-row
-- **`chromium_profile_dir`** (TEXT, NULL) — System path tới thư mục chứa các profile Chromium dùng cho browser-based provider
-
-### API
-
-- `GET /v1/config` — Lấy cấu hình hiện tại
-- `PUT /v1/config` — Cập nhật (partial) — body: `{ chromium_profile_dir? }`
+Schema tham khảo (KHÔNG implement):
+```
+models (
+  id TEXT,
+  provider_id TEXT,
+  name TEXT,
+  is_thinking INTEGER,
+  context_length INTEGER,
+  ...
+)
+```
 
 ---
 

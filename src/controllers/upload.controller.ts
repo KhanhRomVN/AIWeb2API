@@ -34,6 +34,15 @@ export const uploadFile = async (
   try {
     const { accountId } = req.params;
     const file = req.file;
+
+    // conversationId: client tự sinh UUID trước khi upload, truyền qua body hoặc query
+    // Bắt buộc với Claude (file gắn với conversation); optional với các provider khác
+    const conversationId: string | undefined =
+      req.body?.conversationId ||
+      req.body?.conversation_id ||
+      (req.query.conversationId as string | undefined) ||
+      (req.query.conversation_id as string | undefined);
+
     if (!file) {
       logger.warn(`[Upload] No file provided | accountId=${accountId}`);
       res.status(400).json({ error: 'No file uploaded' });
@@ -69,12 +78,17 @@ export const uploadFile = async (
         providerId,
         account.credential,
         file,
+        conversationId,
       );
 
       const responseData: any = {
         filename: file.originalname,
         ...result,
       };
+      // Đảm bảo conversation_id luôn có mặt trong response để client biết dùng convId nào
+      if (!responseData.conversation_id && conversationId) {
+        responseData.conversation_id = conversationId;
+      }
 
       res.status(200).json({ success: true, data: responseData });
     } catch (err: any) {

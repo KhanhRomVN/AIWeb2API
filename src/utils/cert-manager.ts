@@ -98,7 +98,7 @@ export class CertificateManager {
 
       const csrPath = path.join(this.certDir, 'server.csr');
       await execAsync(
-        `openssl req -new -key "${this.keyPath}" -out "${csrPath}" -subj "/C=US/ST=Local/L=Local/O=Elara/CN=localhost"`,
+        `openssl req -new -key "${this.keyPath}" -out "${csrPath}" -subj "/C=US/ST=Local/L=Local/O=AIWeb2API/CN=localhost"`,
         { cwd: this.certDir },
       );
 
@@ -139,7 +139,7 @@ export class CertificateManager {
         { name: 'countryName', value: 'US' },
         { shortName: 'ST', value: 'Local' },
         { name: 'localityName', value: 'Local' },
-        { name: 'organizationName', value: 'Elara' },
+        { name: 'organizationName', value: 'AIWeb2API' },
       ];
 
       cert.setSubject(attrs);

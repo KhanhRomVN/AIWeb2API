@@ -20,6 +20,9 @@
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
 import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
@@ -39,9 +42,11 @@ import {
   ClaudeCredential,
   ClaudeUserProfile,
   ClaudeBootstrapResponse,
-  ClaudeBootstrapModel,
   ClaudeCompletionPayload,
+  ClaudeRetryCompletionPayload,
+  ClaudeConversationResponse,
   ClaudeLoginTokenPayload,
+  ClaudeModelSelectorModel,
 } from './claude.types';
 import {
   PROVIDER_ID,
@@ -77,8 +82,10 @@ import {
   DEFAULT_CHAT_MEMORY_MODE,
   CHROME_FINGERPRINT_HEADERS,
   EFFORT_LEVELS,
+  MODEL_SELECTOR_SURFACE_CHAT,
   THINKING_MODES,
   WEB_SEARCH_TOOL,
+  ANTI_SYSTEM_PROMPT_INJECTION,
 } from './claude.constant';
 
 /**
@@ -152,6 +159,7 @@ export class ClaudeProvider implements Provider {
     is_memory: IS_MEMORY,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
+    anti_system_prompt_injection: ANTI_SYSTEM_PROMPT_INJECTION,
   };
 
   // ─── Credential Parsing ────────────────────────────────────────────
@@ -194,7 +202,9 @@ export class ClaudeProvider implements Provider {
     credential: ClaudeCredential,
   ): Promise<ClaudeBootstrapResponse> {
     if (!credential.organizationId) {
-      throw new Error('Missing organizationId in credential. Please re-login to Claude.');
+      throw new Error(
+        'Missing organizationId in credential. Please re-login to Claude.',
+      );
     }
 
     const client = new ClaudeHttpClient({
@@ -216,7 +226,9 @@ export class ClaudeProvider implements Provider {
       const message = `Claude bootstrap API returned ${res.status}${detail ? `: ${detail}` : ''}`;
       // 401/403 = session hết hạn hoặc cookie invalid → cần re-login
       if (res.status === 401 || res.status === 403) {
-        const err = new Error(`Session expired or invalid. Please re-login to Claude. (${message})`);
+        const err = new Error(
+          `Session expired or invalid. Please re-login to Claude. (${message})`,
+        );
         (err as any).isAuthError = true;
         (err as any).statusCode = res.status;
         throw err;
@@ -257,43 +269,56 @@ export class ClaudeProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   /**
-   * Lấy danh sách model từ bootstrap API. Nếu fail → throw với message rõ ràng
-   * để Zen có thể hiển thị lỗi cho user.
+   * Lấy danh sách model từ `model_selector_config` (surface `chat`) trong
+   * bootstrap response — đây là nguồn ĐÚNG cho effort/capabilities/trạng thái
+   * disabled, thay cho `claude_ai_bootstrap_models_config` (legacy, xem
+   * claude.md trong cùng thư mục provider). Nếu fail → throw với message rõ
+   * ràng để Zen có thể hiển thị lỗi cho user.
    */
   async getModels(credential: string): Promise<any[]> {
     try {
       const cred = this.parseCredential(credential);
       // fetchBootstrap throw trực tiếp với message gốc từ claude.ai nếu fail
       const bootstrap = await this.fetchBootstrap(cred);
-      const membership = bootstrap[API_FIELDS.ACCOUNT]?.memberships?.[0];
-      const modelsConfig: ClaudeBootstrapModel[] | undefined =
-        membership?.organization?.[API_FIELDS.MODELS_CONFIG];
+      const chatSurface = bootstrap.model_selector_config?.find(
+        (s) => s.id === MODEL_SELECTOR_SURFACE_CHAT,
+      );
+      const modelsConfig: ClaudeModelSelectorModel[] | undefined =
+        chatSurface?.models;
 
       if (!modelsConfig || modelsConfig.length === 0) {
         throw new Error(
-          'Bootstrap succeeded but returned no models config. ' +
-            'Your account may not have model access or the organization is missing.',
+          'Bootstrap succeeded but returned no model_selector_config for the ' +
+            '"chat" surface. Your account may not have model access or the ' +
+            'organization is missing.',
         );
       }
 
-      // Nhân mỗi model base với từng mức effort → nhiều entry cùng base.
+      // Nhân mỗi model base với từng mức effort model đó thực sự hỗ trợ
+      // (effort_options[] riêng của từng model — không hardcode chung).
       const expanded: any[] = [];
       for (const m of modelsConfig) {
+        // disabled: true = model bị khóa (cần upgrade plan) — bỏ qua.
+        if (m.disabled === true) continue;
+
         const caps = m.capabilities;
-        const isThinking =
-          Array.isArray(m.thinking_modes) && m.thinking_modes.length > 0;
-        const isImageUpload = caps?.mm_images !== false;
+        const thinkingType = m.thinking?.type;
+        const hasEffort =
+          thinkingType === 'effort' || thinkingType === 'effort_and_mode';
+        const isThinking = hasEffort || thinkingType === 'mode';
+        const isImageUpload = caps?.mm_images === true;
         const isPdfUpload = caps?.mm_pdf === true;
-        const isSearch = caps?.web_search !== false;
+        const isSearch = caps?.web_search === true;
 
-        // Model không hỗ trợ thinking → effort vô nghĩa, chỉ tạo 1 entry.
-        const effortsForModel: Array<string | null> = isThinking
-          ? [...EFFORT_LEVELS]
-          : [null];
+        // Model không có effort → chỉ tạo 1 entry (không suffix).
+        const effortOptions = hasEffort
+          ? (m.thinking?.effort_options ?? [])
+          : [];
+        const entries = effortOptions.length > 0 ? effortOptions : [null];
 
-        for (const effort of effortsForModel) {
-          const id = effort ? `${m.model}-${effort}` : m.model;
-          const name = effort ? `${m.name} ${capitalize(effort)}` : m.name;
+        for (const opt of entries) {
+          const id = opt ? `${m.id}-${opt.id}` : m.id;
+          const name = opt ? `${m.name} ${opt.name}` : m.name;
           expanded.push({
             id,
             name,
@@ -313,16 +338,27 @@ export class ClaudeProvider implements Provider {
         }
       }
 
-      logger.info(
-        `[Claude getModels] Lấy được ${modelsConfig.length} model base từ bootstrap, ` +
-          `mở rộng thành ${expanded.length} model (effort levels: ${EFFORT_LEVELS.join(', ')}). ` +
-          `IDs: ${expanded.map((x) => x.id).join(', ')}`,
-      );
+      this.saveRawModelsResponse(bootstrap);
 
       return expanded;
     } catch (err: any) {
       logger.error('[Claude] Error in getModels:', err);
       throw err;
+    }
+  }
+
+  /**
+   * Lưu raw response của bootstrap API vào file claude_models.json.
+   * Ghi đè mỗi lần gọi (không tạo file mới); chỉ gọi khi getModels() thành công.
+   */
+  private saveRawModelsResponse(bootstrap: ClaudeBootstrapResponse): void {
+    try {
+      const dir = path.join(os.homedir(), '.aiweb2api');
+      fs.mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, 'claude_models.json');
+      fs.writeFileSync(filePath, JSON.stringify(bootstrap, null, 2));
+    } catch (e) {
+      logger.warn('[Claude] Failed to save claude_models.json:', e);
     }
   }
 
@@ -346,6 +382,7 @@ export class ClaudeProvider implements Provider {
         headers?: any;
         email?: string;
         organizationId?: string;
+        sessionKeyExpiresAt?: number | null;
       }) => {
         if (!data.cookies) {
           logger.warn('[Claude] Login validation failed: no cookies captured');
@@ -388,12 +425,15 @@ export class ClaudeProvider implements Provider {
           const finalCred: ClaudeCredential = {
             cookies: data.cookies,
             organizationId: orgId,
+            sessionKeyExpiresAt: data.sessionKeyExpiresAt ?? null,
           };
+
           if (!orgId) {
             logger.warn(
               '[Claude] Login succeeded but organizationId is missing — will retry lazily on first request',
             );
           }
+
           return {
             isValid: true,
             cookies: JSON.stringify(finalCred),
@@ -444,6 +484,34 @@ export class ClaudeProvider implements Provider {
     return typeof firstId === 'string' ? firstId : null;
   }
 
+  // ─── Fetch Conversation ─────────────────────────────────────────────
+
+  /**
+   * GET conversation để lấy danh sách message + current_leaf_message_uuid.
+   * Dùng khi cần tìm `parent_message_uuid` của assistant message cuối để retry.
+   */
+  private async fetchConversation(
+    credential: ClaudeCredential,
+    conversationId: string,
+  ): Promise<ClaudeConversationResponse> {
+    const client = new ClaudeHttpClient({
+      baseURL: BASE_URL,
+      headers: buildClaudeHeaders(
+        credential.cookies,
+        `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`,
+      ),
+    });
+    const res = await client.get(
+      API_PATHS.CONVERSATION(credential.organizationId!, conversationId),
+    );
+    if (!res.ok) {
+      throw new Error(
+        `Claude GET conversation returned ${res.status}: ${(await res.text()).slice(0, 300)}`,
+      );
+    }
+    return (await res.json()) as ClaudeConversationResponse;
+  }
+
   // ─── Handle Message ─────────────────────────────────────────────────
 
   async handleMessage(options: SendMessageOptions): Promise<void> {
@@ -481,7 +549,11 @@ export class ClaudeProvider implements Provider {
             }
           }
         } else {
-          onError(new Error('Claude credential missing organizationId and /api/organizations returned no organizations.'));
+          onError(
+            new Error(
+              'Claude credential missing organizationId and /api/organizations returned no organizations.',
+            ),
+          );
           return;
         }
       } catch (err: any) {
@@ -490,16 +562,23 @@ export class ClaudeProvider implements Provider {
       }
     }
 
-    // Conversation ID: dùng cái đã có, hoặc sinh mới (client-side)
-    const convId = conversationId || randomUUID();
+    // Conversation ID: ưu tiên từ ref_file_ids (Claude: file gắn với convId cụ thể),
+    // sau đó dùng conversationId được truyền vào, cuối cùng sinh mới.
+    let convId = conversationId || randomUUID();
+
+    // ── Dispatch sang retryMessage nếu có parent_message_id ────────────
+    if (options.parent_message_id && convId) {
+      return this.retryMessage({ ...options, conversationId: convId }, cred);
+    }
 
     try {
       // ── Upload file đính kèm (nếu có) ──────────────────────────────
       const fileUuids: string[] = [];
       if (ref_file_ids && ref_file_ids.length > 0) {
         for (const ref of ref_file_ids) {
-          // Chỉ xử lý khi ref có buffer (từ service layer truyền vào)
           const asAny = ref as any;
+
+          // Nhánh 1: raw file có buffer → upload trực tiếp
           if (asAny?.buffer && asAny?.originalname && asAny?.mimetype) {
             const uploadRes = await this.uploadFileRaw(
               cred,
@@ -507,13 +586,22 @@ export class ClaudeProvider implements Provider {
               asAny as ClaudeUploadFileInput,
             );
             fileUuids.push(uploadRes.file_uuid);
-          } else if (
-            typeof ref === 'object' &&
-            ref !== null &&
-            'file_uuid' in ref
-          ) {
+          }
+          // Nhánh 2: đã upload trước qua /upload endpoint → có file_id + conversation_id
+          // Upload service normalize file_uuid → file_id, và trả thêm conversation_id.
+          else if (typeof ref === 'object' && ref !== null && 'file_id' in asAny) {
+            fileUuids.push(asAny.file_id as string);
+            // Dùng conversation_id từ upload để đảm bảo file và message cùng conversation
+            if (asAny.conversation_id && !conversationId) {
+              convId = asAny.conversation_id as string;
+            }
+          }
+          // Nhánh 3: object có file_uuid trực tiếp (legacy format)
+          else if (typeof ref === 'object' && ref !== null && 'file_uuid' in ref) {
             fileUuids.push((ref as { file_uuid: string }).file_uuid);
-          } else if (typeof ref === 'string') {
+          }
+          // Nhánh 4: string thuần
+          else if (typeof ref === 'string') {
             fileUuids.push(ref);
           }
         }
@@ -534,12 +622,6 @@ export class ClaudeProvider implements Provider {
 
       // web search: chỉ bật khi caller truyền search=true.
       const tools = options.search === true ? [WEB_SEARCH_TOOL] : [];
-
-      logger.debug(
-        `[Claude handleMessage] model=${model} → base=${baseModel}, effort=${effort}, ` +
-          `thinking_mode=${thinkingMode}, search=${options.search === true}, thinking=${options.thinking}`,
-      );
-
       const payload: ClaudeCompletionPayload = {
         prompt,
         timezone: DEFAULT_TIMEZONE,
@@ -552,6 +634,8 @@ export class ClaudeProvider implements Provider {
           human_message_uuid: randomUUID(),
           assistant_message_uuid: randomUUID(),
         },
+        attachments: [],
+        sync_sources: [],
         completion_request_id: randomUUID(),
         rendering_mode: DEFAULT_RENDERING_MODE,
         create_conversation_params: {
@@ -559,6 +643,9 @@ export class ClaudeProvider implements Provider {
           model: baseModel,
           include_conversation_preferences: true,
           chat_memory_mode: DEFAULT_CHAT_MEMORY_MODE,
+          tool_search_mode: 'auto',
+          is_temporary: false,
+          enabled_imagine: true,
         },
       };
 
@@ -567,7 +654,9 @@ export class ClaudeProvider implements Provider {
       }
 
       // ── Gửi completion request ─────────────────────────────────────
-      const referer = `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${convId}`;
+      // Referer phải là /new (khớp với traffic thực tế Claude.ai)
+      // Không dùng /chat/{convId} vì Claude.ai dùng /new cho cả upload lẫn completion.
+      const referer = `${BASE_URL}${REFERER_PATHS.NEW}`;
       const client = new ClaudeHttpClient({
         baseURL: BASE_URL,
         headers: {
@@ -585,15 +674,32 @@ export class ClaudeProvider implements Provider {
       if (!response.ok) {
         const rawText = await response.text();
         let detail = rawText.slice(0, 500);
+        let parsedBody: any = null;
         try {
-          const body = JSON.parse(rawText);
-          detail = body?.error?.message ?? body?.message ?? detail;
-        } catch { /* keep rawText slice */ }
-        const message = `Claude API returned ${response.status}: ${detail}`;
+          parsedBody = JSON.parse(rawText);
+          detail = parsedBody?.error?.message ?? parsedBody?.message ?? detail;
+        } catch {
+          /* keep rawText slice */
+        }
+        const message = `Claude API returned ${response.status}: ${rawText.slice(0, 500)}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Claude. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Claude. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
+          throw err;
+        }
+        // Xử lý lỗi 429 hết usage tạm thời (exceeded_limit) — có resetsAt
+        if (
+          response.status === 429 &&
+          parsedBody?.type === 'exceeded_limit' &&
+          parsedBody?.resetsAt
+        ) {
+          const resetsAt = new Date(parsedBody.resetsAt * 1000).toISOString();
+          const err = new Error(message);
+          (err as any).isUsageLimitError = true;
+          (err as any).resetsAt = resetsAt;
           throw err;
         }
         throw new Error(message);
@@ -622,6 +728,159 @@ export class ClaudeProvider implements Provider {
     }
   }
 
+  // ─── Retry / Regenerate Message ────────────────────────────────────
+
+  /**
+   * Regenerate hoặc edit+regenerate response từ 1 parent message cụ thể.
+   *
+   * Flow:
+   * 1. Nếu caller truyền `parent_message_id` → dùng trực tiếp làm
+   *    `parent_message_uuid` trong payload (UUID của human message).
+   * 2. Nếu không (chỉ có `conversationId`) → GET conversation để lấy
+   *    `parent_message_uuid` của assistant message leaf hiện tại, rồi
+   *    dùng `parent_message_uuid` của assistant đó (= human message trước nó).
+   * 3. Gọi `POST /retry_completion` với payload retry.
+   *
+   * Tương đương DeepSeek `parent_message_id` pattern.
+   */
+  private async retryMessage(
+    options: SendMessageOptions,
+    cred: ClaudeCredential,
+  ): Promise<void> {
+    const {
+      messages,
+      model,
+      onContent,
+      onThinking,
+      onRaw,
+      onMetadata,
+      onDone,
+      onError,
+      conversationId,
+    } = options;
+
+    const convId = conversationId!;
+
+    try {
+      // ── Xác định parent_message_uuid ───────────────────────────────
+      // Caller truyền parent_message_id = UUID của human message muốn retry từ đó.
+      // Nếu không có → fetch conversation để lấy parent của leaf assistant message.
+      let parentMessageUuid: string;
+
+      if (options.parent_message_id) {
+        parentMessageUuid = options.parent_message_id;
+      } else {
+        // Fallback: lấy từ conversation
+        const conv = await this.fetchConversation(cred, convId);
+        const messages = conv.chat_messages || [];
+        // Tìm leaf assistant message (message được trỏ bởi current_leaf_message_uuid)
+        const leafUuid = conv.current_leaf_message_uuid;
+        const leafMsg = leafUuid
+          ? messages.find((m) => m.uuid === leafUuid)
+          : [...messages].reverse().find((m) => m.sender === 'assistant');
+
+        if (!leafMsg?.parent_message_uuid) {
+          throw new Error(
+            'Cannot determine parent_message_uuid for retry: conversation has no assistant message',
+          );
+        }
+        parentMessageUuid = leafMsg.parent_message_uuid;
+      }
+
+      // ── Build retry payload ────────────────────────────────────────
+      const lastMessage = messages[messages.length - 1];
+      // Prompt rỗng = regenerate giữ nguyên; có nội dung = edit message
+      const prompt = lastMessage?.content || '';
+      const isEdit = prompt.length > 0;
+
+      const { base: baseModel, effort: parsedEffort } =
+        splitModelAndEffort(model);
+      const effort = parsedEffort || DEFAULT_EFFORT;
+      const thinkingMode =
+        options.thinking === false ? THINKING_MODES.OFF : DEFAULT_THINKING_MODE;
+      const tools = options.search === true ? [WEB_SEARCH_TOOL] : [];
+
+      const payload: ClaudeRetryCompletionPayload = {
+        prompt,
+        parent_message_uuid: parentMessageUuid,
+        timezone: DEFAULT_TIMEZONE,
+        locale: DEFAULT_LOCALE,
+        model: baseModel,
+        effort,
+        thinking_mode: thinkingMode,
+        tools,
+        turn_message_uuids: {
+          assistant_message_uuid: randomUUID(),
+        },
+        attachments: [],
+        files: [],
+        sync_sources: [],
+        completion_request_id: randomUUID(),
+        rendering_mode: DEFAULT_RENDERING_MODE,
+      };
+
+      // ── Gửi retry_completion request ──────────────────────────────
+      // Referer /new khớp với traffic thực tế Claude.ai
+      const referer = `${BASE_URL}${REFERER_PATHS.NEW}`;
+      const client = new ClaudeHttpClient({
+        baseURL: BASE_URL,
+        headers: {
+          ...buildClaudeHeaders(cred.cookies, referer),
+          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+          [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.SSE,
+        },
+      });
+
+      const url = API_PATHS.RETRY_COMPLETION(cred.organizationId!, convId);
+      const response = await client.streamSSE(url, {
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const rawText = await response.text();
+        let detail = rawText.slice(0, 500);
+        try {
+          const parsedBody = JSON.parse(rawText);
+          detail = parsedBody?.error?.message ?? parsedBody?.message ?? detail;
+        } catch {
+          /* keep rawText slice */
+        }
+        const message = `Claude retry_completion returned ${response.status}: ${rawText.slice(0, 500)}`;
+        if (response.status === 401 || response.status === 403) {
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Claude. (${message})`,
+          );
+          (err as any).isAuthError = true;
+          (err as any).statusCode = response.status;
+          throw err;
+        }
+        throw new Error(message);
+      }
+
+      if (!response.body) {
+        throw new Error(
+          'Claude retry_completion returned empty response body (no stream)',
+        );
+      }
+
+      if (onMetadata) {
+        onMetadata({ conversation_id: convId });
+      }
+
+      await parseSSEStream(response.body as unknown as NodeJS.ReadableStream, {
+        onContent,
+        onThinking,
+        onRaw,
+        onMetadata,
+      });
+
+      onDone();
+    } catch (err: any) {
+      logger.error('[Claude] Error in retryMessage:', err);
+      onError(err);
+    }
+  }
+
   // ─── Continue Message ───────────────────────────────────────────────
 
   async continueMessage(options: SendMessageOptions): Promise<void> {
@@ -632,19 +891,22 @@ export class ClaudeProvider implements Provider {
 
   /**
    * Upload file — wrapper public của claudeUploadFile.
-   * @param credential Credential JSON string hoặc raw cookie.
-   * @param file       Buffer + metadata.
-   * @param conversationId Tuỳ chọn; nếu không có sẽ sinh UUID mới.
+   * @param credential     Credential JSON string hoặc raw cookie.
+   * @param file           Buffer + metadata.
+   * @param conversationId UUID conversation do client sinh — bắt buộc để file
+   *                       gắn đúng conversation khi gửi completion. Nếu không
+   *                       truyền sẽ sinh UUID mới (fallback).
    */
   async uploadFile(
     credential: string,
     file: ClaudeUploadFileInput,
     conversationId?: string,
-  ): Promise<{ file_uuid: string }> {
+  ): Promise<{ file_uuid: string; conversation_id: string }> {
     try {
       const cred = this.parseCredential(credential);
       const convId = conversationId || randomUUID();
-      return await this.uploadFileRaw(cred, convId, file);
+      const result = await this.uploadFileRaw(cred, convId, file);
+      return { file_uuid: result.file_uuid, conversation_id: convId };
     } catch (err: any) {
       logger.error('[Claude] Error in uploadFile:', err);
       throw err;

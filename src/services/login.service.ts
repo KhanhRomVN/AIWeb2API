@@ -25,6 +25,7 @@ import { findProviderById } from '../repositories/provider.repository';
 import { createCDPService } from './cdp.service';
 import { browserInstanceManager } from './browser-instance-manager';
 import { proxyEvents } from './proxy.service';
+import { loginContext } from './profile-context';
 
 // ── Providers ──
 import { providerRegistry } from '../provider/registry';
@@ -61,6 +62,8 @@ export interface LoginOptions {
 
 export interface ProviderLoginOptions {
   method?: 'basic' | 'google';
+  /** Thư mục profile Chromium đã resolve (tuyệt đối). Undefined = profile tạm mới. */
+  userDataDir?: string;
 }
 
 export interface ProviderLoginResult {
@@ -244,6 +247,7 @@ export class LoginService extends EventEmitter {
               !capturedCookies ||
               capturedCookies.length < cookieHeader.length
             ) {
+              // Tìm sessionKey nếu có
               capturedCookies = cookieHeader;
               await checkValidation();
             }
@@ -391,7 +395,11 @@ export class LoginService extends EventEmitter {
       }
     });
 
-    const launched = await cdpService.launchBrowser(loginUrl);
+    // Login được gọi kèm profile folder → mở browser với profile đó
+    const launched = await cdpService.launchBrowser(
+      loginUrl,
+      loginContext.getStore()?.userDataDir,
+    );
 
     if (!launched) {
       logger.error(`[LoginService] Failed to launch browser for ${providerId}`);
@@ -441,6 +449,20 @@ export class LoginService extends EventEmitter {
 
           if (cookieStr.length > 10) {
             capturedCookies = cookieStr;
+            // Extract sessionKey expire time và forward vào capturedExtra
+            const sessionKeyCookie = browserCookies.find(
+              (c: any) => c.name === 'sessionKey',
+            );
+            if (
+              sessionKeyCookie &&
+              typeof sessionKeyCookie.expires === 'number' &&
+              sessionKeyCookie.expires > 0
+            ) {
+              capturedExtra = {
+                ...capturedExtra,
+                sessionKeyExpiresAt: Math.floor(sessionKeyCookie.expires),
+              };
+            }
             if (evalResult?.loggedIn && evalResult?.user?.email) {
               capturedEmail = evalResult.user.email;
             }
@@ -473,6 +495,10 @@ export class LoginService extends EventEmitter {
       }
     }, timeout);
 
+    // Attach a noop .catch() to prevent Node from treating this as an
+    // unhandled rejection if the caller disconnects before we reject
+    // (e.g. client closes the HTTP connection while browser is still open).
+    resultPromise.catch(() => {});
     return resultPromise;
   }
 
@@ -584,9 +610,15 @@ export async function loginWithProvider(
     throw new Error(`Provider ${providerId} does not support browser login`);
   }
 
-  const result = await provider.login({
-    method: options.method || 'basic',
-  });
+  const runLogin = () =>
+    provider.login!({
+      method: options.method || 'basic',
+    });
+
+  // Có userDataDir → chạy login trong context để CDPService lấy được profile
+  const result = options.userDataDir
+    ? await loginContext.run({ userDataDir: options.userDataDir }, runLogin)
+    : await runLogin();
 
   return result as ProviderLoginResult;
 }
