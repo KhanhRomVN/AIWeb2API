@@ -46,6 +46,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   HUGGINGCHAT_EVENTS,
   USER_AGENT,
@@ -103,6 +104,7 @@ export class HuggingChatProvider implements Provider {
     is_memory: IS_MEMORY,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────

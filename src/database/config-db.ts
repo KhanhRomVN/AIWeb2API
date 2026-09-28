@@ -3,7 +3,7 @@
  * Config Database
  * ------------------------------------------------------------------
  * File SQLite riêng (`~/.aiweb2api/aiweb2api-config.sqlite`) chỉ chứa
- * bảng `config` (single-row). Tách khỏi aiweb2api.sqlite chính để
+ * bảng `config` (single-row). Tách khỏi aiweb2api-accounts.sqlite chính để
  * cấu hình toàn cục không bị ảnh hưởng bởi migration của DB chính.
  *
  * Main functions:

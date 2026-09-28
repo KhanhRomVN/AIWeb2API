@@ -33,6 +33,8 @@ const logger = createLogger('ProviderService');
 let cachedProviders: Provider[] | null = null;
 /** DataStore reference dùng để detect khi user đổi DB active — invalidate cache khi khác. */
 let cachedDataStore: object | null | undefined = undefined;
+/** Promise đang build cache — tránh concurrent builds khi nhiều request cùng lúc. */
+let buildingCachePromise: Promise<Provider[]> | null = null;
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -86,7 +88,11 @@ const fetchProviderConfig = async (): Promise<any[]> => {
       const id = cfg.provider_id.toLowerCase();
       if (!seenIds.has(id)) {
         seenIds.add(id);
-        configs.push(cfg);
+        // Tự động detect can_refresh_token dựa vào provider instance thay vì hardcode
+        configs.push({
+          ...cfg,
+          can_refresh_token: typeof provider.refreshToken === 'function',
+        });
       }
     } else {
       logger.warn(
@@ -155,23 +161,13 @@ const fetchModelsFromProvider = async (
 export const invalidateProviderCache = (): void => {
   cachedProviders = null;
   cachedDataStore = undefined;
+  buildingCachePromise = null;
 };
 
-export const getAllProviders = async (): Promise<Provider[]> => {
-  // Detect khi user đổi DB active: dùng dataStore reference làm cache key.
-  // Nếu dataStore khác với lần build cache trước, invalidate để fetch lại.
-  const ctx = dbContext.getStore();
-  const currentDataStore = ctx?.dataStore ?? null;
-  if (cachedProviders !== null && currentDataStore !== cachedDataStore) {
-    cachedProviders = null;
-  }
-
-  if (cachedProviders !== null) {
-    return cachedProviders;
-  }
-  // Lưu dataStore reference để so sánh lần sau.
-  cachedDataStore = currentDataStore;
-
+/** Tách phần build cache ra hàm riêng để dùng cho cả inline và background. */
+const buildProvidersCache = async (
+  _currentDataStore: object | null,
+): Promise<Provider[]> => {
   const config = await fetchProviderConfig();
   // Chỉ lấy success_rate từ DB — provider metadata lấy từ registry (constants/API).
   let allModelStats: any[] = [];
@@ -248,8 +244,60 @@ export const getAllProviders = async (): Promise<Provider[]> => {
     providersWithModels.push(entry);
   }
 
-  cachedProviders = providersWithModels;
   return providersWithModels;
+};
+
+export const getAllProviders = async (): Promise<Provider[]> => {
+  // Detect khi user đổi DB active: dùng dataStore reference làm cache key.
+  const ctx = dbContext.getStore();
+  const currentDataStore = ctx?.dataStore ?? null;
+
+  if (cachedProviders !== null && currentDataStore !== cachedDataStore) {
+    // DB đã đổi — schedule background refresh nhưng trả về cache cũ ngay
+    // để tránh block request và tránh EAI_AGAIN khi nhiều calls đồng thời.
+    const staleCache = cachedProviders;
+    cachedDataStore = currentDataStore;
+    cachedProviders = null; // mark stale
+
+    if (!buildingCachePromise) {
+      buildingCachePromise = buildProvidersCache(currentDataStore)
+        .then((result) => {
+          cachedProviders = result;
+          buildingCachePromise = null;
+          return result;
+        })
+        .catch((err) => {
+          logger.warn('Background provider cache refresh failed:', err?.message);
+          buildingCachePromise = null;
+          return staleCache;
+        });
+    }
+
+    return staleCache;
+  }
+
+  if (cachedProviders !== null) {
+    return cachedProviders;
+  }
+
+  // Nếu đang build, chờ kết quả thay vì build thêm lần nữa
+  if (buildingCachePromise) {
+    return buildingCachePromise;
+  }
+
+  cachedDataStore = currentDataStore;
+  buildingCachePromise = buildProvidersCache(currentDataStore)
+    .then((result) => {
+      cachedProviders = result;
+      buildingCachePromise = null;
+      return result;
+    })
+    .catch((err) => {
+      buildingCachePromise = null;
+      throw err;
+    });
+
+  return buildingCachePromise;
 };
 
 export const getProviderModels = async (

@@ -59,6 +59,7 @@ export interface AccountRow {
   is_memory_enabled?: number | null;
   user_data_dir?: string | null;
   last_used_at?: number | null;
+  auth_method?: string | null;
 }
 
 export interface ListAccountsOptions {
@@ -182,6 +183,7 @@ export const insertAccount = async (account: {
   reset_usage_at?: string;
   is_memory_enabled?: number;
   user_data_dir?: string | null;
+  auth_method?: string | null;
 }): Promise<void> => {
   const db = getDataStore().kysely;
   await db
@@ -195,6 +197,7 @@ export const insertAccount = async (account: {
       reset_usage_at: account.reset_usage_at || null,
       is_memory_enabled: account.is_memory_enabled === 1 ? 1 : 0,
       user_data_dir: account.user_data_dir || null,
+      auth_method: account.auth_method || null,
     })
     .execute();
 };
@@ -240,16 +243,25 @@ export const updateAccountCredential = async (
 };
 
 /**
- * Cập nhật các field có thể chỉnh sửa của account (email, credential).
+ * Cập nhật các field có thể chỉnh sửa của account (email, credential, auth_method).
  * Chỉ update những field được truyền vào (khác undefined).
  */
 export const updateAccountFields = async (
   id: string,
-  fields: { email?: string; credential?: string | null },
+  fields: {
+    email?: string;
+    credential?: string | null;
+    auth_method?: string | null;
+  },
 ): Promise<void> => {
-  const patch: { email?: string; credential?: string | null } = {};
+  const patch: {
+    email?: string;
+    credential?: string | null;
+    auth_method?: string | null;
+  } = {};
   if (fields.email !== undefined) patch.email = fields.email;
   if (fields.credential !== undefined) patch.credential = fields.credential;
+  if (fields.auth_method !== undefined) patch.auth_method = fields.auth_method;
   if (Object.keys(patch).length === 0) return;
 
   const db = getDataStore().kysely;

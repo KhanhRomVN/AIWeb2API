@@ -58,6 +58,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   CLAUDE_EVENTS,
   USER_AGENT,
@@ -160,6 +161,7 @@ export class ClaudeProvider implements Provider {
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     anti_system_prompt_injection: ANTI_SYSTEM_PROMPT_INJECTION,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Credential Parsing ────────────────────────────────────────────

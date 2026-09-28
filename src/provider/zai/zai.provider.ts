@@ -54,6 +54,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   ZAI_EVENTS,
   DEFAULT_USER_AGENT,
@@ -87,6 +88,7 @@ export class ZAIProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── User-Agent Rotation ───────────────────────────────────────────

@@ -39,14 +39,30 @@ export type KiroAuthMethod =
 export interface KiroAuthData {
   accessToken: string;
   refreshToken: string;
-  expiresIn?: number;
-  authMethod: KiroAuthMethod;
   clientId?: string;
   clientSecret?: string;
   clientSecretExpiresAt?: number;
+  /** IdC / OIDC token region — dùng cho oidc.{region}.amazonaws.com mint/refresh.
+   *  KHÔNG phải runtime region (runtime region lấy từ profileArn). */
   region?: string;
   profileArn?: string;
-  provider?: string;
+  /** Auth method của account — ảnh hưởng đến refresh path và header. */
+  authMethod?: KiroAuthMethod;
+}
+
+// ─── Token Refresh Result ─────────────────────────────────────────────────
+
+export interface KiroRefreshResult {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn?: number;
+  /** Nếu client được re-register, client mới được trả về để persist. */
+  _newClientId?: string;
+  _newClientSecret?: string;
+  _newClientSecretExpiresAt?: number;
+  /** Unrecoverable error — không thể refresh, cần re-auth. */
+  error?: 'unrecoverable_refresh_error';
+  code?: string;
 }
 
 // ─── Poll Context (serialized into tempSessionId) ────────────────────────

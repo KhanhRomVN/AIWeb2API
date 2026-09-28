@@ -18,42 +18,44 @@ const logger = createLogger('FreebuffProxy');
 
 export const proxyHandler: ProxyHandler = {
   onRequest: (ctx: any, callback: () => void) => {
-    const host = ctx.clientToProxyRequest.headers.host;
+    const host: string | undefined = ctx.clientToProxyRequest.headers.host;
 
-    if (host && host.includes(FREEBUFF_HOST)) {
-      const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-      if (reqCookies && reqCookies.includes(SESSION_TOKEN_KEY)) {
+    if (host?.includes(FREEBUFF_HOST)) {
+      const reqCookies: string | undefined =
+        ctx.clientToProxyRequest.headers.cookie;
+      if (reqCookies?.includes(SESSION_TOKEN_KEY)) {
         proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_TOKEN, { cookies: reqCookies });
       }
     }
+
     callback();
   },
 
   onResponseBody: (ctx: any, body: string) => {
-    const host = ctx.clientToProxyRequest.headers.host;
-    const url = ctx.clientToProxyRequest.url;
+    const host: string | undefined = ctx.clientToProxyRequest.headers.host;
+    const url: string = ctx.clientToProxyRequest.url;
 
-    if (
-      host &&
-      host.includes(FREEBUFF_HOST) &&
-      url.includes('/api/auth/session')
-    ) {
-      try {
-        const json = JSON.parse(body);
-        if (json?.user?.email) {
-          proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_EMAIL, {
-            email: json.user.email,
-          });
+    if (!host?.includes(FREEBUFF_HOST)) return;
+    if (!url.includes('/api/auth/session')) return;
 
-          const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-          if (reqCookies) {
-            proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_TOKEN, {
-              cookies: reqCookies,
-              email: json.user.email,
-            });
-          }
-        }
-      } catch (e) {}
+    try {
+      const json = JSON.parse(body);
+      if (!json?.user?.email) return;
+
+      proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_EMAIL, {
+        email: json.user.email,
+      });
+
+      const reqCookies: string | undefined =
+        ctx.clientToProxyRequest.headers.cookie;
+      if (reqCookies) {
+        proxyEvents.emit(FREEBUFF_EVENTS.LOGIN_TOKEN, {
+          cookies: reqCookies,
+          email: json.user.email,
+        });
+      }
+    } catch {
+      // Body không phải JSON hợp lệ — bỏ qua
     }
   },
 };

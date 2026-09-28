@@ -40,6 +40,8 @@ import {
   updateMemoryState,
   removeAccount,
   importAccounts as importAccountsService,
+  previewImportAccounts as previewImportAccountsService,
+  overrideAccount as overrideAccountService,
   getProviderConfig,
   accountRefreshService,
   type AccountInput,
@@ -60,7 +62,74 @@ import { createLogger } from '../utils/logger';
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('AccountController');
 
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Merge refreshResult vào credential JSON hiện tại của account.
+ * Giữ nguyên các field cũ (clientId, region, authMethod...) và chỉ
+ * overwrite accessToken, refreshToken, và optional client mới nếu có.
+ */
+function buildUpdatedCredential(
+  currentCredential: string,
+  refreshResult: any,
+): string {
+  let base: Record<string, unknown> = {};
+  try {
+    base = JSON.parse(currentCredential) as Record<string, unknown>;
+  } catch {
+    // credential là plain string (access token cũ) - wrap lại
+    base = { accessToken: currentCredential };
+  }
+
+  base.accessToken = refreshResult.accessToken;
+  base.refreshToken = refreshResult.refreshToken || base.refreshToken;
+
+  if (refreshResult.expiresIn !== undefined) {
+    base.expiresIn = refreshResult.expiresIn;
+  }
+
+  // Nếu provider re-register client mới (OIDC path)
+  if (refreshResult._newClientId) {
+    base.clientId = refreshResult._newClientId;
+    base.clientSecret = refreshResult._newClientSecret;
+    base.clientSecretExpiresAt = refreshResult._newClientSecretExpiresAt;
+  }
+
+  return JSON.stringify(base);
+}
+
 // ─── Controller ─────────────────────────────────────────────────────────
+
+// ─── POST /v1/accounts/import/preview ──────────────────────────────
+export const previewImport = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const managerId = req.headers['x-database-manager-id'] ?? '(none)';
+    const accounts: AccountInput[] = req.body;
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Request body must be a non-empty array of accounts',
+      });
+      return;
+    }
+
+    const result = await previewImportAccountsService(accounts);
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error('[previewImport] FAILED — message:', error?.message);
+    logger.error('[previewImport] FAILED — stack:', error?.stack);
+    logger.error('[previewImport] FAILED — full error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      debug: error?.message,
+    });
+  }
+};
 
 // ─── POST /v1/accounts/import ──────────────────────────────────────
 export const importAccounts = async (
@@ -122,6 +191,32 @@ export const importAccounts = async (
       error: { code: 'INTERNAL_ERROR' },
       meta: { timestamp: new Date().toISOString() },
     });
+  }
+};
+
+// ─── POST /v1/accounts/override ─────────────────────────────────────
+export const overrideAccount = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { existingId, incoming } = req.body as {
+      existingId: string;
+      incoming: AccountInput;
+    };
+    if (!existingId || !incoming) {
+      res.status(400).json({
+        success: false,
+        message: 'existingId and incoming are required',
+      });
+      return;
+    }
+    await overrideAccountService(existingId, incoming);
+    invalidateProviderCache();
+    res.status(200).json({ success: true, message: 'Account overridden' });
+  } catch (error) {
+    logger.error('Error in overrideAccount', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
@@ -264,6 +359,11 @@ export const addAccount = async (
         if (account.user_data_dir) {
           updateAccountUserDataDir(existing.id, account.user_data_dir);
         }
+        if (account.auth_method !== undefined) {
+          await updateAccountEditableFields(existing.id, {
+            auth_method: account.auth_method ?? null,
+          });
+        }
         // Invalidate provider cache so model list is refreshed with the updated credential
         invalidateProviderCache();
         res.status(200).json({
@@ -377,7 +477,7 @@ export const updateAccountHandler = async (
     if (email !== undefined) fields.email = email.trim();
     if (credential !== undefined) fields.credential = credential;
 
-    const updated = updateAccountEditableFields(id, fields);
+    const updated = await updateAccountEditableFields(id, fields);
     if (!updated) {
       res.status(404).json({
         success: false,
@@ -482,9 +582,14 @@ export const getAccounts = async (
     // Kết quả sẽ được lưu vào DB → lần fetch tiếp theo sẽ có value sẵn.
     for (const row of rows) {
       const provider = providerRegistry.getProvider(row.provider_id);
-      if (provider?.getUsage && accountRefreshService.shouldRefreshUsage(row)) {
-        accountRefreshService.refreshUsage(row.id).catch(() => {
-          /* ignore */
+      const hasGetUsage = !!provider?.getUsage;
+      const shouldRefresh =
+        hasGetUsage && accountRefreshService.shouldRefreshUsage(row);
+      if (shouldRefresh) {
+        accountRefreshService.refreshUsage(row.id).catch((err) => {
+          logger.warn(
+            `[getAccounts] fire-and-forget refreshUsage failed: account=${row.id} err=${err?.message}`,
+          );
         });
       }
     }
@@ -653,9 +758,9 @@ export const refreshAccountToken = async (
       return;
     }
 
-    // Get provider and check if it supports browser login
+    // Get provider and check if it supports token refresh
     const provider = providerRegistry.getProvider(provider_id);
-    if (!provider?.login) {
+    if (!provider?.refreshToken) {
       res.status(400).json({
         success: false,
         message: 'Provider does not support token refresh',
@@ -665,28 +770,65 @@ export const refreshAccountToken = async (
       return;
     }
 
-    // Call provider login to get fresh token
-    const result = await provider.login(id);
+    if (!account.credential) {
+      res.status(400).json({
+        success: false,
+        message: 'Account has no credential to refresh',
+        error: { code: 'NO_CREDENTIAL' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
 
-    if (!result.success || !result.credential) {
+    // Call provider refreshToken with current credential
+    const refreshResult = await provider.refreshToken(account.credential);
+
+    if (!refreshResult) {
       res.status(500).json({
         success: false,
-        message: result.error || 'Failed to refresh token',
+        message: 'Token refresh failed (network error or unsupported)',
         error: { code: 'REFRESH_FAILED' },
         meta: { timestamp: new Date().toISOString() },
       });
       return;
     }
 
+    if ((refreshResult as any).error === 'unrecoverable_refresh_error') {
+      res.status(401).json({
+        success: false,
+        message:
+          'Refresh token has expired or been revoked. Re-authentication required.',
+        error: { code: 'TOKEN_EXPIRED', details: (refreshResult as any).code },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    if (!(refreshResult as any).accessToken) {
+      res.status(500).json({
+        success: false,
+        message: 'Token refresh returned no access token',
+        error: { code: 'REFRESH_FAILED' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    // Build updated credential with new tokens
+    const updatedCredential = buildUpdatedCredential(
+      account.credential,
+      refreshResult,
+    );
+
     // Update account credential
-    updateAccountCredential(id, result.credential);
+    updateAccountCredential(id, updatedCredential);
     // Invalidate provider cache so model list is refreshed with the new token
     invalidateProviderCache();
 
     res.status(200).json({
       success: true,
       message: 'Token refreshed successfully',
-      data: { account_id: id, email: result.email || account.email },
+      data: { account_id: id, email: account.email },
       meta: { timestamp: new Date().toISOString() },
     });
   } catch (error: any) {

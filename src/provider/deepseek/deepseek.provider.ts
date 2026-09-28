@@ -66,6 +66,7 @@ import {
   MODELS,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   DEEPSEEK_EVENTS,
   MAX_CONTINUATIONS,
@@ -117,6 +118,7 @@ export class DeepSeekProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

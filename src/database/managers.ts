@@ -125,13 +125,13 @@ function runManagersMigrations(db: Database.Database): void {
       `);
     }
 
-    // Seed record mặc định cho aiweb2api.sqlite.
+    // Seed record mặc định cho aiweb2api-accounts.sqlite.
     // Dùng id cố định để INSERT OR IGNORE không tạo duplicate khi restart.
     const now = Date.now();
     const aiweb2apiDbPath = require('path').join(
       require('os').homedir(),
       '.aiweb2api',
-      'aiweb2api.sqlite',
+      'aiweb2api-accounts.sqlite',
     );
     db.prepare(`
       INSERT OR IGNORE INTO database_managers

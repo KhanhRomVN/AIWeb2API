@@ -42,7 +42,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     try {
       const result = await loginWithProvider(providerId, {
-        method: method === 'google' ? 'google' : 'basic',
+        method: method || 'google',
         userDataDir: profile.dir,
       });
 
@@ -151,6 +151,15 @@ export const pollLogin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Parse auth_method từ pollContext để include trong response
+    let authMethodFromCtx: string | null = null;
+    try {
+      const ctx = JSON.parse(pollContext);
+      authMethodFromCtx = ctx?.auth_method ?? null;
+    } catch {
+      // ignore
+    }
+
     res.status(200).json({
       success: true,
       done: true,
@@ -158,6 +167,7 @@ export const pollLogin = async (req: Request, res: Response): Promise<void> => {
         provider_id: providerId,
         email: result.email || '',
         credential: result.cookies || '',
+        auth_method: authMethodFromCtx,
       },
     });
   } catch (error: any) {

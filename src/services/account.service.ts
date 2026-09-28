@@ -56,6 +56,9 @@ import { createLogger } from '../utils/logger';
 // ── Types ──
 import type { AccountRow } from '../repositories/account.repository';
 
+// ─── Constants ──────────────────────────────────────────────────────────
+const logger = createLogger('AccountService');
+
 // ─── Interfaces ─────────────────────────────────────────────────────────
 export interface AccountInput {
   id?: string;
@@ -63,6 +66,9 @@ export interface AccountInput {
   email: string;
   credential?: string;
   user_data_dir?: string | null;
+  usage?: number | null;
+  reset_usage_at?: string | null;
+  auth_method?: string | null;
 }
 
 export interface ListAccountsOptions {
@@ -74,10 +80,105 @@ export interface ListAccountsOptions {
   order?: 'ASC' | 'DESC';
 }
 
+export interface ImportPreviewResult {
+  accounts: Array<{
+    email: string;
+    provider_id: string;
+    kind: 'new' | 'changed' | 'identical';
+    incoming: AccountInput;
+    existing: {
+      id: string;
+      email: string;
+      provider_id: string;
+      credential: string | null;
+      usage: number | null;
+      reset_usage_at: string | null;
+    } | null;
+  }>;
+}
+
+/**
+ * Preview import — check từng account xem là new/changed/identical
+ * mà KHÔNG insert gì vào DB. Dùng để hiển thị confirm UI.
+ */
+export async function previewImportAccounts(
+  accounts: AccountInput[],
+): Promise<ImportPreviewResult> {
+  const result: ImportPreviewResult['accounts'] = [];
+  for (let i = 0; i < accounts.length; i++) {
+    const account = accounts[i];
+    try {
+      const existing = await findAccountByEmailAndProvider(
+        account.email,
+        account.provider_id,
+      );
+
+      if (!existing) {
+        result.push({
+          email: account.email,
+          provider_id: account.provider_id,
+          kind: 'new',
+          incoming: account,
+          existing: null,
+        });
+      } else {
+        const normalize = (v: string | null | undefined) => {
+          if (!v) return null;
+          try {
+            return JSON.stringify(JSON.parse(v));
+          } catch {
+            return v;
+          }
+        };
+        const credChanged =
+          normalize(existing.credential) !== normalize(account.credential);
+
+        result.push({
+          email: account.email,
+          provider_id: account.provider_id,
+          kind: credChanged ? 'changed' : 'identical',
+          incoming: account,
+          existing: {
+            id: existing.id,
+            email: existing.email,
+            provider_id: existing.provider_id,
+            credential: existing.credential ?? null,
+            usage: existing.usage ?? null,
+            reset_usage_at: existing.reset_usage_at ?? null,
+          },
+        });
+      }
+    } catch (err: any) {
+      logger.error(
+        `[previewImportAccounts] FAILED at [${i + 1}/${accounts.length}] email=${account.email} provider=${account.provider_id}`,
+      );
+      logger.error(`[previewImportAccounts] error message: ${err?.message}`);
+      logger.error(`[previewImportAccounts] error stack: ${err?.stack}`);
+      throw err;
+    }
+  }
+
+  return { accounts: result };
+}
+
 export interface ImportAccountsResult {
   imported: number;
   skipped: number;
-  duplicates: Array<{ email: string; provider_id: string }>;
+  duplicates: Array<{
+    email: string;
+    provider_id: string;
+    /** Incoming account data từ file import */
+    incoming: AccountInput;
+    /** Account đang tồn tại trong DB */
+    existing: {
+      id: string;
+      email: string;
+      provider_id: string;
+      credential: string | null;
+      usage: number | null;
+      reset_usage_at: string | null;
+    };
+  }>;
 }
 
 // ─── Service Functions ──────────────────────────────────────────────────
@@ -134,7 +235,9 @@ export function getAccounts(options: ListAccountsOptions) {
 /**
  * Thêm account mới
  */
-export async function createAccount(accountData: AccountInput): Promise<string> {
+export async function createAccount(
+  accountData: AccountInput,
+): Promise<string> {
   const id = accountData.id || require('crypto').randomUUID();
   await insertAccount({
     id,
@@ -142,6 +245,7 @@ export async function createAccount(accountData: AccountInput): Promise<string> 
     email: accountData.email,
     credential: accountData.credential || null,
     user_data_dir: accountData.user_data_dir || null,
+    auth_method: accountData.auth_method || null,
   });
   await ensureProviderExists(
     accountData.provider_id.toLowerCase(),
@@ -158,16 +262,20 @@ export function updateAccount(accountId: string, credential: string): void {
 }
 
 /**
- * Cập nhật các field có thể chỉnh sửa của account (email, credential).
+ * Cập nhật các field có thể chỉnh sửa của account (email, credential, auth_method).
  * Trả về false nếu account không tồn tại.
  */
-export function updateAccountEditableFields(
+export async function updateAccountEditableFields(
   accountId: string,
-  fields: { email?: string; credential?: string | null },
-): boolean {
-  const existing = findAccountById(accountId);
+  fields: {
+    email?: string;
+    credential?: string | null;
+    auth_method?: string | null;
+  },
+): Promise<boolean> {
+  const existing = await findAccountById(accountId);
   if (!existing) return false;
-  updateAccountFields(accountId, fields);
+  await updateAccountFields(accountId, fields);
   return true;
 }
 
@@ -205,7 +313,7 @@ export async function removeAccount(
 export async function importAccounts(
   accounts: AccountInput[],
 ): Promise<ImportAccountsResult> {
-  const duplicates: AccountInput[] = [];
+  const duplicates: ImportAccountsResult['duplicates'] = [];
   const toInsert: Array<{
     id: string;
     provider_id: string;
@@ -219,9 +327,20 @@ export async function importAccounts(
       account.provider_id,
     );
     if (existing) {
-      duplicates.push(account);
+      duplicates.push({
+        email: account.email,
+        provider_id: account.provider_id,
+        incoming: account,
+        existing: {
+          id: existing.id,
+          email: existing.email,
+          provider_id: existing.provider_id,
+          credential: existing.credential ?? null,
+          usage: existing.usage ?? null,
+          reset_usage_at: existing.reset_usage_at ?? null,
+        },
+      });
     } else {
-      // Generate id if not provided
       const id = account.id || require('crypto').randomUUID();
       toInsert.push({
         id,
@@ -244,11 +363,27 @@ export async function importAccounts(
   return {
     imported: toInsert.length,
     skipped: duplicates.length,
-    duplicates: duplicates.map((d) => ({
-      email: d.email,
-      provider_id: d.provider_id,
-    })),
+    duplicates,
   };
+}
+
+/**
+ * Override một account đã tồn tại bằng data từ import
+ * (dùng khi user confirm giữ lại account trùng lặp)
+ */
+export async function overrideAccount(
+  existingId: string,
+  incoming: AccountInput,
+): Promise<void> {
+  const fields: Record<string, any> = {};
+  if (incoming.credential !== undefined)
+    fields.credential = incoming.credential;
+  if (incoming.usage !== undefined) fields.usage = incoming.usage;
+  if (incoming.reset_usage_at !== undefined)
+    fields.reset_usage_at = incoming.reset_usage_at;
+  if (Object.keys(fields).length > 0) {
+    await updateAccountFields(existingId, fields);
+  }
 }
 
 /**
@@ -327,8 +462,6 @@ export async function getAccountUsageFromProvider(
 }
 
 // ─── Account Refresh Background Service ────────────────────────────────
-
-const logger = createLogger('AccountService');
 
 /**
  * Account Refresh Service Class
@@ -442,13 +575,20 @@ export class AccountRefreshService {
    */
   shouldRefreshUsage(account: AccountRow): boolean {
     // Chưa bao giờ fetch usage → fetch ngay
-    if (account.usage == null) return true;
+    if (account.usage == null) {
+      return true;
+    }
 
     const resetAt = account.reset_usage_at;
-    if (!resetAt) return false;
+    if (!resetAt) {
+      // usage đã có nhưng không có reset_usage_at → provider chưa trả về resetAt
+      // (ví dụ: code cũ chạy trước khi implement resetAt) → refresh để lấy lại
+      return true;
+    }
     try {
       const resetDate = new Date(resetAt);
-      return resetDate.getTime() <= Date.now();
+      const shouldRefresh = resetDate.getTime() <= Date.now();
+      return shouldRefresh;
     } catch {
       return false;
     }
@@ -474,10 +614,20 @@ export class AccountRefreshService {
       );
 
       if (usageInfo) {
-        updateAccountUsageInfo(
-          account.id,
-          usageInfo.usage,
-          usageInfo.resetUsageAt,
+        // Sanity check trước khi ghi DB
+        const safeUsage =
+          typeof usageInfo.usage === 'number' && isFinite(usageInfo.usage)
+            ? usageInfo.usage
+            : 0;
+        const safeResetAt =
+          typeof usageInfo.resetUsageAt === 'string' ||
+          usageInfo.resetUsageAt === null
+            ? usageInfo.resetUsageAt
+            : null;
+        updateAccountUsageInfo(account.id, safeUsage, safeResetAt);
+      } else {
+        logger.warn(
+          `[AccountRefresh] refreshUsage: getUsage returned null/undefined — account=${accountId} provider=${account.provider_id}`,
         );
       }
     } catch (err: any) {

@@ -45,11 +45,15 @@ import {
   CONTENT_TYPES,
   API_FIELDS,
   kiroRuntimeHost,
+  resolveKiroRuntimeRegion,
+  KIRO_PROFILE_REGIONS,
+  CAN_REGENERATE,
 } from './kiro.constant';
 
 import type {
   KiroAuthData,
   KiroAuthMethod,
+  KiroRefreshResult,
   KiroClientRegistrationRequest,
   KiroClientRegistrationResponse,
   KiroDeviceAuthorizationRequest,
@@ -85,6 +89,7 @@ export class KiroProvider implements Provider {
     models: MODELS,
     is_pausable: false,
     is_memory: false,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── AWS OIDC: Register Client ─────────────────────────────────────────
@@ -122,7 +127,9 @@ export class KiroProvider implements Provider {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error('[Kiro] OIDC client registration failed:', errorText);
-      throw new Error(`OIDC client registration failed: ${response.status} ${errorText}`);
+      throw new Error(
+        `OIDC client registration failed: ${response.status} ${errorText}`,
+      );
     }
 
     const data = (await response.json()) as KiroClientRegistrationResponse;
@@ -168,7 +175,9 @@ export class KiroProvider implements Provider {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error('[Kiro] Device authorization failed:', errorText);
-      throw new Error(`Device authorization failed: ${response.status} ${errorText}`);
+      throw new Error(
+        `Device authorization failed: ${response.status} ${errorText}`,
+      );
     }
 
     const data = (await response.json()) as KiroDeviceAuthorizationResponse;
@@ -178,7 +187,8 @@ export class KiroProvider implements Provider {
       user_code: data[API_FIELDS.USER_CODE],
       verification_uri: data[API_FIELDS.VERIFICATION_URI] || '',
       verification_uri_complete: data[API_FIELDS.VERIFICATION_URI_COMPLETE],
-      expires_in: data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.EXPIRES_SEC,
+      expires_in:
+        data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.EXPIRES_SEC,
       interval: data[API_FIELDS.INTERVAL] || DEVICE_CODE_DEFAULTS.INTERVAL_SEC,
       clientId: client.clientId,
       clientSecret: client.clientSecret,
@@ -217,7 +227,9 @@ export class KiroProvider implements Provider {
     if (!response.ok) {
       const errorText = await response.text();
       logger.error('[Kiro] Social device authorization failed:', errorText);
-      throw new Error(`Social device authorization failed: ${response.status} ${errorText}`);
+      throw new Error(
+        `Social device authorization failed: ${response.status} ${errorText}`,
+      );
     }
 
     const data = (await response.json()) as {
@@ -239,17 +251,20 @@ export class KiroProvider implements Provider {
     const deviceCode = data.deviceCode || data.device_code || '';
     const userCode = data.userCode || data.user_code || '';
     const verificationUri = data.verificationUri || data.verification_uri || '';
-    const verificationUriComplete = data.verificationUriComplete || data.verification_uri_complete;
+    const verificationUriComplete =
+      data.verificationUriComplete || data.verification_uri_complete;
     // Response uses milliseconds; convert to seconds for consistency
     const expiresIn = data.expiresInMilliseconds
       ? Math.floor(data.expiresInMilliseconds / 1000)
-      : (data.expires_in || DEVICE_CODE_DEFAULTS.EXPIRES_SEC);
+      : data.expires_in || DEVICE_CODE_DEFAULTS.EXPIRES_SEC;
     const interval = data.intervalInMilliseconds
       ? Math.floor(data.intervalInMilliseconds / 1000)
-      : (data.interval || DEVICE_CODE_DEFAULTS.INTERVAL_SEC);
+      : data.interval || DEVICE_CODE_DEFAULTS.INTERVAL_SEC;
 
     if (!deviceCode) {
-      throw new Error('Social device authorization response missing device_code');
+      throw new Error(
+        'Social device authorization response missing device_code',
+      );
     }
 
     return {
@@ -268,18 +283,20 @@ export class KiroProvider implements Provider {
   /**
    * Bước 1: Khởi tạo device flow, trả về user_code + verification_url ngay.
    *
-   * options.kiroMethod:
+   * options.method / options.kiroMethod:
    * - 'builder-id' : AWS OIDC device code, startUrl = awsapps.com/start
    * - 'idc'        : AWS OIDC device code, startUrl + region do user cung cấp
    * - 'google'     : Kiro social device code, provider = google
    * - 'github'     : Kiro social device code, provider = github
    */
   async login(options?: {
+    method?: 'google' | 'github' | 'builder-id' | 'idc';
     kiroMethod?: 'google' | 'github' | 'builder-id' | 'idc';
-    startUrl?: string;  // cho IDC
-    region?: string;    // cho IDC
+    startUrl?: string; // cho IDC
+    region?: string; // cho IDC
   }) {
-    const method = options?.kiroMethod || AUTH_METHODS.GOOGLE;
+    const method =
+      options?.method || options?.kiroMethod || AUTH_METHODS.GOOGLE;
 
     try {
       let deviceAuth: DeviceCodeResponse;
@@ -298,13 +315,18 @@ export class KiroProvider implements Provider {
       } else {
         // ── AWS OIDC device code flow (Builder ID / IDC) ──
         const region = options?.region || DEFAULT_REGION;
-        const startUrl = method === 'idc'
-          ? (options?.startUrl || BUILDER_ID_START_URL)
-          : BUILDER_ID_START_URL;
+        const startUrl =
+          method === 'idc'
+            ? options?.startUrl || BUILDER_ID_START_URL
+            : BUILDER_ID_START_URL;
         // IDC: không gửi issuerUrl vì tenant-specific; Builder ID: gửi issuerUrl chuẩn
         const skipIssuerUrl = method === 'idc';
 
-        const result = await this.startAwsDeviceAuthorization({ region, startUrl, skipIssuerUrl });
+        const result = await this.startAwsDeviceAuthorization({
+          region,
+          startUrl,
+          skipIssuerUrl,
+        });
         deviceAuth = result;
         pollContext = {
           flowType: 'aws_oidc',
@@ -403,15 +425,16 @@ export class KiroProvider implements Provider {
     if (response.ok) {
       const data = (await response.json()) as KiroTokenPollResponse;
       return await this.buildAuthResult(data.accessToken, data.refreshToken, {
-        authMethod: ctx.auth_method,
         clientId: ctx.client_id,
         clientSecret: ctx.client_secret,
         region,
-        expiresIn: data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+        authMethod: ctx.auth_method,
       });
     }
 
-    const errorData = (await response.json().catch(() => ({}))) as DeviceCodeError;
+    const errorData = (await response
+      .json()
+      .catch(() => ({}))) as DeviceCodeError;
     return this.handlePollError(errorData);
   }
 
@@ -440,7 +463,9 @@ export class KiroProvider implements Provider {
       }),
     });
 
-    const data = (await response.json().catch(() => ({}))) as KiroSocialPollResponse;
+    const data = (await response
+      .json()
+      .catch(() => ({}))) as KiroSocialPollResponse;
 
     // Kiro social endpoint trả về error/status thay vì HTTP status cho pending
     const progress = data.error ?? data.status;
@@ -448,14 +473,18 @@ export class KiroProvider implements Provider {
       return { done: false };
     }
 
-    if (!response.ok || (data.error && data.error !== 'authorization_pending')) {
+    if (
+      !response.ok ||
+      (data.error && data.error !== 'authorization_pending')
+    ) {
       if (progress === 'access_denied') {
         return { done: false, error: 'User denied authorization' };
       }
       if (progress === 'expired_token' || progress === 'device_expired') {
         return { done: false, error: 'Device code expired. Please try again.' };
       }
-      const errMsg = typeof data.error === 'string' ? data.error : 'Authorization failed';
+      const errMsg =
+        typeof data.error === 'string' ? data.error : 'Authorization failed';
       return { done: false, error: errMsg };
     }
 
@@ -463,12 +492,14 @@ export class KiroProvider implements Provider {
       return { done: false, error: 'No token received from social auth' };
     }
 
-    return await this.buildAuthResult(data.accessToken || '', data.refreshToken || '', {
-      authMethod: ctx.auth_method,
-      profileArn: data.profileArn,
-      expiresIn: data.expiresIn || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
-      provider: ctx.auth_method === 'google' ? 'Google' : 'Github',
-    });
+    return await this.buildAuthResult(
+      data.accessToken || '',
+      data.refreshToken || '',
+      {
+        profileArn: data.profileArn,
+        authMethod: ctx.auth_method,
+      },
+    );
   }
 
   // ─── Handle Poll Error ────────────────────────────────────────────────
@@ -491,46 +522,119 @@ export class KiroProvider implements Provider {
     if (errorData.error === 'expired_token') {
       return { done: false, error: 'Device code expired. Please try again.' };
     }
-    return { done: false, error: `Token polling failed: ${errorData.error || 'unknown'}` };
+    return {
+      done: false,
+      error: `Token polling failed: ${errorData.error || 'unknown'}`,
+    };
   }
 
   // ─── Build Auth Result ────────────────────────────────────────────────
 
   /**
    * Tạo cookies JSON và lấy email sau khi poll thành công.
+   * Với IDC flow, tự động discover profileArn qua ListAvailableProfiles.
    */
   private async buildAuthResult(
     accessToken: string,
     refreshToken: string,
     meta: {
-      authMethod: KiroAuthMethod;
       clientId?: string;
       clientSecret?: string;
       clientSecretExpiresAt?: number;
       region?: string;
       profileArn?: string;
-      expiresIn?: number;
-      provider?: string;
+      authMethod?: KiroAuthMethod;
     },
   ): Promise<{ done: boolean; cookies: string; email: string }> {
+    let profileArn = meta.profileArn;
+
+    // IDC flow không trả về profileArn từ token endpoint.
+    // Discover nó bằng cách gọi ListAvailableProfiles.
+    // Builder ID không cần profileArn — bỏ qua.
+    if (!profileArn && meta.authMethod === 'idc') {
+      try {
+        profileArn =
+          (await this.discoverProfileArn(accessToken, meta.region)) ??
+          undefined;
+      } catch (err) {
+        logger.warn('[Kiro] Failed to discover profileArn (non-fatal):', err);
+      }
+    }
+
     const authData: KiroAuthData = {
       accessToken,
       refreshToken,
-      expiresIn: meta.expiresIn || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
-      authMethod: meta.authMethod,
       ...(meta.clientId ? { clientId: meta.clientId } : {}),
       ...(meta.clientSecret ? { clientSecret: meta.clientSecret } : {}),
-      ...(meta.clientSecretExpiresAt ? { clientSecretExpiresAt: meta.clientSecretExpiresAt } : {}),
+      ...(meta.clientSecretExpiresAt
+        ? { clientSecretExpiresAt: meta.clientSecretExpiresAt }
+        : {}),
       region: meta.region || DEFAULT_REGION,
-      ...(meta.profileArn ? { profileArn: meta.profileArn } : {}),
-      ...(meta.provider ? { provider: meta.provider } : {}),
+      ...(profileArn ? { profileArn } : {}),
+      ...(meta.authMethod ? { authMethod: meta.authMethod } : {}),
     };
 
     // Kiro social tokens là AWS opaque — không có endpoint nào trả email.
     // Email sẽ được nhập thủ công ở UI.
     const emailFromJwt = this.extractEmailFromJWT(accessToken);
 
-    return { done: true, cookies: JSON.stringify(authData), email: emailFromJwt || '' };
+    return {
+      done: true,
+      cookies: JSON.stringify(authData),
+      email: emailFromJwt || '',
+    };
+  }
+
+  // ─── Discover Profile ARN ─────────────────────────────────────────────
+
+  /**
+   * Discover Q Developer profileArn bằng ListAvailableProfiles.
+   * Dùng cho IDC flow — probes us-east-1 và eu-central-1 (nơi AWS host profile),
+   * sau đó thử stored region như forward-compatible fallback.
+   */
+  private async discoverProfileArn(
+    accessToken: string,
+    storedRegion?: string,
+  ): Promise<string | null> {
+    const regionsToProbe: string[] = [...KIRO_PROFILE_REGIONS];
+    // Append stored region nếu là valid AWS region và chưa có trong list
+    if (
+      storedRegion &&
+      /^[a-z]{2}-[a-z]+-\d{1,2}$/.test(storedRegion) &&
+      !regionsToProbe.includes(storedRegion)
+    ) {
+      regionsToProbe.push(storedRegion);
+    }
+
+    for (const region of regionsToProbe) {
+      try {
+        const host = kiroRuntimeHost(region);
+        const response = await fetch(`${host}/`, {
+          method: 'POST',
+          headers: {
+            [HTTP_HEADER_NAMES.CONTENT_TYPE]: 'application/x-amz-json-1.0',
+            [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+            'x-amz-target': 'AmazonCodeWhispererService.ListAvailableProfiles',
+            [HTTP_HEADER_NAMES.AUTHORIZATION]: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ maxResults: 10 }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) continue;
+        const data = (await response.json()) as { profiles?: unknown };
+        const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+        const matched =
+          profiles.find((p: unknown) => {
+            const arn = (p as { arn?: string })?.arn;
+            return typeof arn === 'string' && arn.includes(`:${region}:`);
+          }) || profiles[0];
+        const arn = (matched as { arn?: string })?.arn;
+        if (typeof arn === 'string' && arn.length > 0) return arn;
+      } catch {
+        // region probe failed — try next
+      }
+    }
+    return null;
   }
 
   // ─── JWT Email Extraction ─────────────────────────────────────────────
@@ -546,7 +650,10 @@ export class KiroProvider implements Provider {
       let payload = parts[1];
       while (payload.length % 4) payload += '=';
       const decoded = JSON.parse(
-        Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'),
+        Buffer.from(
+          payload.replace(/-/g, '+').replace(/_/g, '/'),
+          'base64',
+        ).toString('utf8'),
       );
       return (
         decoded.email ||
@@ -580,20 +687,17 @@ export class KiroProvider implements Provider {
       return {
         accessToken: parsed.accessToken || credential,
         refreshToken: parsed.refreshToken || AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
-        authMethod: parsed.authMethod || (AUTH_DATA_DEFAULTS.METHOD as KiroAuthMethod),
-        expiresIn: parsed.expiresIn,
         clientId: parsed.clientId,
         clientSecret: parsed.clientSecret,
         clientSecretExpiresAt: parsed.clientSecretExpiresAt,
         region: parsed.region || DEFAULT_REGION,
         profileArn: parsed.profileArn,
-        provider: parsed.provider,
+        authMethod: parsed.authMethod,
       };
     } catch {
       return {
         accessToken: credential,
         refreshToken: AUTH_DATA_DEFAULTS.REFRESH_TOKEN,
-        authMethod: AUTH_DATA_DEFAULTS.METHOD as KiroAuthMethod,
         region: DEFAULT_REGION,
       };
     }
@@ -603,21 +707,37 @@ export class KiroProvider implements Provider {
 
   /**
    * Refresh access token bằng refresh token.
-   * Sync với OmniRoute services/kiro.ts → refreshToken().
+   *
+   * Logic (theo thứ tự):
+   * 1. AWS SSO OIDC (Builder ID / IDC) khi có clientId + clientSecret,
+   *    trừ authMethod === "imported" (token là social, không thể refresh bằng OIDC client).
+   *    Khi OIDC refresh thất bại do client hết hạn → tự re-register client mới và retry.
+   * 2. Social Auth (Google / GitHub / imported) → Kiro social refresh endpoint.
+   *
+   * Return: KiroRefreshResult | null
+   *   - null: network error hoặc không thể refresh
+   *   - { error: 'unrecoverable_refresh_error' }: refresh token đã revoke, cần re-auth
+   *   - _newClientId/_newClientSecret: client mới sau khi re-register (cần persist)
    */
-  async refreshToken(credential: string): Promise<KiroAuthData | null> {
+  async refreshToken(credential: string): Promise<KiroRefreshResult | null> {
     const authData = this.parseAuthData(credential);
-    const { refreshToken, authMethod, clientId, clientSecret, region } = authData;
+    const { refreshToken, clientId, clientSecret, region, authMethod } =
+      authData;
 
-    if (!refreshToken) return null;
+    if (!refreshToken) {
+      logger.warn(
+        '[Kiro][RefreshToken] No refresh token found in credential, aborting.',
+      );
+      return null;
+    }
 
     try {
-      // AWS SSO OIDC refresh (Builder ID / IDC)
-      // Không refresh imported social token bằng OIDC (chỉ dùng social path)
+      // ── AWS SSO OIDC refresh (Builder ID / IDC) ──
+      // "imported" tokens dùng OIDC client đã register nhưng refresh token là social-issued
+      // → OIDC client không thể refresh → dùng social path (#2467)
       if (clientId && clientSecret && authMethod !== 'imported') {
         const resolvedRegion = region || DEFAULT_REGION;
         const endpoint = `https://oidc.${resolvedRegion}.amazonaws.com/token`;
-
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -635,17 +755,107 @@ export class KiroProvider implements Provider {
         if (response.ok) {
           const data = (await response.json()) as KiroTokenPollResponse;
           return {
-            ...authData,
             accessToken: data.accessToken,
             refreshToken: data.refreshToken || refreshToken,
-            expiresIn: data[API_FIELDS.EXPIRES_IN] || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
+            expiresIn: data.expiresIn,
           };
         }
-        // Nếu lỗi, fall through sang social refresh
-        logger.warn('[Kiro] OIDC refresh failed, trying social path');
+
+        const errorText = await response.text();
+        logger.warn('[Kiro][RefreshToken] OIDC response error body', {
+          status: response.status,
+          body: errorText.slice(0, 500),
+        });
+
+        // AWS SSO OIDC dùng {"__type": "..."} thay vì standard OAuth2 error
+        let awsErrorType: string | undefined;
+        try {
+          const awsError = JSON.parse(errorText) as Record<string, unknown>;
+          awsErrorType = (awsError.__type || awsError.error) as
+            | string
+            | undefined;
+        } catch {
+          /* not JSON */
+        }
+
+        // Refresh token đã bị revoke/hết hạn → không thể recover
+        if (
+          awsErrorType === 'InvalidGrantException' ||
+          awsErrorType === 'ExpiredTokenException' ||
+          awsErrorType === 'invalid_grant'
+        ) {
+          logger.error(
+            '[Kiro][RefreshToken] Refresh token expired/invalid. Re-authentication required.',
+            { awsErrorType },
+          );
+          return {
+            accessToken: '',
+            refreshToken: '',
+            error: 'unrecoverable_refresh_error',
+            code: awsErrorType,
+          };
+        }
+
+        // Client credentials có thể hết hạn (DB import, TTL, browser conflict)
+        // → Re-register OIDC client mới và retry một lần (#2524)
+        logger.warn(
+          '[Kiro][RefreshToken] OIDC refresh failed, attempting client re-registration...',
+          {
+            status: response.status,
+            error: errorText.slice(0, 200),
+          },
+        );
+
+        try {
+          const newClient = await this.registerOIDCClient(
+            resolvedRegion,
+            false,
+          );
+          const retryResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+              [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+            },
+            body: JSON.stringify({
+              clientId: newClient.clientId,
+              clientSecret: newClient.clientSecret,
+              refreshToken,
+              grantType: 'refresh_token',
+            }),
+          });
+
+          if (retryResponse.ok) {
+            const retryData =
+              (await retryResponse.json()) as KiroTokenPollResponse;
+            return {
+              accessToken: retryData.accessToken,
+              refreshToken: retryData.refreshToken || refreshToken,
+              expiresIn: retryData.expiresIn,
+              _newClientId: newClient.clientId,
+              _newClientSecret: newClient.clientSecret,
+              _newClientSecretExpiresAt: newClient.clientSecretExpiresAt,
+            };
+          }
+
+          const retryErrorText = await retryResponse.text();
+          logger.warn('[Kiro][RefreshToken] OIDC retry also failed', {
+            status: retryResponse.status,
+            body: retryErrorText.slice(0, 300),
+          });
+        } catch (reRegErr) {
+          logger.warn(
+            '[Kiro][RefreshToken] Client re-registration fallback failed:',
+            reRegErr,
+          );
+        }
+
+        // OIDC path hoàn toàn thất bại, fall through sang social
+        logger.warn(
+          '[Kiro][RefreshToken] OIDC refresh failed entirely, trying social path',
+        );
       }
 
-      // Social Auth refresh (Google / GitHub / imported)
       const response = await fetch(SOCIAL_AUTH.SOCIAL_REFRESH_URL, {
         method: 'POST',
         headers: {
@@ -657,7 +867,42 @@ export class KiroProvider implements Provider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Token refresh failed: ${errorText}`);
+        logger.warn('[Kiro][RefreshToken] Social response error body', {
+          status: response.status,
+          body: errorText.slice(0, 500),
+        });
+
+        // Cũng check AWS-style error trên social path (Kiro có thể relay chúng)
+        try {
+          const awsError = JSON.parse(errorText) as Record<string, unknown>;
+          const awsErrorType = (awsError.__type || awsError.error) as
+            | string
+            | undefined;
+          if (
+            awsErrorType === 'InvalidGrantException' ||
+            awsErrorType === 'ExpiredTokenException' ||
+            awsErrorType === 'invalid_grant'
+          ) {
+            logger.error(
+              '[Kiro][RefreshToken] Social refresh token expired/invalid.',
+              { awsErrorType },
+            );
+            return {
+              accessToken: '',
+              refreshToken: '',
+              error: 'unrecoverable_refresh_error',
+              code: awsErrorType,
+            };
+          }
+        } catch {
+          /* not JSON */
+        }
+
+        logger.error('[Kiro][RefreshToken] Social token refresh failed:', {
+          status: response.status,
+          error: errorText.slice(0, 200),
+        });
+        return null;
       }
 
       const data = (await response.json()) as {
@@ -668,14 +913,15 @@ export class KiroProvider implements Provider {
       };
 
       return {
-        ...authData,
         accessToken: data.accessToken || '',
         refreshToken: data.refreshToken || refreshToken,
-        expiresIn: data.expiresIn || DEVICE_CODE_DEFAULTS.TOKEN_EXPIRES_SEC,
-        ...(data.profileArn ? { profileArn: data.profileArn } : {}),
+        expiresIn: data.expiresIn,
       };
     } catch (error) {
-      logger.error('[Kiro] Token refresh error:', error);
+      logger.error(
+        '[Kiro][RefreshToken] Unexpected error during token refresh:',
+        error,
+      );
       return null;
     }
   }
@@ -710,47 +956,105 @@ export class KiroProvider implements Provider {
       onThinking,
       onDone,
       onError,
+      onCredentialRotated,
     } = options;
 
     try {
-      const authData = this.parseAuthData(credential);
-      const { accessToken, region, profileArn } = authData;
+      let authData = this.parseAuthData(credential);
 
-      if (!accessToken) {
+      if (!authData.accessToken) {
         throw new Error('Kiro: missing access token');
       }
 
-      // ── Build Kiro conversationState payload ──
-      const resolvedRegion = region || DEFAULT_REGION;
-      const body = this.buildConversationPayload(messages, model, profileArn);
+      // ── Resolve RUNTIME region từ profileArn (không phải stored IdC region) ──
+      const resolvedRegion = resolveKiroRuntimeRegion(authData);
+      const body = this.buildConversationPayload(
+        messages,
+        model,
+        authData.profileArn,
+      );
 
-      // ── Build headers ──
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/x-amz-json-1.0',
-        'X-Amz-Target': 'AmazonCodeWhispererStreamingService.GenerateAssistantResponse',
-        'Accept': 'application/vnd.amazon.eventstream',
-        'Amz-Sdk-Request': 'attempt=1; max=3',
-        'x-amzn-bedrock-cache-control': 'enable',
+      const buildHeaders = (
+        token: string,
+        authMethod?: string,
+      ): Record<string, string> => {
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/x-amz-json-1.0',
+          'X-Amz-Target':
+            'AmazonCodeWhispererStreamingService.GenerateAssistantResponse',
+          Accept: 'application/vnd.amazon.eventstream',
+          'Amz-Sdk-Request': 'attempt=1; max=3',
+          'Amz-Sdk-Invocation-Id': uuidv4(),
+          'x-amzn-bedrock-cache-control': 'enable',
+        };
+        // API key auth cần header tokentype
+        if (authMethod === 'api_key') {
+          headers['tokentype'] = 'API_KEY';
+        }
+        return headers;
       };
 
       // ── Determine endpoint ──
-      // Social auth (google/github) → try branded Kiro gateway first
-      // Falls back to direct CodeWhisperer if needed
-      const baseUrl = resolvedRegion === DEFAULT_REGION
-        ? 'https://runtime.us-east-1.kiro.dev/generateAssistantResponse'
-        : kiroRuntimeHost(resolvedRegion) + '/generateAssistantResponse';
+      // Social auth (google/github) và Builder ID → Kiro branded gateway (us-east-1)
+      // API key, IDC → direct CodeWhisperer/Q endpoint
+      const isCodeWhispererOnly =
+        authData.authMethod === 'api_key' || authData.authMethod === 'idc';
+      const regionalUrl =
+        kiroRuntimeHost(resolvedRegion) + '/generateAssistantResponse';
+      const baseUrl =
+        resolvedRegion === DEFAULT_REGION && !isCodeWhispererOnly
+          ? 'https://runtime.us-east-1.kiro.dev/generateAssistantResponse'
+          : regionalUrl;
 
-      const response = await fetch(baseUrl, {
+      let headers = buildHeaders(authData.accessToken, authData.authMethod);
+      let response = await fetch(baseUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
       });
 
+      // ── Auto-refresh on 401/403 then retry ──
+      if (
+        (response.status === 401 || response.status === 403) &&
+        authData.refreshToken
+      ) {
+        const refreshed = await this.refreshToken(credential);
+
+        if (refreshed && !refreshed.error && refreshed.accessToken) {
+          // Cập nhật authData với token mới, preserve các fields còn lại
+          authData = {
+            ...authData,
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            // Nếu client được re-register, cập nhật client credentials
+            ...(refreshed._newClientId
+              ? {
+                  clientId: refreshed._newClientId,
+                  clientSecret: refreshed._newClientSecret,
+                  clientSecretExpiresAt: refreshed._newClientSecretExpiresAt,
+                }
+              : {}),
+          };
+
+          // Persist refreshed credential
+          if (onCredentialRotated) {
+            onCredentialRotated(JSON.stringify(authData));
+          }
+
+          headers = buildHeaders(authData.accessToken, authData.authMethod);
+          response = await fetch(baseUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+          });
+        }
+      }
+
+      // ── Fallback to direct CodeWhisperer endpoint nếu vẫn lỗi ──
       if (!response.ok) {
-        // Fallback to direct CodeWhisperer endpoint on auth failure
         if (response.status === 401 || response.status === 403) {
-          const fallbackUrl = kiroRuntimeHost(resolvedRegion) + '/generateAssistantResponse';
+          const fallbackUrl = regionalUrl;
           if (fallbackUrl !== baseUrl) {
             const fallbackResponse = await fetch(fallbackUrl, {
               method: 'POST',
@@ -759,11 +1063,17 @@ export class KiroProvider implements Provider {
             });
             if (!fallbackResponse.ok) {
               const errText = await fallbackResponse.text();
-              throw new Error(`Kiro API error ${fallbackResponse.status}: ${errText}`);
+              throw new Error(
+                `Kiro API error ${fallbackResponse.status}: ${errText}`,
+              );
             }
-            await this.processEventStream(response as any, onContent, onThinking);
-      onDone();
-      return;
+            await this.processEventStream(
+              fallbackResponse as any,
+              onContent,
+              onThinking,
+            );
+            onDone();
+            return;
           }
         }
         const errText = await response.text();
@@ -800,8 +1110,15 @@ export class KiroProvider implements Provider {
         const text = typeof msg.content === 'string' ? msg.content : '';
         systemContent += (systemContent ? '\n\n' : '') + text;
       } else if (msg.role === 'user') {
-        const text = typeof msg.content === 'string' ? msg.content
-          : Array.isArray(msg.content) ? msg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
+        const text =
+          typeof msg.content === 'string'
+            ? msg.content
+            : Array.isArray(msg.content)
+              ? msg.content
+                  .filter((c: any) => c.type === 'text')
+                  .map((c: any) => c.text)
+                  .join('\n')
+              : '';
         history.push({
           userInputMessage: {
             content: text || '(empty)',
@@ -810,8 +1127,15 @@ export class KiroProvider implements Provider {
           },
         });
       } else if (msg.role === 'assistant') {
-        const text = typeof msg.content === 'string' ? msg.content
-          : Array.isArray(msg.content) ? msg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
+        const text =
+          typeof msg.content === 'string'
+            ? msg.content
+            : Array.isArray(msg.content)
+              ? msg.content
+                  .filter((c: any) => c.type === 'text')
+                  .map((c: any) => c.text)
+                  .join('\n')
+              : '';
         history.push({
           assistantResponseMessage: { content: text || '(empty)' },
         });
@@ -820,8 +1144,15 @@ export class KiroProvider implements Provider {
 
     // Current (last) message
     const lastMsg = messages[messages.length - 1];
-    let lastContent = typeof lastMsg?.content === 'string' ? lastMsg.content
-      : Array.isArray(lastMsg?.content) ? lastMsg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
+    let lastContent =
+      typeof lastMsg?.content === 'string'
+        ? lastMsg.content
+        : Array.isArray(lastMsg?.content)
+          ? lastMsg.content
+              .filter((c: any) => c.type === 'text')
+              .map((c: any) => c.text)
+              .join('\n')
+          : '';
 
     // Prepend system prompt vào content của current message
     if (systemContent) {
@@ -831,8 +1162,15 @@ export class KiroProvider implements Provider {
     // Deterministic conversationId từ first user message
     const NAMESPACE_KIRO = '34f7193f-561d-4050-bc84-9547d953d6bf';
     const firstUser = messages.find((m) => m.role === 'user');
-    const seed = typeof firstUser?.content === 'string' ? firstUser.content
-      : Array.isArray(firstUser?.content) ? firstUser.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ') : '';
+    const seed =
+      typeof firstUser?.content === 'string'
+        ? firstUser.content
+        : Array.isArray(firstUser?.content)
+          ? firstUser.content
+              .filter((c: any) => c.type === 'text')
+              .map((c: any) => c.text)
+              .join(' ')
+          : '';
     const conversationId = seed
       ? uuidv5(seed.substring(0, 4000), NAMESPACE_KIRO)
       : uuidv4();
@@ -885,7 +1223,8 @@ export class KiroProvider implements Provider {
         while (buffer.length >= 16 && iterations < 1000) {
           iterations++;
           const totalLength = buffer.peekUint32BE(0);
-          if (!totalLength || totalLength < 16 || totalLength > buffer.length) break;
+          if (!totalLength || totalLength < 16 || totalLength > buffer.length)
+            break;
 
           const eventData = buffer.read(totalLength);
           if (!eventData) break;
@@ -896,14 +1235,18 @@ export class KiroProvider implements Provider {
           const eventType = event.headers[':event-type'] || '';
 
           if (eventType === 'assistantResponseEvent') {
-            const content = typeof event.payload?.content === 'string' ? event.payload.content : '';
+            const content =
+              typeof event.payload?.content === 'string'
+                ? event.payload.content
+                : '';
             if (content) onContent(content);
           } else if (eventType === 'reasoningContentEvent') {
             const rp = event.payload as Record<string, unknown> | null;
             const rt = rp?.reasoningText;
             let reasoning = '';
             if (rt && typeof rt === 'object') {
-              reasoning = typeof (rt as any).text === 'string' ? (rt as any).text : '';
+              reasoning =
+                typeof (rt as any).text === 'string' ? (rt as any).text : '';
             } else if (typeof rt === 'string') {
               reasoning = rt;
             }
@@ -913,13 +1256,200 @@ export class KiroProvider implements Provider {
       };
 
       nodeStream.on('data', (chunk: Buffer) => {
-        buffer.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+        buffer.push(
+          new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+        );
         processBuffer();
       });
 
       nodeStream.on('end', () => resolve());
       nodeStream.on('error', (err: Error) => reject(err));
     });
+  }
+
+  // ─── Get Usage ────────────────────────────────────────────────────────
+
+  /**
+   * Fetch usage quota từ Kiro/CodeWhisperer GetUsageLimits endpoint.
+   *
+   * Trả về:
+   *   - usage: phần trăm đã dùng (0–100), tính từ resource AGENTIC_REQUEST
+   *     hoặc resource đầu tiên có total > 0.
+   *   - resetUsageAt: ISO string của ngày reset, hoặc null.
+   *
+   * Thử theo thứ tự:
+   *   1. POST /  (x-amz-target: GetUsageLimits) — canonical, có profileArn
+   *   2. GET /getUsageLimits — fallback cho một số account/region
+   */
+  async getUsage(
+    credential: string,
+  ): Promise<{ usage: number; resetUsageAt: string | null }> {
+    const authData = this.parseAuthData(credential);
+    const { accessToken, authMethod } = authData;
+
+    if (!accessToken) {
+      throw new Error('[Kiro] getUsage: missing accessToken');
+    }
+
+    // Resolve runtime region từ profileArn (không phải IdC region)
+    let profileArn = authData.profileArn;
+    const resolvedRegion = resolveKiroRuntimeRegion(authData);
+    const runtimeHost = kiroRuntimeHost(resolvedRegion);
+
+    // Builder ID không cần profileArn, IDC cần — discover nếu chưa có
+    if (
+      !profileArn &&
+      authMethod !== 'builder-id' &&
+      authMethod !== 'api_key'
+    ) {
+      try {
+        profileArn =
+          (await this.discoverProfileArn(accessToken, authData.region)) ??
+          undefined;
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    if (
+      !profileArn &&
+      authMethod !== 'builder-id' &&
+      authMethod !== 'api_key'
+    ) {
+      throw new Error('[Kiro] getUsage: profileArn not available');
+    }
+
+    const authHeaders: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      ...(authMethod === 'api_key' ? { tokentype: 'API_KEY' } : {}),
+    };
+
+    const payload: Record<string, unknown> = {
+      origin: 'AI_EDITOR',
+      resourceType: 'AGENTIC_REQUEST',
+      ...(profileArn ? { profileArn } : {}),
+    };
+
+    // Attempt 1: POST (canonical)
+    let data: Record<string, unknown> | null = null;
+    const postRes = await fetch(runtimeHost, {
+      method: 'POST',
+      headers: {
+        ...authHeaders,
+        'Content-Type': 'application/x-amz-json-1.0',
+        'x-amz-target': 'AmazonCodeWhispererService.GetUsageLimits',
+      },
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+
+    if (postRes?.ok) {
+      data = (await postRes.json()) as Record<string, unknown>;
+    }
+
+    // Attempt 2: GET fallback
+    if (!data) {
+      const qParams = new URLSearchParams({
+        origin: 'AI_EDITOR',
+        resourceType: 'AGENTIC_REQUEST',
+        ...(profileArn ? { profileArn } : {}),
+      });
+      const getRes = await fetch(`${runtimeHost}/getUsageLimits?${qParams}`, {
+        method: 'GET',
+        headers: authHeaders,
+      }).catch(() => null);
+
+      if (getRes?.ok) {
+        data = (await getRes.json()) as Record<string, unknown>;
+      } else if (getRes) {
+        const errText = await getRes.text().catch(() => '');
+        throw new Error(
+          `[Kiro] GetUsageLimits failed (${getRes.status}): ${errText.slice(0, 200)}`,
+        );
+      } else {
+        throw new Error('[Kiro] GetUsageLimits: all attempts failed');
+      }
+    }
+
+    return this.parseKiroUsage(data!);
+  }
+
+  /**
+   * Parse GetUsageLimits response → { usage %, resetUsageAt }.
+   * Ưu tiên resource AGENTIC_REQUEST, fallback về resource đầu tiên có data.
+   */
+  private parseKiroUsage(data: Record<string, unknown>): {
+    usage: number;
+    resetUsageAt: string | null;
+  } {
+    const usageList = Array.isArray(data.usageBreakdownList)
+      ? data.usageBreakdownList
+      : [];
+
+    // Check overage (unlimited) — nếu enabled, usage = 0 (không giới hạn)
+    const overageConfig = (data.overageConfiguration ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const overageEnabled =
+      String(overageConfig.overageStatus ?? '').toUpperCase() === 'ENABLED' ||
+      data.overageEnabled === true ||
+      overageConfig.overageEnabled === true;
+
+    if (overageEnabled) {
+      return { usage: 0, resetUsageAt: this.parseResetTime(data) };
+    }
+
+    // Tìm resource AGENTIC_REQUEST trước, fallback về resource đầu tiên
+    const target =
+      usageList.find(
+        (b: unknown) =>
+          typeof (b as any)?.resourceType === 'string' &&
+          (b as any).resourceType.toUpperCase() === 'AGENTIC_REQUEST',
+      ) ?? usageList[0];
+
+    if (!target) {
+      return { usage: 0, resetUsageAt: this.parseResetTime(data) };
+    }
+
+    const b = target as Record<string, unknown>;
+    const used =
+      Number(b.currentUsageWithPrecision ?? b.currentUsage ?? 0) || 0;
+    const total = Number(b.usageLimitWithPrecision ?? b.usageLimit ?? 0) || 0;
+    const usagePercent =
+      total > 0 ? Math.min(100, Math.round((used / total) * 10000) / 100) : 0;
+
+    return { usage: usagePercent, resetUsageAt: this.parseResetTime(data) };
+  }
+
+  private parseResetTime(data: Record<string, unknown>): string | null {
+    const raw = data.nextDateReset ?? data.resetDate;
+    if (raw == null) return null;
+    try {
+      // AWS trả về Unix timestamp (seconds hoặc milliseconds).
+      // Nếu là số < 1e10 thì là seconds → nhân 1000 để ra ms.
+      // Nếu là số >= 1e10 thì đã là ms rồi.
+      // Nếu là string ISO thì dùng thẳng.
+      let ms: number;
+      if (typeof raw === 'number') {
+        ms = raw < 1e10 ? raw * 1000 : raw;
+      } else {
+        const parsed = Number(raw);
+        if (
+          !isNaN(parsed) &&
+          String(raw)
+            .trim()
+            .match(/^\d+(\.\d+)?$/)
+        ) {
+          ms = parsed < 1e10 ? parsed * 1000 : parsed;
+        } else {
+          ms = new Date(raw as string).getTime();
+        }
+      }
+      return isNaN(ms) ? null : new Date(ms).toISOString();
+    } catch {
+      return null;
+    }
   }
 }
 

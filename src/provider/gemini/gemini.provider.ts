@@ -49,6 +49,7 @@ import {
   MODELS,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   USER_AGENT,
   GEMINI_EVENTS,
@@ -97,6 +98,7 @@ export class GeminiProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
   };

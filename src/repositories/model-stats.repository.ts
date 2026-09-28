@@ -8,7 +8,7 @@
  * lấy từ provider constants hoặc API live.
  *
  * ĐÃ MIGRATE sang Kysely (async) — chạy được trên cả SQLite lẫn
- * Postgres thông qua `getDataStore()`. Mọi hàm trả Promise, caller
+ * Postgres thông qua `getMetricsDataStore()`. Mọi hàm trả Promise, caller
  * phải `await`.
  *
  * Main functions:
@@ -20,7 +20,7 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-import { getDataStore } from '../database';
+import { getMetricsDataStore } from '../database';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ export interface ModelStatsRow {
 // ─── Queries ────────────────────────────────────────────────────────────
 
 export const findAllModelStats = async (): Promise<ModelStatsRow[]> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
   return (await db
     .selectFrom('model_stats')
     .selectAll()
@@ -45,7 +45,7 @@ export const findModelStats = async (
   providerId: string,
   modelId: string,
 ): Promise<ModelStatsRow | undefined> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
   const row = await db
     .selectFrom('model_stats')
     .selectAll()
@@ -65,7 +65,7 @@ export const upsertModelStats = async (
   providerId: string,
   modelId: string,
 ): Promise<void> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
   await db
     .insertInto('model_stats')
     .values({
@@ -89,7 +89,7 @@ export const updateModelSuccessRate = async (
   modelId: string,
   successRate: number | null,
 ): Promise<void> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
   await db
     .updateTable('model_stats')
     .set({ success_rate: successRate, updated_at: Date.now() })

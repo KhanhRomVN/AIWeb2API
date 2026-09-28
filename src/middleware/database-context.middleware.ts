@@ -238,9 +238,12 @@ const resolveRequestDb = async (
           return { db: getDb(), dataStore: ds, managerId };
         } catch (err) {
           logger.error(
-            `Could not create Postgres DataStore for manager ${managerId}`,
+            `Could not connect to Postgres for manager ${managerId} — falling back to default DB`,
             err,
           );
+          // Xóa cache để lần sau retry khi Postgres có thể đã recover.
+          dataStoreCache.delete(managerId);
+          migrationPromises.delete(managerId);
           return defaultContext();
         }
       }

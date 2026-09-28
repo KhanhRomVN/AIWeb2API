@@ -24,6 +24,8 @@ import { Router } from 'express';
 // ── Controllers ──
 import {
   importAccounts,
+  previewImport,
+  overrideAccount,
   addAccount,
   updateAccountHandler,
   getAccounts,
@@ -41,7 +43,9 @@ import {
 
 const router = Router();
 
+router.post('/import/preview', previewImport);
 router.post('/import', importAccounts);
+router.post('/override', overrideAccount);
 router.post('/', addAccount);
 router.get('/', getAccounts);
 router.put('/:id', updateAccountHandler);

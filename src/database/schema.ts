@@ -1,11 +1,11 @@
 /**
  * ------------------------------------------------------------------
- * Database Schema (Kysely)
+ * Database Schemas (Kysely)
  * ------------------------------------------------------------------
- * Định nghĩa type cho tất cả bảng trong database chính dưới dạng
- * interface mà Kysely dùng để type-check query. Phản ánh schema do
- * `migrations.ts` tạo ra (SQLite) — khi chạy trên Postgres, schema
- * tương đương được tạo bởi `migrations-postgres.ts`.
+ * Định nghĩa type cho các bảng trong 2 databases:
+ *
+ * AccountsDatabase  → aiweb2api-accounts.sqlite  (chỉ bảng `accounts`)
+ * MetricsDatabase   → metrics.sqlite             (model_stats + metrics)
  *
  * Lưu ý: SQLite lưu boolean dưới dạng INTEGER 0/1, nên các cột boolean
  * được khai báo là `number | null` để khớp cả 2 engine.
@@ -25,12 +25,8 @@ export interface AccountsTable {
   is_memory_enabled: number | null;
   user_data_dir: string | null;
   last_used_at: number | null;
+  auth_method: string | null;
 }
-
-// ─── providers ──────────────────────────────────────────────────────────
-// NOTE: Bảng providers đã bị loại bỏ — xem database-schema.md để biết lý do.
-// Provider metadata được lấy trực tiếp từ provider registry (constants/API),
-// không cần persist vào DB.
 
 // ─── model_stats ────────────────────────────────────────────────────────
 export interface ModelStatsTable {
@@ -51,8 +47,23 @@ export interface MetricsTable {
   timestamp: number;
 }
 
-// ─── Database (root) ────────────────────────────────────────────────────
-/** Interface root mà Kysely generic nhận — map tên bảng → type của nó. */
+// ─── Database roots ─────────────────────────────────────────────────────
+
+/** Schema cho aiweb2api-accounts.sqlite */
+export interface AccountsDatabase {
+  accounts: AccountsTable;
+}
+
+/** Schema cho metrics.sqlite */
+export interface MetricsDatabase {
+  model_stats: ModelStatsTable;
+  metrics: MetricsTable;
+}
+
+/**
+ * Legacy union schema — giữ để tránh breaking change trong các file chưa migrate.
+ * @deprecated Dùng AccountsDatabase hoặc MetricsDatabase riêng lẻ.
+ */
 export interface Database {
   accounts: AccountsTable;
   model_stats: ModelStatsTable;

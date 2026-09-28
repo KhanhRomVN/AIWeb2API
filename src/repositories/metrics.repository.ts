@@ -6,7 +6,7 @@
  * của các request gửi đến provider.
  *
  * ĐÃ MIGRATE sang Kysely (async) — chạy được trên cả SQLite lẫn
- * Postgres thông qua `getDataStore()`. Riêng `queryUsageHistory` có
+ * Postgres thông qua `getMetricsDataStore()`. Riêng `queryUsageHistory` có
  * branch theo dialect vì cú pháp format ngày khác nhau:
  *   - SQLite   : strftime('%Y-%m-%d', datetime(ts/1000, 'unixepoch', 'localtime'))
  *   - Postgres : to_char(to_timestamp(ts/1000), 'YYYY-MM-DD')
@@ -24,7 +24,7 @@
 import { sql } from 'kysely';
 
 // ── Database ──
-import { getDataStore } from '../database';
+import { getDataStore, getMetricsDataStore } from '../database';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ export const insertMetric = async (
   status: 'success' | 'error' = 'success',
   timestamp?: number,
 ): Promise<void> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
   await db
     .insertInto('metrics')
     .values({
@@ -72,7 +72,7 @@ export const queryUsageHistory = async (
   endTime: number,
   accountId?: string,
 ): Promise<Array<{ date: string; requests: number; tokens: number }>> => {
-  const store = getDataStore();
+  const store = getMetricsDataStore();
   const db = store.kysely;
 
   // Với Postgres, `groupBy(expression)` trong Kysely không sinh ra GROUP BY
@@ -111,47 +111,58 @@ export const queryAccountStatsByPeriod = async (
   endTime: number,
   accountId?: string,
 ): Promise<any[]> => {
-  const db = getDataStore().kysely;
-
-  const statsSubquery = db
+  // Step 1: lấy stats từ metrics DB
+  const metricsDb = getMetricsDataStore().kysely;
+  let metricsQuery = metricsDb
     .selectFrom('metrics')
     .select([
       'account_id',
       sql<number>`count(id)`.as('total_requests'),
-      sql<number>`sum(case when total_tokens > 0 then 1 else 0 end)`.as(
-        'successful_requests',
-      ),
+      sql<number>`sum(case when total_tokens > 0 then 1 else 0 end)`.as('successful_requests'),
       sql<number>`sum(total_tokens)`.as('total_tokens'),
     ])
     .where('timestamp', '>=', startTime)
     .where('timestamp', '<=', endTime)
-    .groupBy('account_id')
-    .as('stats');
-
-  let query = db
-    .selectFrom('accounts as a')
-    .leftJoin(statsSubquery, 'a.id', 'stats.account_id')
-    .select([
-      'a.id',
-      'a.email',
-      'a.provider_id',
-      'stats.total_requests',
-      'stats.successful_requests',
-      'stats.total_tokens',
-    ]);
+    .groupBy('account_id');
 
   if (accountId) {
-    query = query.where('a.id', '=', accountId);
+    metricsQuery = metricsQuery.where('account_id', '=', accountId);
   }
 
-  return (await query.orderBy('total_requests', 'desc').execute()) as any[];
+  const metricsRows = await metricsQuery.execute() as any[];
+
+  // Step 2: lấy accounts từ accounts DB
+  const accountsDb = getDataStore().kysely;
+  let accountsQuery = accountsDb
+    .selectFrom('accounts')
+    .select(['id', 'email', 'provider_id']);
+
+  if (accountId) {
+    accountsQuery = accountsQuery.where('id', '=', accountId);
+  }
+
+  const accountRows = await accountsQuery.execute() as any[];
+
+  // Step 3: merge in-memory
+  const statsMap = new Map(metricsRows.map((r: any) => [r.account_id, r]));
+  return accountRows.map((a: any) => {
+    const stats = statsMap.get(a.id) as any;
+    return {
+      id: a.id,
+      email: a.email,
+      provider_id: a.provider_id,
+      total_requests: stats?.total_requests ?? null,
+      successful_requests: stats?.successful_requests ?? null,
+      total_tokens: stats?.total_tokens ?? null,
+    };
+  }).sort((x: any, y: any) => (y.total_requests ?? 0) - (x.total_requests ?? 0));
 };
 
 export const queryModelStatsByPeriod = async (
   startTime: number,
   endTime: number,
 ): Promise<any[]> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
 
   const statsSubquery = db
     .selectFrom('metrics')
@@ -182,7 +193,7 @@ export const calculateModelSuccessRate = async (
   providerId: string,
   modelId: string,
 ): Promise<number | null> => {
-  const db = getDataStore().kysely;
+  const db = getMetricsDataStore().kysely;
   const result = await db
     .selectFrom('metrics')
     .select(

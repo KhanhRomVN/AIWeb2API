@@ -11,7 +11,7 @@
  * `getDb()` sẽ trả về DB của context đó; ngoài context sẽ fallback về global.
  *
  * Main functions:
- * - initDatabase()          : Khởi tạo DB chính, chạy migrations
+ * - initDatabase()          : Khởi tạo DB chính (`aiweb2api-accounts.sqlite`), chạy migrations
  * - getDb()                 : Lấy DB instance (ALS context > global)
  * - resolveNativeBinding()  : Tìm native binding cho better-sqlite3 (pkg/npm)
  *
@@ -120,7 +120,7 @@ export const initDatabase = (customPath?: string): void => {
     fs.mkdirSync(basePath, { recursive: true });
   }
 
-  const dbPath = customPath || path.join(basePath, 'aiweb2api.sqlite');
+  const dbPath = customPath || path.join(basePath, 'aiweb2api-accounts.sqlite');
 
   try {
     if (isCjsBundle) {

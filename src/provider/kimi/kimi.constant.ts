@@ -42,6 +42,7 @@ export const KIMI_AUTH_METHODS = {
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
+export const CAN_REGENERATE = true;
 
 export const MODELS = [] as const;
 

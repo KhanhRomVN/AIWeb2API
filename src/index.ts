@@ -44,6 +44,7 @@ import { startServer } from './server';
 
 // ── Database ──
 import { initDatabase } from './database';
+import { initMetricsDatabase } from './database/metrics-db';
 import { initManagersDatabase } from './database/managers';
 import { initConfigDatabase } from './database/config-db';
 import { runIntegrityCheck } from './database/integrity-check';
@@ -68,6 +69,7 @@ const logger = createLogger('Startup');
 const main = async (options?: { dbPath?: string }) => {
   try {
     initDatabase(options?.dbPath);
+    initMetricsDatabase();
     initManagersDatabase();
     initConfigDatabase();
     runIntegrityCheck();

@@ -56,6 +56,7 @@ import {
   MODELS,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   QWEN_CLI_EVENTS,
   USER_INFO_URL,
   CHAT_COMPLETIONS_URL,
@@ -101,6 +102,7 @@ export class QwenCoderCLIProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────

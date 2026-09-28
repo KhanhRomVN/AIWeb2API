@@ -85,7 +85,9 @@ export const createPostgresKysely = (
     user: config.username ?? undefined,
     password: config.password ?? undefined,
     ssl: resolvePgSsl(config.ssl_mode),
-    connectionTimeoutMillis: 8000,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,  // đóng connection idle sau 30s, tránh Neon terminate đột ngột
+    max: 3,                    // giới hạn pool size cho free tier
   });
 
   return new Kysely<DbSchema>({

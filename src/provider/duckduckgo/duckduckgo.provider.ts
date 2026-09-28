@@ -40,6 +40,7 @@ import {
   MODELS,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   STATUS_URL,
   CHAT_URL,
@@ -240,6 +241,7 @@ export class DuckDuckGoProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
   };
 
   private warmed = false;

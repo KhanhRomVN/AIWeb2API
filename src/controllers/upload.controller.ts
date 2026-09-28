@@ -84,6 +84,8 @@ export const uploadFile = async (
       const responseData: any = {
         filename: file.originalname,
         ...result,
+        // Spread raw fields lên top-level để client dùng trực tiếp trong ref_file_ids
+        ...(result.raw && typeof result.raw === 'object' ? result.raw : {}),
       };
       // Đảm bảo conversation_id luôn có mặt trong response để client biết dùng convId nào
       if (!responseData.conversation_id && conversationId) {

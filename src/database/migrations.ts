@@ -1,21 +1,20 @@
 /**
  * ------------------------------------------------------------------
- * Database Migrations
+ * Database Migrations (accounts DB)
  * ------------------------------------------------------------------
- * Quản lý schema và migrations cho database SQLite. Tự động tạo bảng,
- * thêm/sửa column, và thực hiện các migration khi cần.
+ * Quản lý schema và migrations cho `aiweb2api-accounts.sqlite`.
+ * Chỉ chứa bảng `accounts` — metrics đã chuyển sang `metrics.sqlite`.
  *
  * Main functions:
  * - runMigrations() : Chạy toàn bộ migrations theo thứ tự
  *
  * Migration functions:
- * - migrateAccounts()          : Tạo/migrate bảng accounts
- * - migrateModelStats()        : Tạo/migrate bảng model_stats
- * - migrateMetrics()           : Tạo/migrate bảng metrics
- * - migrateBrowserSessions()   : Tích hợp browser sessions vào accounts
- * - dropUnusedTables()         : Xóa các bảng không còn sử dụng
+ * - migrateAccounts()        : Tạo/migrate bảng accounts
+ * - migrateBrowserSessions() : Tích hợp browser sessions vào accounts
+ * - dropUnusedTables()       : Xóa các bảng không còn sử dụng
  *
- * NOTE: Bảng `providers` và `models` đã bị loại bỏ — xem database-schema.md
+ * NOTE: Bảng `providers` và `models` đã bị loại bỏ — xem data-storage.md
+ * NOTE: Bảng `model_stats` và `metrics` đã chuyển sang metrics.sqlite
  * ------------------------------------------------------------------
  */
 
@@ -28,9 +27,7 @@ const logger = createLogger('Database');
 
 export const runMigrations = (db: Database.Database): void => {
   migrateAccounts(db);
-  migrateModelStats(db);
-  migrateMetrics(db);
-  migrateBrowserSessions(db); 
+  migrateBrowserSessions(db);
   dropUnusedTables(db);
 };
 // ─── Accounts Table ──────────────────────────────────────────────────
@@ -129,6 +126,18 @@ function migrateAccounts(db: Database.Database): void {
       }
     }
 
+    // Migration: add auth_method (e.g. 'google', 'github', 'apple')
+    const colsAfterLastUsed = (db.pragma('table_info(accounts)') as any[]).map(
+      (c) => c.name,
+    );
+    if (!colsAfterLastUsed.includes('auth_method')) {
+      try {
+        db.exec('ALTER TABLE accounts ADD COLUMN auth_method TEXT');
+      } catch (e) {
+        logger.warn('Failed to add auth_method to accounts', e);
+      }
+    }
+
     // Migration: Rename provider → provider_id
     const updatedCols = (db.pragma('table_info(accounts)') as any[]).map(
       (c) => c.name,
@@ -150,66 +159,10 @@ function migrateAccounts(db: Database.Database): void {
 }
 
 // ─── Model Stats Table ────────────────────────────────────────────────
-
-function migrateModelStats(db: Database.Database): void {
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS model_stats (
-        provider_id TEXT NOT NULL,
-        model_id TEXT NOT NULL,
-        success_rate REAL DEFAULT NULL,
-        updated_at INTEGER NOT NULL,
-        PRIMARY KEY (provider_id, model_id)
-      )
-    `);
-  } catch (err) {
-    logger.error('Error initializing model_stats table', err);
-  }
-}
+// (Đã chuyển sang metrics.sqlite — xem src/database/metrics-db.ts)
 
 // ─── Metrics Table ────────────────────────────────────────────────────
-
-function migrateMetrics(db: Database.Database): void {
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS metrics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        provider_id TEXT NOT NULL,
-        model_id TEXT NOT NULL,
-        account_id TEXT NOT NULL,
-        status TEXT DEFAULT 'success',
-        total_tokens INTEGER DEFAULT 0,
-        timestamp INTEGER NOT NULL
-      )
-    `);
-
-    // Migration for existing databases: add status column if missing
-    const metricsCols = (db.pragma('table_info(metrics)') as any[]).map(
-      (c) => c.name,
-    );
-    if (!metricsCols.includes('status')) {
-      try {
-        db.exec("ALTER TABLE metrics ADD COLUMN status TEXT DEFAULT 'success'");
-      } catch (e) {
-        logger.warn('Failed to add status column to metrics', e);
-      }
-    }
-
-    // Optimization indexes
-    db.exec(
-      'CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp)',
-    );
-    db.exec(
-      'CREATE INDEX IF NOT EXISTS idx_metrics_account_time ON metrics(account_id, timestamp)',
-    );
-    db.exec(
-      'CREATE INDEX IF NOT EXISTS idx_metrics_provider_model_time ON metrics(provider_id, model_id, timestamp)',
-    );
-    db.exec('CREATE INDEX IF NOT EXISTS idx_metrics_status ON metrics(status)');
-  } catch (err) {
-    logger.error('Error initializing metrics table', err);
-  }
-}
+// (Đã chuyển sang metrics.sqlite — xem src/database/metrics-db.ts)
 
 // ─── Browser Sessions Migration ─────────────────────────────────────
 
@@ -308,16 +261,14 @@ function dropUnusedTables(db: Database.Database): void {
     db.exec('DROP TABLE IF EXISTS models');
     // Migration: providers table không còn cần thiết — metadata lấy từ registry
     db.exec('DROP TABLE IF EXISTS providers');
-    // Remove conversation_id column from metrics if exists
-    const metricsCols = (db.pragma('table_info(metrics)') as any[]).map(
-      (c) => c.name,
-    );
-    if (metricsCols.includes('conversation_id')) {
-      try {
-        db.exec('DROP INDEX IF EXISTS idx_metrics_conversation_id');
-      } catch (_) {}
-      db.exec('ALTER TABLE metrics DROP COLUMN conversation_id');
-    }
+    // Migration: model_stats và metrics đã chuyển sang metrics.sqlite
+    db.exec('DROP TABLE IF EXISTS model_stats');
+    db.exec('DROP INDEX IF EXISTS idx_metrics_timestamp');
+    db.exec('DROP INDEX IF EXISTS idx_metrics_account_time');
+    db.exec('DROP INDEX IF EXISTS idx_metrics_provider_model_time');
+    db.exec('DROP INDEX IF EXISTS idx_metrics_status');
+    db.exec('DROP TABLE IF EXISTS metrics');
+    // Remove conversation_id column from metrics if exists (legacy — table đã drop ở trên)
   } catch (e) {
     logger.warn('Failed to drop unused tables or migrate columns', e);
   }

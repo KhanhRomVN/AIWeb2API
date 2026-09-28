@@ -44,6 +44,7 @@ export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = true;
+export const CAN_REGENERATE = true;
 
 // Note: Models are fetched dynamically from API /api/v2/models/
 // No hardcoded models - all model info comes from the API response

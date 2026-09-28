@@ -8,9 +8,9 @@
  * [C1] database-managers.sqlite bị xóa/mất
  *      → better-sqlite3 đã tự tạo lại file + schema khi init.
  *        Ở đây: đảm bảo seed record __aiweb2api_default__ tồn tại
- *        và file_path khớp với aiweb2api.sqlite thực tế.
+ *        và file_path khớp với aiweb2api-accounts.sqlite thực tế.
  *
- * [C2] aiweb2api.sqlite bị xóa nhưng record vẫn còn trong managers
+ * [C2] aiweb2api-accounts.sqlite bị xóa nhưng record vẫn còn trong managers
  *      → initDatabase() đã tạo lại file + schema tự động (better-sqlite3).
  *        Ở đây: cập nhật last_test_status của record thành 'recovered'
  *        để UI biết file vừa được tạo lại.
@@ -19,7 +19,7 @@
  *      → Cả hai init đã tạo lại. Ở đây: re-seed record mặc định.
  *
  * [C4] Record __aiweb2api_default__ bị user xóa thủ công
- *      → Re-seed nếu aiweb2api.sqlite tồn tại.
+ *      → Re-seed nếu aiweb2api-accounts.sqlite tồn tại.
  *
  * [C5] file_path trong record __aiweb2api_default__ không khớp path thực
  *      (user đổi HOME, di chuyển folder, v.v.)
@@ -51,9 +51,9 @@ import {
 
 const logger = createLogger('DBIntegrity');
 
-// Path cố định của hai file chính
+// Path cố định của các file DB
 const BASE_DIR = path.join(os.homedir(), '.aiweb2api');
-const AIWEB2API_DB_PATH = path.join(BASE_DIR, 'aiweb2api.sqlite');
+const AIWEB2API_DB_PATH = path.join(BASE_DIR, 'aiweb2api-accounts.sqlite');
 const MANAGERS_DB_PATH = path.join(BASE_DIR, 'database-managers.sqlite');
 const DEFAULT_RECORD_ID = '__aiweb2api_default__';
 
@@ -156,7 +156,7 @@ export function runIntegrityCheck(): void {
       ).run(AIWEB2API_DB_PATH, now, DEFAULT_RECORD_ID);
     }
 
-    // ── [C2] aiweb2api.sqlite bị xóa rồi được tạo lại bởi initDatabase() ─
+    // ── [C2] aiweb2api-accounts.sqlite bị xóa rồi được tạo lại bởi initDatabase() ─
     // better-sqlite3 tạo file mới → file tồn tại nhưng last_test_status
     // có thể là cũ. Đánh dấu 'recovered' để UI biết.
     if (
@@ -171,12 +171,12 @@ export function runIntegrityCheck(): void {
     }
   }
 
-  // ── [C2] Trường hợp aiweb2api.sqlite không tồn tại dù record có ─────────
+  // ── [C2] Trường hợp aiweb2api-accounts.sqlite không tồn tại dù record có ─
   // Điều này không nên xảy ra vì initDatabase() luôn tạo file.
   // Nhưng nếu initDatabase() chưa chạy (customPath scenario), handle ở đây.
   if (!fs.existsSync(AIWEB2API_DB_PATH)) {
     logger.warn(
-      '[C2] aiweb2api.sqlite does not exist. Marking record as file_missing.',
+      '[C2] aiweb2api-accounts.sqlite does not exist. Marking record as file_missing.',
     );
     db.prepare(
       `UPDATE database_managers

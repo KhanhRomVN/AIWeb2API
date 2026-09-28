@@ -65,6 +65,7 @@ import {
   MODELS,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   KIMI_EVENTS,
   USER_AGENT,
   MSH_HEADERS,
@@ -120,6 +121,7 @@ export class KimiProvider implements Provider {
     is_memory: IS_MEMORY,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

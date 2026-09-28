@@ -55,6 +55,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   API_BASE_URL,
   API_PATHS,
@@ -96,6 +97,7 @@ export class CerebrasCloudProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────

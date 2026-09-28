@@ -26,6 +26,7 @@ export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
+export const CAN_REGENERATE = false;
 
 // ─── Models ───────────────────────────────────────────────────────────
 // Sync với OmniRoute open-sse/config/providers/registry/kiro/index.ts
@@ -269,6 +270,45 @@ export function kiroRuntimeHost(region: string): string {
   return region === 'us-east-1'
     ? CODEWHISPERER_BASE
     : `https://q.${region}.amazonaws.com`;
+}
+
+/**
+ * Regions where the Amazon Q Developer *profile* (runtime) is currently hosted.
+ * AWS hosts the profile ONLY here regardless of the IdC/token region.
+ * A stored IdC region like eu-north-1 is NOT a valid runtime region.
+ */
+export const KIRO_PROFILE_REGIONS = ['us-east-1', 'eu-central-1'] as const;
+
+/**
+ * Extract the region from a CodeWhisperer profile ARN.
+ * e.g. "arn:aws:codewhisperer:us-east-1:..." → "us-east-1"
+ */
+export function regionFromKiroProfileArn(profileArn?: string | null): string | undefined {
+  if (typeof profileArn !== 'string') return undefined;
+  return (
+    profileArn.toLowerCase().match(/^arn:aws:codewhisperer:([a-z0-9-]+):/)?.[1] ?? undefined
+  );
+}
+
+/**
+ * Resolve the RUNTIME region for CodeWhisperer/Amazon Q calls.
+ *
+ * Priority:
+ *   1. Region embedded in `profileArn` — authoritative (where the Q Developer profile lives)
+ *   2. Stored region ONLY when it is a valid Q Developer profile region (us-east-1 / eu-central-1)
+ *      A stored IdC region (e.g. eu-north-1) is deliberately ignored for runtime.
+ *   3. us-east-1 as final fallback.
+ */
+export function resolveKiroRuntimeRegion(
+  authData: { region?: string | null; profileArn?: string | null } | null | undefined,
+): string {
+  const fromArn = regionFromKiroProfileArn(authData?.profileArn);
+  if (fromArn) return fromArn;
+
+  const stored = (authData?.region ?? '').trim().toLowerCase();
+  if (stored && (KIRO_PROFILE_REGIONS as readonly string[]).includes(stored)) return stored;
+
+  return DEFAULT_REGION;
 }
 
 // ─── Base URLs / Hosts ────────────────────────────────────────────────

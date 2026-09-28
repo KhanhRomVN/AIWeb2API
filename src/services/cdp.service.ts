@@ -179,9 +179,6 @@ export class CDPService extends EventEmitter {
       '--no-first-run',
       '--no-default-browser-check',
       `--user-data-dir=${userDataDir}`,
-      '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-site-isolation-trials',
       '--ignore-certificate-errors',
     ];
 

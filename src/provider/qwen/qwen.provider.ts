@@ -66,6 +66,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   QWEN_EVENTS,
   API_VERSION,
@@ -105,6 +106,21 @@ import {
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenProvider');
+
+// ─── File Info Cache ───────────────────────────────────────────────────
+// Cache metadata file sau khi upload để dùng lại khi regenerate request.
+// Key: file_id, Value: thông tin file cần thiết để build payload.
+
+interface CachedFileInfo {
+  url: string;
+  name: string;
+  file_type: string;
+  type: string;
+  showType: string;
+  file_class: string;
+}
+
+const fileInfoCache = new Map<string, CachedFileInfo>();
 
 // ─── Session Lock ──────────────────────────────────────────────────────
 
@@ -158,6 +174,7 @@ export class QwenProvider implements Provider {
     is_memory: IS_MEMORY,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Token Helpers ─────────────────────────────────────────────────
@@ -819,29 +836,53 @@ export class QwenProvider implements Provider {
             [CHAT_PAYLOAD_FIELDS.FILES]: (options.ref_file_ids || []).map(
               (item: any) => {
                 if (typeof item === 'string') {
-                  throw new Error(
-                    `[Qwen] ref_file_ids contains string "${item}". ` +
-                      `Must send object { file_id, url, ... } to build valid file object.`,
-                  );
+                  // item là string file_id → tra cứu từ cache
+                  const cached = fileInfoCache.get(item);
+                  if (!cached) {
+                    throw new Error(
+                      `[Qwen] ref_file_ids contains string file_id="${item}" but no cached file info found. ` +
+                        `Upload the file first or send full file object { file_id, url, ... }.`,
+                    );
+                  }
+                  return {
+                    type: cached.type,
+                    id: item,
+                    url: cached.url,
+                    name: cached.name,
+                    status: 'uploaded',
+                    file_type: cached.file_type,
+                    showType: cached.showType,
+                    file_class: cached.file_class,
+                  };
                 }
                 if (!item.file_id) {
                   throw new Error(`[Qwen] ref_file_ids[].file_id is required.`);
                 }
-                if (!item.url) {
-                  throw new Error(
-                    `[Qwen] ref_file_ids[].url is missing (file_id=${item.file_id}). ` +
-                      `Check if upload API response includes "url" field.`,
-                  );
+                // Nếu url bị thiếu, thử lấy từ cache
+                let url = item.url;
+                if (!url) {
+                  const cached = fileInfoCache.get(item.file_id);
+                  if (cached) {
+                    url = cached.url;
+                    logger.warn(
+                      `[Qwen] ref_file_ids[].url missing for file_id=${item.file_id}, using cached url`,
+                    );
+                  } else {
+                    throw new Error(
+                      `[Qwen] ref_file_ids[].url is missing (file_id=${item.file_id}). ` +
+                        `Check if upload API response includes "url" field.`,
+                    );
+                  }
                 }
                 return {
-                  type: item.type || 'image',
+                  type: item.type || (fileInfoCache.get(item.file_id)?.type ?? 'image'),
                   id: item.file_id,
-                  url: item.url,
-                  name: item.name || 'file',
+                  url,
+                  name: item.name || (fileInfoCache.get(item.file_id)?.name ?? 'file'),
                   status: 'uploaded',
-                  file_type: item.file_type || 'image/png',
-                  showType: item.showType || 'image',
-                  file_class: item.file_class || 'vision',
+                  file_type: item.file_type || (fileInfoCache.get(item.file_id)?.file_type ?? 'image/png'),
+                  showType: item.showType || (fileInfoCache.get(item.file_id)?.showType ?? 'image'),
+                  file_class: item.file_class || (fileInfoCache.get(item.file_id)?.file_class ?? 'vision'),
                 };
               },
             ),
@@ -1380,7 +1421,7 @@ export class QwenProvider implements Provider {
       buffer: file.buffer,
     };
 
-    return await qwenUploadFile(
+    const result = await qwenUploadFile(
       {
         token: parsedCred.token,
         bxUa: parsedCred.bxUa,
@@ -1389,6 +1430,34 @@ export class QwenProvider implements Provider {
       },
       uploadInput,
     );
+
+    // Cache file info để dùng lại khi regenerate request
+    const fileType = file.mimetype.startsWith('image/')
+      ? 'image'
+      : file.mimetype.startsWith('video/')
+        ? 'video'
+        : file.mimetype.startsWith('audio/')
+          ? 'audio'
+          : 'file';
+    const fileClass =
+      fileType === 'image'
+        ? 'vision'
+        : fileType === 'video'
+          ? 'video'
+          : fileType === 'audio'
+            ? 'audio'
+            : 'document';
+
+    fileInfoCache.set(result.id, {
+      url: result.url,
+      name: file.originalname,
+      file_type: file.mimetype,
+      type: fileType,
+      showType: fileType,
+      file_class: fileClass,
+    });
+
+    return result;
   }
 
   // ─── Get Models ─────────────────────────────────────────────────────

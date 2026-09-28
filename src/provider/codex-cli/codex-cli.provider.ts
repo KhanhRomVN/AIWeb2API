@@ -44,6 +44,7 @@ import {
   CONNECTION_TYPE,
   MODELS,
   IS_PAUSABLE,
+  CAN_REGENERATE,
   CODEX_CLI_EVENTS,
   CHATGPT_USAGE_URL,
   CODEX_RESPONSES_URL,
@@ -104,6 +105,7 @@ export class CodexCLIProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
+    can_regenerate: CAN_REGENERATE,
   };
 
   // ─── Get Profile ────────────────────────────────────────────────────

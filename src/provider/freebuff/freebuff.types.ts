@@ -6,6 +6,19 @@
  * ------------------------------------------------------------------
  */
 
+// ─── Credential ──────────────────────────────────────────────────────────
+
+/**
+ * Credential Freebuff đã parse từ JSON string.
+ * Format lưu trong DB: JSON.stringify({ cookies })
+ */
+export interface FreebuffCredential {
+  /** Raw cookie string (next-auth session cookies) */
+  cookies: string;
+}
+
+// ─── Auth / Session ──────────────────────────────────────────────────────
+
 export interface FreebuffUserProfile {
   user?: {
     name?: string;
@@ -15,10 +28,34 @@ export interface FreebuffUserProfile {
   expires?: string;
 }
 
+// ─── Request Payload ─────────────────────────────────────────────────────
+
+export interface FreebuffRequestBody {
+  /** Thread ID nếu tiếp tục conversation, null nếu tạo mới */
+  threadId: string | null;
+  /** Nội dung tin nhắn */
+  content: string;
+  /** Model ID (dạng đầy đủ, vd: "z-ai/glm-5.3-flash") */
+  model: string;
+  /** Mức độ reasoning, null nếu model không hỗ trợ */
+  reasoningEffort: string | null;
+  /** Danh sách ảnh đã upload (optional) */
+  images?: Array<{
+    storageId: string;
+    mediaType: string;
+    name: string;
+    descriptionStorageId?: string;
+  }>;
+}
+
+// ─── SSE Event Types ─────────────────────────────────────────────────────
+
 export interface FreebuffSSEMetaEvent {
   type: 'meta';
   threadId?: string;
+  title?: string;
   model?: string;
+  accessTier?: string;
 }
 
 export interface FreebuffSSEReasoningEvent {
@@ -39,19 +76,105 @@ export interface FreebuffSSESuggestionsEvent {
   followups?: string[];
 }
 
-export interface FreebuffSSEEvent {
-  type: 'meta' | 'reasoning_delta' | 'delta' | 'suggestions' | 'done' | 'title';
+export interface FreebuffSSETitleEvent {
+  type: 'title';
   threadId?: string;
-  model?: string;
-  delta?: string;
-  text?: string;
-  suggestions?: string[];
-  followups?: string[];
+  title?: string;
 }
 
-export interface FreebuffRequestBody {
-  content: string;
-  message: string;
-  model: string;
-  threadId?: string;
+export interface FreebuffSSEDoneEvent {
+  type: 'done';
+}
+
+/** Union type cho tất cả SSE events từ Freebuff */
+export type FreebuffSSEEvent =
+  | FreebuffSSEMetaEvent
+  | FreebuffSSEReasoningEvent
+  | FreebuffSSEDeltaEvent
+  | FreebuffSSESuggestionsEvent
+  | FreebuffSSETitleEvent
+  | FreebuffSSEDoneEvent;
+
+// ─── Threads API Response ─────────────────────────────────────────────────
+
+export interface FreebuffThread {
+  id: string;
+  title?: string;
+  model?: string;
+  updated_at?: string;
+  created_at?: string;
+}
+
+export interface FreebuffThreadsResponse {
+  threads?: FreebuffThread[];
+  /** "limited" = ngoài vùng full access hoặc dùng VPN, "full" = full access */
+  accessTier?: string;
+}
+
+// ─── Usage ───────────────────────────────────────────────────────────────
+
+export interface FreebuffUsageInfo {
+  remaining?: number;
+  accessTier?: string;
+}
+
+// ─── Freebucks Session ────────────────────────────────────────────────────
+
+export interface FreebucksSessionResponse {
+  freebucks?: {
+    daily?: {
+      limit?: number;
+      spent?: number;
+      remaining?: number;
+      /** ISO 8601 UTC — thời điểm reset daily freebucks */
+      resetAt?: string;
+      resetTimeZone?: string;
+    };
+  };
+}
+
+// ─── Upload ──────────────────────────────────────────────────────────────
+
+export interface FreebuffUploadResponse {
+  kind: 'image';
+  /** Storage ID dùng trong `images` array của /api/chat/stream request */
+  storageId: string;
+  /** Public URL của ảnh */
+  url?: string;
+  /** MIME type, vd: "image/png" */
+  mediaType: string;
+  /** Tên file */
+  name: string;
+  /** Storage ID của AI-generated description */
+  descriptionStorageId?: string;
+}
+
+/** Object đặt vào `images` array trong /api/chat/stream request body */
+export interface FreebuffImageAttachment {
+  storageId: string;
+  mediaType: string;
+  name: string;
+  descriptionStorageId?: string;
+}
+
+// ─── Subscriptions / Usage ────────────────────────────────────────────────
+
+export interface FreebuffSubscriptionTier {
+  id: string;
+  displayName: string;
+  priceUsd: number;
+  dailySessions?: number;
+  fiveDaySessions?: number;
+  monthlySessions?: number;
+  dailyPremiumSessions?: number;
+  /** Luôn false trong response API — không dùng để xác định active tier */
+  current?: boolean;
+}
+
+export interface FreebuffSubscriptionResponse {
+  subscription?: {
+    /** null nếu free plan */
+    tierId: string | null;
+    tiers?: FreebuffSubscriptionTier[];
+  };
 }

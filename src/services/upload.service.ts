@@ -62,10 +62,11 @@ export async function uploadFileToProvider(
     if (typeof result === 'string') {
       return { file_id: result };
     } else if (result && typeof result === 'object' && 'id' in result) {
-      const normalized = {
+      const normalized: UploadResult = {
         file_id: (result as any).id,
         url: (result as any).url,
         token_usage: (result as any).token_usage,
+        raw: result,
       };
 
       return normalized;

@@ -37,6 +37,7 @@ export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'browser';
 export const IS_PAUSABLE = false;
 export const IS_MEMORY = false;
+export const CAN_REGENERATE = false;
 export const PLATFORM = 'web';
 export const BROWSER_EXTENSION_FOLDER = 'zai-bridge';
 

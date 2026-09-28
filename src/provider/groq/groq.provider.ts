@@ -48,6 +48,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   IS_MEMORY,
+  CAN_REGENERATE,
   BASE_URL,
   API_CHAT_COMPLETIONS_URL,
   API_MODELS_URL,
@@ -90,6 +91,7 @@ export class GroqProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     is_memory: IS_MEMORY,
+    can_regenerate: CAN_REGENERATE,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
   };
