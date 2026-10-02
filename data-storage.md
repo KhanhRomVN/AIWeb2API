@@ -125,10 +125,12 @@ Single-row (`id = 1`, `CHECK (id = 1)`, được seed tự động).
 
 - **`id`** (INTEGER, PRIMARY KEY) — Luôn bằng 1
 - **`chromium_profile_dir`** (TEXT, NULL) — System path tới thư mục chứa các profile Chromium.
+- **`chromium_profile_subpath`** (TEXT, NULL) — Relative path từ `[profile_email]/` tới folder chứa `Default/`. NULL hoặc rỗng = cấu trúc mặc định (`[profile_email]/Default/`). Ví dụ: `"chrome"` hoặc `"chromium"` cho cấu trúc `[profile_email]/chrome/Default/`.
 
 **API:**
 - `GET /v1/config` — Lấy cấu hình hiện tại
-- `PUT /v1/config` — Cập nhật (partial) — body: `{ chromium_profile_dir? }`
+- `PUT /v1/config` — Cập nhật (partial) — body: `{ chromium_profile_dir?, chromium_profile_subpath? }`
+- `POST /v1/config/scan-profile-dir` — Quét cấu trúc thư mục profile — body: `{ profile_dir: string }` → trả về `{ subpaths: string[] }` (mảng rỗng = cấu trúc mặc định)
 
 ---
 

@@ -24,6 +24,8 @@ import { getConfigDb } from '../database/config-db';
 export interface ConfigRow {
   id: number;
   chromium_profile_dir: string | null;
+  /** Relative path từ [profile_email]/ tới folder chứa Default/. NULL/rỗng = mặc định. */
+  chromium_profile_subpath: string | null;
 }
 
 // ─── Queries ────────────────────────────────────────────────────────────
@@ -34,13 +36,13 @@ export interface ConfigRow {
 export const getConfig = async (): Promise<ConfigRow> => {
   const db = getConfigDb();
   const row = db
-    .prepare('SELECT id, chromium_profile_dir FROM config WHERE id = 1')
+    .prepare('SELECT id, chromium_profile_dir, chromium_profile_subpath FROM config WHERE id = 1')
     .get() as ConfigRow | undefined;
   if (row) return row;
   // Fallback phòng khi seed không kịp chạy (không nên xảy ra).
   db.prepare('INSERT OR IGNORE INTO config (id) VALUES (1)').run();
   return db
-    .prepare('SELECT id, chromium_profile_dir FROM config WHERE id = 1')
+    .prepare('SELECT id, chromium_profile_dir, chromium_profile_subpath FROM config WHERE id = 1')
     .get() as ConfigRow;
 };
 
@@ -50,17 +52,26 @@ export const getConfig = async (): Promise<ConfigRow> => {
  */
 export const updateConfig = async (patch: {
   chromium_profile_dir?: string | null;
+  chromium_profile_subpath?: string | null;
 }): Promise<void> => {
   const db = getConfigDb();
 
-  if (patch.chromium_profile_dir === undefined) return;
+  const updates: string[] = [];
+  const values: (string | null)[] = [];
 
-  const value =
-    patch.chromium_profile_dir === '' ? null : patch.chromium_profile_dir;
+  if (patch.chromium_profile_dir !== undefined) {
+    updates.push('chromium_profile_dir = ?');
+    values.push(patch.chromium_profile_dir === '' ? null : patch.chromium_profile_dir);
+  }
+
+  if (patch.chromium_profile_subpath !== undefined) {
+    updates.push('chromium_profile_subpath = ?');
+    values.push(patch.chromium_profile_subpath === '' ? null : patch.chromium_profile_subpath);
+  }
+
+  if (updates.length === 0) return;
 
   // Đảm bảo row id=1 tồn tại trước khi UPDATE.
   db.prepare('INSERT OR IGNORE INTO config (id) VALUES (1)').run();
-  db.prepare('UPDATE config SET chromium_profile_dir = ? WHERE id = 1').run(
-    value,
-  );
+  db.prepare(`UPDATE config SET ${updates.join(', ')} WHERE id = 1`).run(...values);
 };

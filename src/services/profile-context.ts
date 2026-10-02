@@ -7,7 +7,7 @@
  *
  * Main functions:
  * - loginContext                : AsyncLocalStorage giữ userDataDir cho 1 lần login
- * - resolveProfileUserDataDir() : Ghép chromium_profile_dir + tên folder, chặn path traversal
+ * - resolveProfileUserDataDir() : Ghép chromium_profile_dir + tên folder + subpath (nếu có), chặn path traversal
  * ------------------------------------------------------------------
  */
 
@@ -37,7 +37,13 @@ export interface ResolvedProfile {
 // ─── Functions ──────────────────────────────────────────────────────────
 
 /**
- * Ghép `chromium_profile_dir` (từ config) với tên folder do client gửi.
+ * Ghép `chromium_profile_dir` (từ config) với tên folder do client gửi,
+ * rồi append thêm `chromium_profile_subpath` nếu được cấu hình.
+ *
+ * Cấu trúc kết quả:
+ * - Không có subpath: `{chromium_profile_dir}/{profile_folder}/`
+ * - Có subpath:       `{chromium_profile_dir}/{profile_folder}/{subpath}/`
+ *
  * Chỉ nhận tên folder cấp 1: từ chối `/`, `\`, `..`, ký tự null, và
  * đường dẫn sau khi resolve phải nằm trực tiếp dưới `chromium_profile_dir`.
  * Không truyền profile_folder → trả `{}` (hành vi login mặc định).
@@ -57,7 +63,7 @@ export async function resolveProfileUserDataDir(
     return { error: 'Invalid profile_folder' };
   }
 
-  const { chromium_profile_dir } = await getAppConfig();
+  const { chromium_profile_dir, chromium_profile_subpath } = await getAppConfig();
   if (!chromium_profile_dir) {
     return { error: 'chromium_profile_dir is not configured' };
   }
@@ -76,5 +82,10 @@ export async function resolveProfileUserDataDir(
     return { error: 'Profile folder does not exist' };
   }
 
-  return { dir: target };
+  // Append subpath nếu được cấu hình — cho phép cấu trúc
+  // {profile_folder}/{subpath}/Default/ thay vì {profile_folder}/Default/
+  const subpath = chromium_profile_subpath?.trim();
+  const dir = subpath ? path.join(target, subpath) : target;
+
+  return { dir };
 }

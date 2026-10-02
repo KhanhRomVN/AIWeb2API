@@ -615,9 +615,12 @@ export async function loginWithProvider(
       method: options.method || 'basic',
     });
 
-  // Có userDataDir → chạy login trong context để CDPService lấy được profile
+  // Có userDataDir → chạy login trong context để CDPService lấy được profile + clearSession flag
   const result = options.userDataDir
-    ? await loginContext.run({ userDataDir: options.userDataDir }, runLogin)
+    ? await loginContext.run(
+        { userDataDir: options.userDataDir },
+        runLogin,
+      )
     : await runLogin();
 
   return result as ProviderLoginResult;

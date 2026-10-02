@@ -78,7 +78,10 @@ export const resetConfigDb = (): void => {
 
 /**
  * Schema cho bảng `config` (single-row, id luôn = 1).
- * - chromium_profile_dir : system path tới thư mục chứa các profile Chromium.
+ * - chromium_profile_dir     : system path tới thư mục chứa các profile Chromium.
+ * - chromium_profile_subpath : relative path từ [profile_email]/ tới folder chứa Default/.
+ *                              Rỗng/NULL = cấu trúc mặc định ([profile_email]/Default/).
+ *                              Ví dụ: "chrome" hoặc "chromium".
  */
 function runConfigMigrations(db: Database.Database): void {
   try {
@@ -90,6 +93,13 @@ function runConfigMigrations(db: Database.Database): void {
     `);
     // Seed row id=1 nếu chưa có để GET luôn có dữ liệu trả về.
     db.prepare('INSERT OR IGNORE INTO config (id) VALUES (1)').run();
+
+    // Migration: thêm cột chromium_profile_subpath nếu chưa có
+    const cols = db.pragma('table_info(config)') as { name: string }[];
+    const hasSubpath = cols.some((c) => c.name === 'chromium_profile_subpath');
+    if (!hasSubpath) {
+      db.exec('ALTER TABLE config ADD COLUMN chromium_profile_subpath TEXT');
+    }
   } catch (err) {
     logger.error('Error initializing config table', err);
   }
