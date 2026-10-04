@@ -1,6 +1,6 @@
 {
   "name": "AIWeb2API",
-  "version": "1.2.5",
+  "version": "2.0.1",
   "description": "",
   "main": "dist/index.js",
   "bin": {
