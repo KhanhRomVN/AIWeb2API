@@ -127,6 +127,111 @@ function printBanner(): void {
   console.log();
 }
 
+// ─── Update warning ─────────────────────────────────────────────────────
+
+// GitHub redirects /releases/latest to the newest release tag page
+const RELEASES_URL = 'https://github.com/KhanhRomVN/AIWeb2API/releases/latest';
+// GitHub API endpoint for latest release — returns JSON with tag_name
+const GITHUB_API_LATEST = 'https://api.github.com/repos/KhanhRomVN/AIWeb2API/releases/latest';
+
+/**
+ * Parse a semver string like "v2.0.2" or "2.0.2" into [major, minor, patch].
+ * Returns null if the format is invalid.
+ */
+function parseSemver(v: string): [number, number, number] | null {
+  const m = v.replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+/**
+ * Returns true if `latest` is strictly newer than `current`.
+ * Both must be valid semver strings (with or without leading "v").
+ */
+function isOutdated(current: string, latest: string): boolean {
+  const c = parseSemver(current);
+  const l = parseSemver(latest);
+  if (!c || !l) return false;
+  if (l[0] !== c[0]) return l[0] > c[0];
+  if (l[1] !== c[1]) return l[1] > c[1];
+  return l[2] > c[2];
+}
+
+/** Fetch the latest release tag from GitHub. Returns null on any error. */
+async function fetchLatestVersion(): Promise<string | null> {
+  try {
+    const https = await import('https');
+    return await new Promise<string | null>((resolve) => {
+      const req = https.get(
+        GITHUB_API_LATEST,
+        {
+          headers: {
+            'User-Agent': `AIWeb2API/${APP_VERSION}`,
+            Accept: 'application/vnd.github+json',
+          },
+          timeout: 4000,
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk: Buffer) => (body += chunk.toString()));
+          res.on('end', () => {
+            try {
+              const json = JSON.parse(body) as { tag_name?: string };
+              resolve(json.tag_name ?? null);
+            } catch {
+              resolve(null);
+            }
+          });
+        },
+      );
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(null);
+      });
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Cached result so we only hit GitHub once per process */
+let _cachedOutdated: { outdated: boolean; latestVersion: string } | null = null;
+let _versionChecked = false;
+
+async function getUpdateStatus(): Promise<{ outdated: boolean; latestVersion: string }> {
+  if (_versionChecked) return _cachedOutdated ?? { outdated: false, latestVersion: APP_VERSION };
+  _versionChecked = true;
+  const latest = await fetchLatestVersion();
+  const outdated = latest ? isOutdated(APP_VERSION, latest) : false;
+  _cachedOutdated = { outdated, latestVersion: latest ?? APP_VERSION };
+  return _cachedOutdated;
+}
+
+async function printUpdateWarning(): Promise<void> {
+  const { outdated, latestVersion } = await getUpdateStatus();
+  if (!outdated) return;
+
+  const width = cardWidth();
+  const textWidth = width - 4;
+  const bar = red('▌') + ' ';
+  const blank = red('▌');
+
+  const lines: string[] = [
+    bar + red('⚠ UPDATE REQUIRED') + yellow(`  v${APP_VERSION} → ${latestVersion}`),
+    blank,
+    ...wrap(
+      'Open the Releases page, download the latest version and replace this one.',
+      textWidth,
+    ).map((l) => bar + yellow(l)),
+    blank,
+    bar + red('↗ ') + yellow(RELEASES_URL),
+  ];
+
+  print(lines);
+  console.log();
+}
+
 // ─── About / ecosystem (borderless) ─────────────────────────────────────
 
 const AUTHOR = {
@@ -471,6 +576,7 @@ export async function showWelcome(
 ): Promise<ServerAddress> {
   printBanner();
   if (IS_TTY) printIntro();
+  await printUpdateWarning(); // bottom of the welcome screen, right above the prompt
   return askServerAddress(defaultHost, defaultPort);
 }
 

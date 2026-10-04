@@ -3,11 +3,22 @@ import { providerRegistry } from '../../provider/registry';
 
 const router = Router();
 
+// ─── App version (read once at startup) ─────────────────────────────────
+let APP_VERSION = '?.?.?';
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const pkg = require('../../../package.json');
+  APP_VERSION = pkg.version ?? APP_VERSION;
+} catch {
+  // ignored inside the binary
+}
+
 // Health check
 router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     aiweb2api: 'khanhromvn/AIWeb2API',
+    version: `v${APP_VERSION}`,
     timestamp: new Date().toISOString(),
   });
 });
