@@ -2,7 +2,7 @@
  * ------------------------------------------------------------------
  * Welcome UI
  * ------------------------------------------------------------------
- * Banner + about card + interactive host/port picker shown before the
+ * Banner + about section + interactive host/port picker shown before the
  * server starts. Automatically skips all prompts (uses defaults) when
  * stdin is not a TTY.
  *
@@ -89,21 +89,6 @@ function wrap(text: string, width: number): string[] {
   return out;
 }
 
-/** Render lines inside a rounded box with an optional title. */
-function box(title: string, lines: string[], width: number): string[] {
-  const inner = width - 4;
-  const head = title
-    ? `╭─ ${bold(title)} ${'─'.repeat(Math.max(0, width - 5 - vlen(title)))}╮`
-    : `╭${'─'.repeat(width - 2)}╮`;
-  const rows = lines.map((l) => `│ ${padEnd(l, inner)} │`);
-  const foot = `╰${'─'.repeat(width - 2)}╯`;
-  return [head, ...rows, foot].map((l, i, a) =>
-    i === 0 || i === a.length - 1
-      ? dim(l)
-      : dim('│') + l.slice(1, -1) + dim('│'),
-  );
-}
-
 const print = (lines: string[]): void =>
   lines.forEach((l) => console.log('  ' + l));
 
@@ -142,14 +127,23 @@ function printBanner(): void {
   console.log();
 }
 
-// ─── About / ecosystem card ─────────────────────────────────────────────
+// ─── About / ecosystem (borderless) ─────────────────────────────────────
 
 const AUTHOR = {
   name: 'KhanhRomVN',
+  role: 'Author of AIWeb2API and its companion tools',
   url: 'https://github.com/KhanhRomVN',
 };
 
-const TOOLS = [
+interface Tool {
+  name: string;
+  summary: string;
+  description: string;
+  url: string;
+  install?: string;
+}
+
+const TOOLS: Tool[] = [
   {
     name: 'Zen',
     summary: 'AI coding agent for VS Code',
@@ -167,28 +161,41 @@ const TOOLS = [
   },
 ];
 
+/** Section heading: "── Title ─────────────" */
+function sectionTitle(label: string, width: number): string {
+  const rule = '─'.repeat(Math.max(2, width - vlen(label) - 4));
+  return `${dim('──')} ${bold(label)} ${dim(rule)}`;
+}
+
 function printIntro(): void {
   const width = cardWidth();
-  const inner = width - 4;
-  const body: string[] = [];
+  const bar = dim('│') + '  '; // left gutter for item bodies
+  const textWidth = width - 4; // gutter (3) + 1 spare
+  const lines: string[] = [];
 
-  body.push(`Built by ${bold(AUTHOR.name)}`);
-  body.push(cyan(AUTHOR.url));
-  body.push('');
-  body.push(dim('Companion tools for AIWeb2API'));
+  // ── Developer ─────────────────────────────────────────────────────
+  lines.push(sectionTitle('Developer', width));
+  lines.push('');
+  lines.push(`${blue('◆')} ${bold(AUTHOR.name)}`);
+  wrap(AUTHOR.role, textWidth).forEach((l) => lines.push(bar + dim(l)));
+  lines.push(bar + cyan('↗ ') + cyan(AUTHOR.url));
+  lines.push('');
+
+  // ── Companion tools ───────────────────────────────────────────────
+  lines.push(sectionTitle('Companion tools', width));
 
   for (const tool of TOOLS) {
-    body.push('');
-    body.push(`${blue('◆')} ${bold(tool.name)} ${dim('— ' + tool.summary)}`);
-    wrap(tool.description, inner - 2).forEach((l) => body.push('  ' + l));
-    if ('install' in tool && tool.install) {
-      body.push('  ' + dim('$ ') + tool.install);
+    lines.push('');
+    lines.push(`${blue('◆')} ${bold(tool.name)}  ${dim(tool.summary)}`);
+    wrap(tool.description, textWidth).forEach((l) => lines.push(bar + l));
+    if (tool.install) {
+      lines.push(bar + green('$ ') + bold(tool.install));
     }
-    body.push('  ' + cyan(tool.url));
+    lines.push(bar + cyan('↗ ') + cyan(tool.url));
   }
 
-  print(box('About', body, width));
-  console.log();
+  lines.push('');
+  print(lines);
 }
 
 // ─── Input helpers ──────────────────────────────────────────────────────
@@ -387,7 +394,9 @@ async function askServerAddress(
 
   // Nếu port bị chiếm, nhắc ngay sau dòng hỏi
   if (initialPortErr) {
-    console.log(`  ${red('✗')} ${initialPortErr} Please enter a different port.\n`);
+    console.log(
+      `  ${red('✗')} ${initialPortErr} Please enter a different port.\n`,
+    );
   }
 
   const prompt = createPrompt();
@@ -406,9 +415,14 @@ async function askServerAddress(
       // EOF (Ctrl+D) hoặc ENTER → chấp nhận currentPort
       // (nếu currentPort bị chiếm, không cho qua — phải nhập port mới)
       if (answer.kind === 'eof' || answer.value === '') {
-        if (initialPortErr && currentPort === (hasSaved ? savedPort! : defaultPort)) {
+        if (
+          initialPortErr &&
+          currentPort === (hasSaved ? savedPort! : defaultPort)
+        ) {
           // Port vẫn bị chiếm, user ấn Enter mà không nhập gì → nhắc lại
-          console.log(`  ${red('✗')} ${initialPortErr} Please enter a different port.\n`);
+          console.log(
+            `  ${red('✗')} ${initialPortErr} Please enter a different port.\n`,
+          );
           continue;
         }
         break;
@@ -448,7 +462,7 @@ async function askServerAddress(
 // ─── Public API ─────────────────────────────────────────────────────────
 
 /**
- * Show the banner + about card, then ask for host/port.
+ * Show the banner + about section, then ask for host/port.
  * Call before startServer(). Returns the address the user selected.
  */
 export async function showWelcome(
@@ -470,30 +484,49 @@ function lanAddress(): string | null {
   return null;
 }
 
+export interface StartedOptions {
+  /** WebSocket path on the same port. Default: '/ws' */
+  wsPath?: string;
+}
+
 /**
- * Print the "server started" card.
+ * Print the "server started" section (borderless):
+ * HTTP + WebSocket endpoints for Local, and for Network when exposed.
  */
 export function printStarted(
   host: string,
   port: number,
   isHttps = false,
+  opts: StartedOptions = {},
 ): void {
-  const protocol = isHttps ? 'https' : 'http';
+  const wsPath = opts.wsPath ?? '/ws';
+  const httpProto = isHttps ? 'https' : 'http';
+  const wsProto = isHttps ? 'wss' : 'ws';
   const exposed = host === '0.0.0.0' || host === '::';
-  const local = `${protocol}://${displayHostOf(host)}:${port}`;
   const lan = exposed ? lanAddress() : null;
+  const width = cardWidth();
+  const LABEL_W = 9; // "WebSocket"
 
-  const body: string[] = [
+  const endpoints = (hostname: string): string[] => [
+    `${dim(padEnd('HTTP', LABEL_W))}  ${cyan(`${httpProto}://${hostname}:${port}`)}`,
+    `${dim(padEnd('WebSocket', LABEL_W))}  ${cyan(`${wsProto}://${hostname}:${port}${wsPath}`)}`,
+  ];
+
+  const lines: string[] = [
     `${green('✓')} ${bold('AIWeb2API is running')}`,
     '',
-    `${dim('Local  ')}  ${cyan(local)}`,
+    sectionTitle('Local', width),
+    ...endpoints(displayHostOf(host)),
   ];
-  if (lan)
-    body.push(`${dim('Network')}  ${cyan(`${protocol}://${lan}:${port}`)}`);
-  body.push('', dim('Press Ctrl+C to stop.'));
+
+  if (lan) {
+    lines.push('', sectionTitle('Network', width), ...endpoints(lan));
+  }
+
+  lines.push('', dim('Press Ctrl+C to stop.'));
 
   console.log();
-  print(box('', body, cardWidth()));
+  print(lines);
   console.log();
 }
 

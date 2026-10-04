@@ -627,7 +627,7 @@ export class AccountRefreshService {
         updateAccountUsageInfo(account.id, safeUsage, safeResetAt);
       } else {
         logger.warn(
-          `[AccountRefresh] refreshUsage: getUsage returned null/undefined — account=${accountId} provider=${account.provider_id}`,
+          `refreshUsage: getUsage returned null/undefined — account=${accountId} provider=${account.provider_id}`,
         );
       }
     } catch (err: any) {
