@@ -230,6 +230,13 @@ function buildTarget(target) {
     log(`  Copied: resources/${path.basename(wasmSrc)}`);
   }
 
+  // README.md
+  const readmeSrc = path.join(rootDir, 'README.md');
+  if (fs.existsSync(readmeSrc)) {
+    fs.copyFileSync(readmeSrc, path.join(stagingDir, 'README.md'));
+    log(`  Copied: README.md`);
+  }
+
   // 6. Zip staging → releases/<version>/
   log(`  Zipping → ${zipFileName}`);
   zipDirectory(stagingDir, zipFilePath);
