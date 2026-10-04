@@ -45,4 +45,7 @@ src/scratch/
 dist-bin/
 .git_disabled/
 
-chatgpt2api
+releases
+
+# Native binaries (built via npm install or CI/CD)
+resources/*.node

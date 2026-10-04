@@ -27,6 +27,7 @@ import { login } from './controllers/login.controller';
 
 // ── Providers ──
 import { providerRegistry } from './provider/registry';
+import { ALL_PROVIDERS } from './provider/providers';
 
 // ── Utils ──
 import { createLogger } from './utils/logger';
@@ -38,7 +39,9 @@ const logger = createLogger('App');
 
 export const createApp = async () => {
   const app = express();
-  await providerRegistry.loadProviders();
+  // Dùng static manifest thay cho dynamic fs.readdirSync() để hoạt động đúng
+  // trong cả môi trường dev lẫn production binary (pkg bundled).
+  providerRegistry.loadProvidersStatic(ALL_PROVIDERS as any);
 
   // ─── Middleware ──────────────────────────────────────────────────────
   app.use(cors());

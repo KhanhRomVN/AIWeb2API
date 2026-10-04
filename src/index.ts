@@ -82,7 +82,10 @@ const main = async (options?: { dbPath?: string }) => {
   const result = await startServer();
 
   if (result.success) {
-    startWebSocketServer();
+    // WS port = HTTP port + 11 (8888→8899, 9000→9011, v.v.)
+    // findFreePort() trong startWebSocketServer sẽ tự tìm port trống kế tiếp nếu bị chiếm.
+    const wsPort = (result.port ?? 8888) + 11;
+    await startWebSocketServer(wsPort);
     accountRefreshService.start();
     // Kết nối trước toàn bộ database managers để Zen lấy status ngay
     // khi mở tab Database (không cần chạy health check lần đầu).

@@ -428,7 +428,43 @@ export const getWebSocketServer = (port?: number): ExtensionWebSocketServer => {
   return wsServerInstance;
 };
 
-export const startWebSocketServer = (port?: number): void => {
-  const server = getWebSocketServer(port);
-  server.start();
+/**
+ * Tìm port trống bắt đầu từ `startPort`, thử tối đa `maxTries` lần.
+ * Dùng bind-probe (listen + close) để kiểm tra chính xác.
+ */
+async function findFreePort(startPort: number, maxTries = 20): Promise<number> {
+  for (let p = startPort; p < startPort + maxTries; p++) {
+    const available = await new Promise<boolean>((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const srv = require('net').createServer();
+      srv.unref();
+      srv.once('error', () => resolve(false));
+      srv.listen(p, '0.0.0.0', () => srv.close(() => resolve(true)));
+    });
+    if (available) return p;
+  }
+  return startPort; // fallback — let ws error surface naturally
+}
+
+export const startWebSocketServer = async (port?: number): Promise<void> => {
+  const cfg = process.env.WEBSOCKET_PORT
+    ? parseInt(process.env.WEBSOCKET_PORT)
+    : port || 8899;
+
+  const freePort = await findFreePort(cfg);
+
+  if (freePort !== cfg) {
+    logger.warn(
+      `[WebSocketServer] Port ${cfg} is in use — using ${freePort} instead.`,
+    );
+  }
+
+  if (!wsServerInstance) {
+    wsServerInstance = new ExtensionWebSocketServer(freePort);
+  } else {
+    // Cập nhật port nếu instance đã tồn tại nhưng chưa start
+    (wsServerInstance as any).port = freePort;
+  }
+
+  wsServerInstance.start();
 };

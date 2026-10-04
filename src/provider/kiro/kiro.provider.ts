@@ -27,6 +27,7 @@ import { Provider, SendMessageOptions } from '../../types';
 import { createLogger } from '../../utils/logger';
 import { proxyHandler } from './kiro.proxy-handler';
 import { ByteQueue, parseEventFrame } from './kiro.sse-parser';
+import { createKiroThinkingParser } from './kiro.thinking-parser';
 
 import {
   PROVIDER_NAME,
@@ -952,6 +953,7 @@ export class KiroProvider implements Provider {
       credential,
       messages,
       model,
+      ref_file_ids,
       onContent,
       onThinking,
       onDone,
@@ -966,10 +968,15 @@ export class KiroProvider implements Provider {
         throw new Error('Kiro: missing access token');
       }
 
+      // ── Inject images từ ref_file_ids vào last user message ──────────────
+      // uploadFile() trả về data: URL dưới dạng file_id.
+      // Đây là cơ chế để Zen gửi ảnh qua upload API mà không cần server riêng.
+      const effectiveMessages = this.injectRefFileImages(messages, ref_file_ids);
+
       // ── Resolve RUNTIME region từ profileArn (không phải stored IdC region) ──
       const resolvedRegion = resolveKiroRuntimeRegion(authData);
       const body = this.buildConversationPayload(
-        messages,
+        effectiveMessages,
         model,
         authData.profileArn,
       );
@@ -1089,6 +1096,69 @@ export class KiroProvider implements Provider {
   }
 
   /**
+   * Inject ảnh từ ref_file_ids vào last user message dưới dạng image_url blocks.
+   *
+   * Kiro không có upload API — uploadFile() lưu ảnh dưới dạng data: URL trong file_id.
+   * Hàm này lấy các data: URL đó và thêm vào content của last user message
+   * để buildConversationPayload() có thể extract ra images array.
+   *
+   * Chỉ xử lý image (file_id bắt đầu bằng "data:image/").
+   * Non-image file_id bị bỏ qua.
+   */
+  private injectRefFileImages(
+    messages: Array<{ role: string; content: string | any[] }>,
+    refFileIds?: SendMessageOptions['ref_file_ids'],
+  ): Array<{ role: string; content: string | any[] }> {
+    if (!refFileIds || refFileIds.length === 0) return messages;
+
+    // Chỉ lấy entries có file_id dạng data:image/...
+    const imageDataUrls: string[] = [];
+    for (const ref of refFileIds) {
+      if (typeof ref === 'string') {
+        if (ref.startsWith('data:image/')) imageDataUrls.push(ref);
+      } else if (ref && typeof ref === 'object') {
+        const fid = (ref as any).file_id || (ref as any).url || '';
+        if (typeof fid === 'string' && fid.startsWith('data:image/')) {
+          imageDataUrls.push(fid);
+        }
+      }
+    }
+
+    if (imageDataUrls.length === 0) return messages;
+
+    // Clone messages, inject image_url blocks vào last user message
+    const cloned = messages.map((m) => ({ ...m }));
+    for (let i = cloned.length - 1; i >= 0; i--) {
+      if (cloned[i].role === 'user') {
+        const existing = cloned[i].content;
+        const imageBlocks = imageDataUrls.map((url) => ({
+          type: 'image_url',
+          image_url: { url },
+        }));
+
+        if (typeof existing === 'string') {
+          // Convert string → array, append image blocks
+          cloned[i] = {
+            ...cloned[i],
+            content: [
+              { type: 'text', text: existing },
+              ...imageBlocks,
+            ],
+          };
+        } else if (Array.isArray(existing)) {
+          cloned[i] = {
+            ...cloned[i],
+            content: [...existing, ...imageBlocks],
+          };
+        }
+        break;
+      }
+    }
+
+    return cloned;
+  }
+
+  /**
    * Build minimal Kiro conversationState từ OpenAI messages.
    * Chỉ handle single-turn và basic multi-turn — đủ cho chat thông thường.
    */
@@ -1099,6 +1169,45 @@ export class KiroProvider implements Provider {
   ) {
     // Normalize model: dashes → dots cho version number (e.g. claude-sonnet-4-5 → claude-sonnet-4.5)
     const normalizedModel = model.replace(/-(\d+)-(\d{1,2})$/, '-$1.$2');
+
+    // Chỉ Claude models hỗ trợ image attachments trên Kiro API.
+    // Non-Claude models (deepseek, minimax, glm, qwen3-coder-next) sẽ reject nếu gửi images.
+    const supportsImages = normalizedModel.toLowerCase().includes('claude');
+
+    /**
+     * Extract base64 images từ một OpenAI message content array.
+     * Hỗ trợ 3 format:
+     * - image_url với data URL: { type: "image_url", image_url: { url: "data:image/jpeg;base64,..." } }
+     * - Anthropic image block: { type: "image", source: { type: "base64", media_type: "...", data: "..." } }
+     * - AI SDK image part:     { type: "image", image: "data:image/jpeg;base64,..." }
+     */
+    const extractImages = (
+      content: any[],
+    ): Array<{ format: string; source: { bytes: string } }> => {
+      if (!supportsImages) return [];
+      const images: Array<{ format: string; source: { bytes: string } }> = [];
+      for (const block of content) {
+        if (block.type === 'image_url') {
+          const url: string = block.image_url?.url || '';
+          if (url.startsWith('data:')) {
+            const [header, bytes] = url.split(',', 2);
+            const format = header.split(';')[0].replace('data:', '').split('/')[1] || 'jpeg';
+            if (bytes) images.push({ format, source: { bytes } });
+          }
+        } else if (block.type === 'image' && block.source?.type === 'base64') {
+          const format = (block.source.media_type || 'image/jpeg').split('/')[1] || 'jpeg';
+          if (block.source.data) images.push({ format, source: { bytes: block.source.data } });
+        } else if (block.type === 'image' && typeof block.image === 'string') {
+          const url = block.image;
+          if (url.startsWith('data:')) {
+            const [header, bytes] = url.split(',', 2);
+            const format = header.split(';')[0].replace('data:', '').split('/')[1] || 'jpeg';
+            if (bytes) images.push({ format, source: { bytes } });
+          }
+        }
+      }
+      return images;
+    };
 
     // Build history và currentMessage
     const history: any[] = [];
@@ -1119,13 +1228,18 @@ export class KiroProvider implements Provider {
                   .map((c: any) => c.text)
                   .join('\n')
               : '';
-        history.push({
+        const images = Array.isArray(msg.content) ? extractImages(msg.content) : [];
+        const userMsg: any = {
           userInputMessage: {
             content: text || '(empty)',
             modelId: normalizedModel,
             origin: 'AI_EDITOR',
           },
-        });
+        };
+        if (images.length > 0) {
+          userMsg.userInputMessage.images = images;
+        }
+        history.push(userMsg);
       } else if (msg.role === 'assistant') {
         const text =
           typeof msg.content === 'string'
@@ -1153,6 +1267,7 @@ export class KiroProvider implements Provider {
               .map((c: any) => c.text)
               .join('\n')
           : '';
+    const lastImages = Array.isArray(lastMsg?.content) ? extractImages(lastMsg.content) : [];
 
     // Prepend system prompt vào content của current message
     if (systemContent) {
@@ -1175,16 +1290,21 @@ export class KiroProvider implements Provider {
       ? uuidv5(seed.substring(0, 4000), NAMESPACE_KIRO)
       : uuidv4();
 
+    const currentUserMsg: any = {
+      content: lastContent || '(empty)',
+      modelId: normalizedModel,
+      origin: 'AI_EDITOR',
+    };
+    if (lastImages.length > 0) {
+      currentUserMsg.images = lastImages;
+    }
+
     const payload: any = {
       conversationState: {
         chatTriggerType: 'MANUAL',
         conversationId,
         currentMessage: {
-          userInputMessage: {
-            content: lastContent || '(empty)',
-            modelId: normalizedModel,
-            origin: 'AI_EDITOR',
-          },
+          userInputMessage: currentUserMsg,
         },
         history,
       },
@@ -1203,6 +1323,9 @@ export class KiroProvider implements Provider {
   /**
    * Process AWS EventStream binary response và extract text content.
    * response.body là Node.js Readable (từ node-fetch).
+   *
+   * Dùng KiroThinkingParser để wrap raw reasoning text thành
+   * <thinking>...</thinking> format nhất quán với các provider khác.
    */
   private async processEventStream(
     response: any,
@@ -1214,6 +1337,7 @@ export class KiroProvider implements Provider {
     }
 
     const buffer = new ByteQueue();
+    const thinkingParser = createKiroThinkingParser();
 
     await new Promise<void>((resolve, reject) => {
       const nodeStream = response.body as NodeJS.ReadableStream;
@@ -1239,7 +1363,14 @@ export class KiroProvider implements Provider {
               typeof event.payload?.content === 'string'
                 ? event.payload.content
                 : '';
-            if (content) onContent(content);
+            if (content) {
+              // Nếu đang có pending thinking chưa close, close nó trước
+              if (thinkingParser.isActive() && onThinking) {
+                const closingTag = thinkingParser.end();
+                if (closingTag) onThinking(closingTag);
+              }
+              onContent(content);
+            }
           } else if (eventType === 'reasoningContentEvent') {
             const rp = event.payload as Record<string, unknown> | null;
             const rt = rp?.reasoningText;
@@ -1249,8 +1380,14 @@ export class KiroProvider implements Provider {
                 typeof (rt as any).text === 'string' ? (rt as any).text : '';
             } else if (typeof rt === 'string') {
               reasoning = rt;
+            } else if (typeof rp?.text === 'string') {
+              reasoning = rp.text;
             }
-            if (reasoning && onThinking) onThinking(reasoning);
+            if (reasoning && onThinking) {
+              // feed() tự động emit '<thinking>' khi là chunk đầu tiên
+              const wrapped = thinkingParser.feed(reasoning);
+              onThinking(wrapped);
+            }
           }
         }
       };
@@ -1262,7 +1399,14 @@ export class KiroProvider implements Provider {
         processBuffer();
       });
 
-      nodeStream.on('end', () => resolve());
+      nodeStream.on('end', () => {
+        // Đóng thinking block nếu stream kết thúc mà chưa close
+        if (thinkingParser.isActive() && onThinking) {
+          const closingTag = thinkingParser.end();
+          if (closingTag) onThinking(closingTag);
+        }
+        resolve();
+      });
       nodeStream.on('error', (err: Error) => reject(err));
     });
   }
@@ -1450,6 +1594,216 @@ export class KiroProvider implements Provider {
     } catch {
       return null;
     }
+  }
+
+  // ─── Upload File ──────────────────────────────────────────────────────
+
+  /**
+   * Kiro không có upload API — encode file thành data URL và trả về
+   * dưới dạng file_id. Khi gửi message, chat.controller sẽ thấy file_id
+   * dạng "data:..." và đưa vào image_url block trong messages.
+   *
+   * Chỉ hỗ trợ image (Claude models trên Kiro mới nhận được ảnh).
+   * File không phải image → throw lỗi rõ ràng.
+   */
+  async uploadFile(
+    _credential: string,
+    file: Express.Multer.File,
+  ): Promise<{ id: string; url: string }> {
+    const mimeType = file.mimetype || 'application/octet-stream';
+
+    if (!mimeType.startsWith('image/')) {
+      throw new Error(
+        `Kiro only supports image attachments (received: ${mimeType})`,
+      );
+    }
+
+    const base64 = file.buffer.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    return { id: dataUrl, url: dataUrl };
+  }
+
+  // ─── Get Models ───────────────────────────────────────────────────────
+
+  /**
+   * Lấy danh sách model từ Kiro/CodeWhisperer ListAvailableModels API.
+   *
+   * Model catalog là per-account/per-tier — free tier, Pro, Pro+ và enterprise IDC
+   * admin-curated list cho các bộ model khác nhau.
+   *
+   * Attempt order (dừng khi thành công):
+   *   1. GET /ListAvailableModels?origin=AI_EDITOR trên region-matched endpoint
+   *   2. GET /ListAvailableModels?origin=AI_EDITOR trên us-east-1 fallback (nếu region khác)
+   *   3. GET /ListAvailableModels?origin=AI_EDITOR&profileArn=... chỉ khi có profileArn
+   *      (desktop accounts yêu cầu; Builder ID/IDC không gửi để tránh 403)
+   *
+   * Fallback về MODELS constant nếu tất cả attempt thất bại hoặc không có access token.
+   */
+  async getModels(credential: string): Promise<any[]> {
+    const authData = this.parseAuthData(credential);
+    const { accessToken, authMethod } = authData;
+
+    if (!accessToken) {
+      logger.warn('[Kiro] getModels: no access token, returning hardcoded models');
+      return [...MODELS];
+    }
+
+    const resolvedRegion = resolveKiroRuntimeRegion(authData);
+
+    // Build ordered endpoint list: region-matched đầu tiên, us-east-1 fallback nếu khác
+    const endpoints: string[] = [
+      `https://q.${resolvedRegion}.amazonaws.com/ListAvailableModels`,
+    ];
+    if (resolvedRegion !== 'us-east-1') {
+      endpoints.push('https://q.us-east-1.amazonaws.com/ListAvailableModels');
+    }
+
+    const authHeaders: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'x-amzn-kiro-agent-mode': 'vibe',
+      'x-amzn-codewhisperer-optout': 'true',
+      'amz-sdk-request': 'attempt=1; max=1',
+    };
+    if (authMethod === 'api_key') {
+      authHeaders['tokentype'] = 'API_KEY';
+    }
+
+    // Pass 1: origin-only — works cho Builder ID / social / IDC
+    for (const base of endpoints) {
+      try {
+        const res = await fetch(`${base}?origin=AI_EDITOR`, {
+          method: 'GET',
+          headers: authHeaders,
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as Record<string, unknown>;
+          const models = this.parseKiroModels(data);
+          if (models.length > 0) return models;
+        }
+      } catch {
+        /* try next */
+      }
+    }
+
+    // Pass 2: retry với profileArn trên primary endpoint
+    // Chỉ dùng cho desktop-style accounts — không gửi cho Builder ID / IDC (có thể 403)
+    const profileArn = authData.profileArn;
+    if (
+      profileArn &&
+      authMethod !== 'builder-id' &&
+      authMethod !== 'idc'
+    ) {
+      try {
+        const url = `${endpoints[0]}?origin=AI_EDITOR&profileArn=${encodeURIComponent(profileArn)}`;
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: authHeaders,
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as Record<string, unknown>;
+          const models = this.parseKiroModels(data);
+          if (models.length > 0) return models;
+        }
+      } catch {
+        /* fall through to hardcoded */
+      }
+    }
+
+    // Fallback: hardcoded MODELS constant
+    logger.warn('[Kiro] getModels: ListAvailableModels failed, returning hardcoded models');
+    return [...MODELS];
+  }
+
+  /**
+   * Parse ListAvailableModels response → model array theo format Provider.
+   *
+   * Response shape:
+   *   { models: [{ modelId, modelName?, tokenLimits?: { maxInputTokens } }] }
+   *
+   * Expand variant `-thinking` cho model hỗ trợ adaptive thinking
+   * (claude-sonnet-*, claude-haiku-* hiện tại theo kiroModels.ts).
+   */
+  private parseKiroModels(data: Record<string, unknown>): any[] {
+    const items = Array.isArray(data.models)
+      ? data.models
+      : Array.isArray(data.availableModels)
+        ? data.availableModels
+        : [];
+
+    if (items.length === 0) return [];
+
+    const THINKING_CAPABLE_PREFIXES = ['claude-sonnet', 'claude-haiku', 'claude-opus'];
+
+    const supportsThinking = (modelId: string): boolean =>
+      THINKING_CAPABLE_PREFIXES.some((prefix) => modelId.startsWith(prefix));
+
+    const seen = new Set<string>();
+    const result: any[] = [];
+
+    for (const item of items) {
+      const raw = item as Record<string, unknown>;
+      const id =
+        (typeof raw.modelId === 'string' ? raw.modelId.trim() : null) ||
+        (typeof raw.id === 'string' ? raw.id.trim() : null);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+
+      const name =
+        (typeof raw.modelName === 'string' ? raw.modelName.trim() : null) ||
+        (typeof raw.name === 'string' ? raw.name.trim() : null) ||
+        `Kiro ${id}`;
+
+      const tokenLimits = (raw.tokenLimits ?? {}) as Record<string, unknown>;
+      const contextLength =
+        typeof tokenLimits.maxInputTokens === 'number'
+          ? tokenLimits.maxInputTokens
+          : 200000;
+
+      result.push({
+        id,
+        name: `Kiro ${name}`,
+        is_thinking: false,
+        max_context_length: contextLength,
+        is_search: false,
+        is_image_upload: false,
+        is_video_upload: false,
+        is_audio_upload: false,
+        is_file_upload: false,
+        is_larger_content_paste_upload: false,
+        is_image_generator: false,
+        is_video_generator: false,
+        is_deep_research: false,
+      });
+
+      // Thêm variant thinking cho model hỗ trợ adaptive thinking
+      if (supportsThinking(id)) {
+        const thinkingId = `${id}-thinking`;
+        if (!seen.has(thinkingId)) {
+          seen.add(thinkingId);
+          result.push({
+            id: thinkingId,
+            name: `Kiro ${name} (Thinking)`,
+            is_thinking: true,
+            max_context_length: contextLength,
+            is_search: false,
+            is_image_upload: false,
+            is_video_upload: false,
+            is_audio_upload: false,
+            is_file_upload: false,
+            is_larger_content_paste_upload: false,
+            is_image_generator: false,
+            is_video_generator: false,
+            is_deep_research: false,
+          });
+        }
+      }
+    }
+
+    return result;
   }
 }
 

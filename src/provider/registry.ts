@@ -85,7 +85,33 @@ class ProviderRegistry {
     return Array.from(unique.values());
   }
 
-  // ─── Load Providers ────────────────────────────────────────────────
+  // ─── Load Providers (Static) ───────────────────────────────────────
+  /**
+   * Load providers từ static manifest (providers.ts).
+   * Dùng cho production binary (pkg) vì dynamic require() không hoạt động
+   * trong môi trường bundled — fs.readdirSync(__dirname) sẽ không tìm thấy
+   * subfolder khi toàn bộ code đã được bundle vào 1 file duy nhất.
+   */
+  loadProvidersStatic(providers: Provider[]) {
+    let count = 0;
+    for (const provider of providers) {
+      if (provider && provider.name) {
+        this.register(provider);
+        count++;
+      } else {
+        logger.warn(
+          `[Registry] Invalid provider in static list: ${JSON.stringify(provider)}`,
+        );
+      }
+    }
+  }
+
+  // ─── Load Providers (Dynamic) ──────────────────────────────────────
+  /**
+   * Load providers bằng cách scan filesystem (chỉ hoạt động trong dev/ts-node).
+   * Trong production binary (pkg/tsup bundle), dùng loadProvidersStatic() thay thế.
+   * @deprecated Dùng loadProvidersStatic() cho môi trường production.
+   */
   async loadProviders() {
     try {
       const providersDir = __dirname;

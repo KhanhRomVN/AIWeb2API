@@ -22,12 +22,13 @@ import * as https from 'https';
 import { createApp } from './app';
 
 // ── Config ──
-import { getServerConfig } from './config/server.config';
+import { getServerConfig, defaultConfig } from './config/server.config';
 
 // ── Utils ──
 import { createLogger } from './utils/logger';
 import { askYesNo } from './utils/prompt';
 import { killProcessOnPort } from './utils/kill-port';
+import { showWelcome, printStarted, printCancelled } from './utils/welcome';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('Server');
@@ -50,6 +51,31 @@ export const startServer = async (): Promise<{
 
   try {
     const config = getServerConfig();
+
+    // ── Welcome UI: banner + hỏi host/port (chỉ khi TTY) ───────────
+    // Trả về ngay với giá trị mặc định nếu stdin không phải TTY
+    // (chạy trong pipe, service, extension, v.v.).
+    let finalHost = config.host;
+    let finalPort = config.port;
+
+    try {
+      const chosen = await showWelcome(config.host, config.port);
+      finalHost = chosen.host;
+      finalPort = chosen.port;
+    } catch (e: any) {
+      // Nếu người dùng Ctrl+C ngay ở prompt → thoát sạch
+      if (e?.code === 'ERR_USE_AFTER_CLOSE' || e?.message?.includes('cancel')) {
+        printCancelled();
+        process.exit(0);
+      }
+      // Lỗi khác → log và tiếp tục với config mặc định
+      logger.warn(`Welcome UI error: ${e?.message ?? e}`);
+    }
+
+    // Cập nhật config với host/port người dùng chọn (nếu khác default)
+    if (finalHost !== config.host) (config as any).host = finalHost;
+    if (finalPort !== config.port) (config as any).port = finalPort;
+
     const app = await createApp();
 
     return new Promise((resolve) => {
@@ -64,39 +90,41 @@ export const startServer = async (): Promise<{
           server = http.createServer(app);
         }
 
-        server.listen(config.port, config.host, () => {
+        server.listen(finalPort, finalHost, () => {
+          printStarted(finalHost, finalPort, config.tls.enable);
           resolve({
             success: true,
-            port: config.port,
+            port: finalPort,
             https: config.tls.enable,
           });
         });
 
         server.on('error', async (e: any) => {
           if (e.code === 'EADDRINUSE') {
-            logger.error(`Port ${config.port} already in use`);
+            logger.error(`Port ${finalPort} already in use`);
 
             const isTTY = process.stdin.isTTY;
             let shouldKill = false;
 
             if (isTTY) {
               const answer = await askYesNo(
-                `Port ${config.port} is already in use. Do you want to kill the process using this port?`,
+                `Port ${finalPort} is already in use. Do you want to kill the process using this port?`,
               );
               shouldKill = answer === true;
             }
 
             if (shouldKill) {
-              const killed = await killProcessOnPort(config.port);
+              const killed = await killProcessOnPort(finalPort);
 
               if (killed) {
                 server?.close(() => {
                   const newServer = http.createServer(app);
-                  newServer.listen(config.port, config.host, () => {
+                  newServer.listen(finalPort, finalHost, () => {
                     server = newServer;
+                    printStarted(finalHost, finalPort, config.tls.enable);
                     resolve({
                       success: true,
-                      port: config.port,
+                      port: finalPort,
                       https: config.tls.enable,
                     });
                   });
@@ -111,10 +139,10 @@ export const startServer = async (): Promise<{
                 });
                 return;
               } else {
-                logger.error(`Failed to kill process on port ${config.port}`);
+                logger.error(`Failed to kill process on port ${finalPort}`);
                 resolve({
                   success: false,
-                  error: `Port ${config.port} is already in use and could not be killed`,
+                  error: `Port ${finalPort} is already in use and could not be killed`,
                   code: 'EADDRINUSE_KILL_FAILED',
                 });
                 return;
@@ -123,7 +151,7 @@ export const startServer = async (): Promise<{
 
             resolve({
               success: false,
-              error: `Port ${config.port} is already in use`,
+              error: `Port ${finalPort} is already in use`,
               code: 'EADDRINUSE',
             });
           } else {

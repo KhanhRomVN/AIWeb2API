@@ -9,7 +9,7 @@ export default defineConfig({
   clean: true,
   minify: true,
   bundle: true,
-  noExternal: [/^((?!better-sqlite3|chokidar|fsevents).)*$/], // Bundle all EXCEPT native modules
+  noExternal: [/^((?!better-sqlite3|chokidar|fsevents|ali-oss|urllib).)*$/], // Bundle all EXCEPT native/problematic modules
   external: [
     'better-sqlite3',
     'chokidar',
@@ -20,7 +20,18 @@ export default defineConfig({
     '@arcjet/protocol',
     'express',
     'mongoose',
+    'proxy-agent',
+    'ali-oss',   // ali-oss -> urllib -> proxy-agent (optional, not installed)
   ],
+  esbuildOptions(options) {
+    // Treat .md files as plain text (inlined as string)
+    // Treat .wasm files as binary (inlined as Uint8Array / copied as asset)
+    options.loader = {
+      ...options.loader,
+      '.md': 'text',
+      '.wasm': 'file',
+    };
+  },
   // We need to keep some heavy native or peer modules external to avoid bundling errors,
   // or we can try to inline everything. Let's start by externalizing tricky ones
   // that have natives or dynamic requires.
