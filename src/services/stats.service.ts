@@ -28,13 +28,13 @@ export { getModelStatsByPeriod } from './metrics.service';
 // ─── Wrappers ──────────────────────────────────────────────────────────
 
 export const getAccountStatsByPeriod = (
-  period: 'day' | 'week' | 'month' | 'year',
+  period: 'day' | 'week' | 'month' | 'year' | 'all',
   offset: number,
   accountId?: string,
 ) => _getAccountStatsByPeriod(period, offset, accountId);
 
 export const getUsageHistory = (
-  period: 'day' | 'week' | 'month' | 'year',
+  period: 'day' | 'week' | 'month' | 'year' | 'all',
   offset: number,
   accountId?: string,
 ) => _getUsageHistory(period, offset, accountId);

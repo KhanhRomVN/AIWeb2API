@@ -37,9 +37,7 @@ import {
   WEBSITE_URL,
   AUTH_METHOD,
   CONNECTION_TYPE,
-  MODELS,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   BASE_URL,
   STATUS_URL,
@@ -55,6 +53,7 @@ import {
   DEFAULT_FE_VERSION,
   CB_THRESHOLD,
   CB_COOLDOWN_MS,
+  MODELS,
 } from './duckduckgo.constant';
 import {
   solveDuckDuckGoChallenge,
@@ -240,7 +239,6 @@ export class DuckDuckGoProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 

@@ -54,7 +54,6 @@ import {
   AUTH_METHOD,
   CONNECTION_TYPE,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   BASE_URL,
   API_BASE_URL,
@@ -96,7 +95,6 @@ export class CerebrasCloudProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 
@@ -186,7 +184,8 @@ export class CerebrasCloudProvider implements Provider {
     };
 
     if (apiKey) {
-      headers[HTTP_HEADER_NAMES.AUTHORIZATION] = `${HTTP_HEADERS.BEARER_PREFIX}${apiKey}`;
+      headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
+        `${HTTP_HEADERS.BEARER_PREFIX}${apiKey}`;
     } else {
       headers[HTTP_HEADER_NAMES.COOKIE] = credential;
     }
@@ -199,12 +198,14 @@ export class CerebrasCloudProvider implements Provider {
     if (!response.ok) {
       let detail = '';
       try {
-        const body = await response.json() as any;
+        const body = (await response.json()) as any;
         detail = body?.error?.message || body?.message || JSON.stringify(body);
       } catch {
         detail = await response.text().catch(() => '');
       }
-      throw new Error(`Cerebras API returned ${response.status}${detail ? `: ${detail}` : ''}`);
+      throw new Error(
+        `Cerebras API returned ${response.status}${detail ? `: ${detail}` : ''}`,
+      );
     }
 
     const json = (await response.json()) as CerebrasModelsResponse;
@@ -284,14 +285,17 @@ export class CerebrasCloudProvider implements Provider {
       if (!response.ok) {
         let detail = '';
         try {
-          const body = await response.json() as any;
-          detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+          const body = (await response.json()) as any;
+          detail =
+            body?.error?.message ?? body?.message ?? JSON.stringify(body);
         } catch {
           detail = await response.text().catch(() => '');
         }
         const message = `Cerebras API returned ${response.status}${detail ? `: ${detail}` : ''}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Cerebras. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Cerebras. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;

@@ -10,10 +10,9 @@
  * - IS_ENABLED             : Bật/tắt provider
  * - WEBSITE_URL            : URL website
  * - AUTH_METHOD            : Phương thức xác thực
- * - CONNECTION_TYPE        : Loại kết nối (https/browser)
- * - MODELS                 : Empty array (models fetched from API at runtime)
- * - IS_PAUSABLE            : Hỗ trợ tạm dừng session
- * - IS_MEMORY              : Hỗ trợ bộ nhớ dài hạn
+ * - CONNECTION_TYPE        : Loại kết nối (https / websocket / cli)
+ * - IS_PAUSABLE            : Có thể tạm dừng giữa chừng
+ * - MODELS                 : Danh sách models hỗ trợ
  * - KIMI_BASE_URL          : Base URL của Kimi AI
  * - KIMI_MODELS            : Model constants
  * - KIMI_EVENTS            : Các event name dùng trong proxy handler
@@ -41,7 +40,6 @@ export const KIMI_AUTH_METHODS = {
 } as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = true;
 
 export const MODELS = [] as const;

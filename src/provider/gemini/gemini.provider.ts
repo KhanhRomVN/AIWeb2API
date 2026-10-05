@@ -46,9 +46,7 @@ import {
   WEBSITE_URL,
   AUTH_METHOD,
   CONNECTION_TYPE,
-  MODELS,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   BASE_URL,
   USER_AGENT,
@@ -68,6 +66,7 @@ import {
   ERROR_SLICE_LENGTH,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
+  MODELS,
 } from './gemini.constant';
 import { proxyHandler } from './gemini.proxy-handler';
 import { parseSSEStream } from './gemini.sse-parser';
@@ -97,8 +96,6 @@ export class GeminiProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
-    can_regenerate: CAN_REGENERATE,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
   };
@@ -339,7 +336,9 @@ export class GeminiProvider implements Provider {
 
           const message = `Gemini API returned ${response.status}: ${errorText.slice(0, ERROR_SLICE_LENGTH)}`;
           if (response.status === 401 || response.status === 403) {
-            const err = new Error(`Session expired or invalid. Please re-login to Gemini. (${message})`);
+            const err = new Error(
+              `Session expired or invalid. Please re-login to Gemini. (${message})`,
+            );
             (err as any).isAuthError = true;
             (err as any).statusCode = response.status;
             throw err;

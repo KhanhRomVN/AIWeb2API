@@ -45,7 +45,6 @@ import {
   AUTH_METHOD,
   CONNECTION_TYPE,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   GEMINI_CLI_EVENTS,
   CLOUDCODE_LOAD_CODE_ASSIST_URL,
@@ -116,7 +115,6 @@ export class GeminiCLIProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 
@@ -287,8 +285,12 @@ export class GeminiCLIProvider implements Provider {
     if (!response.ok) {
       let detail = '';
       try {
-        const body = await response.json() as any;
-        detail = body?.error_description ?? body?.error ?? body?.message ?? JSON.stringify(body);
+        const body = (await response.json()) as any;
+        detail =
+          body?.error_description ??
+          body?.error ??
+          body?.message ??
+          JSON.stringify(body);
       } catch {
         detail = await response.text().catch(() => '');
       }
@@ -305,13 +307,15 @@ export class GeminiCLIProvider implements Provider {
     const response = await fetch(CLOUDCODE_LOAD_CODE_ASSIST_URL, {
       method: 'POST',
       headers: {
-        [HTTP_HEADER_NAMES.AUTHORIZATION]:
-          `${HTTP_HEADERS.BEARER_PREFIX}${accessToken}`,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${HTTP_HEADERS.BEARER_PREFIX}${accessToken}`,
         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
         [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
         [HTTP_HEADER_NAMES.X_GOOG_API_CLIENT]: X_GOOG_API_CLIENT,
       },
-      body: JSON.stringify({ metadata: CLIENT_METADATA, mode: PAYLOAD_DEFAULTS.MODE }),
+      body: JSON.stringify({
+        metadata: CLIENT_METADATA,
+        mode: PAYLOAD_DEFAULTS.MODE,
+      }),
     });
     if (!response.ok) {
       logger.warn(
@@ -376,9 +380,7 @@ export class GeminiCLIProvider implements Provider {
         request: {
           contents: messages.map((m) => ({
             role:
-              m.role === MESSAGE_ROLES.ASSISTANT
-                ? MESSAGE_ROLES.MODEL
-                : m.role,
+              m.role === MESSAGE_ROLES.ASSISTANT ? MESSAGE_ROLES.MODEL : m.role,
             parts: [{ text: m.content }],
           })),
         },
@@ -388,8 +390,7 @@ export class GeminiCLIProvider implements Provider {
         method: 'POST',
         headers: {
           [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-          [HTTP_HEADER_NAMES.AUTHORIZATION]:
-            `${HTTP_HEADERS.BEARER_PREFIX}${token}`,
+          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${HTTP_HEADERS.BEARER_PREFIX}${token}`,
           [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
           [HTTP_HEADER_NAMES.X_GOOG_API_CLIENT]: X_GOOG_API_CLIENT,
         },
@@ -435,10 +436,14 @@ export class GeminiCLIProvider implements Provider {
         try {
           const body = JSON.parse(rawText);
           detail = body?.error?.message ?? body?.message ?? detail;
-        } catch { /* keep rawText slice */ }
+        } catch {
+          /* keep rawText slice */
+        }
         const message = `Gemini CLI API Error ${response.status}: ${detail}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Gemini CLI. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Gemini CLI. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;
@@ -468,9 +473,9 @@ export class GeminiCLIProvider implements Provider {
               const json = JSON.parse(jsonStr) as GeminiSSEChunk;
               const responseObj = json.response || json;
               const content =
-                responseObj[API_FIELDS.CANDIDATES]?.[0]?.[
-                  API_FIELDS.CONTENT
-                ]?.[API_FIELDS.PARTS]?.[0]?.[API_FIELDS.TEXT];
+                responseObj[API_FIELDS.CANDIDATES]?.[0]?.[API_FIELDS.CONTENT]?.[
+                  API_FIELDS.PARTS
+                ]?.[0]?.[API_FIELDS.TEXT];
               if (content) onContent(content);
             } catch (e) {
               logger.warn('[GeminiCLI] Failed to parse SSE line:', e);
@@ -521,8 +526,7 @@ export class GeminiCLIProvider implements Provider {
     const response = await fetch(CLOUDCODE_RETRIEVE_QUOTA_URL, {
       method: 'POST',
       headers: {
-        [HTTP_HEADER_NAMES.AUTHORIZATION]:
-          `${HTTP_HEADERS.BEARER_PREFIX}${tokens.accessToken}`,
+        [HTTP_HEADER_NAMES.AUTHORIZATION]: `${HTTP_HEADERS.BEARER_PREFIX}${tokens.accessToken}`,
         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
         [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
         [HTTP_HEADER_NAMES.X_GOOG_API_CLIENT]: X_GOOG_API_CLIENT,

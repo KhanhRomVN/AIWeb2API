@@ -65,13 +65,22 @@ export interface Provider {
   /** Error message khi getModels() thất bại — hiển thị trong UI thay vì danh sách rỗng */
   models_error?: string;
   is_pausable?: boolean;
-  is_memory?: boolean;
   /**
    * Provider tự inject system prompt nội bộ — Zen không nên gửi thêm
    * system prompt sẽ conflict. Khi true: PromptLength chỉ cho phép "none",
    * StyleCode chỉ cho phép "none".
    */
   anti_system_prompt_injection?: boolean;
+  /**
+   * Khung giờ bị chặn (UTC). Lấy thẳng từ provider constant để Zen webview
+   * không cần hardcode — đổi 1 chỗ là sync toàn bộ.
+   */
+  blocked_time_ranges?: Array<{ startTime: number; endTime: number }>;
+  /**
+   * Provider có hỗ trợ session cleanup không (xóa toàn bộ conversation khi
+   * account không còn ở chat view). Detect tự động từ deleteAllSessions().
+   */
+  supports_session_cleanup?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -92,6 +101,7 @@ const fetchProviderConfig = async (): Promise<any[]> => {
         configs.push({
           ...cfg,
           can_refresh_token: typeof provider.refreshToken === 'function',
+          supports_session_cleanup: typeof provider.deleteAllSessions === 'function',
         });
       }
     } else {
@@ -217,8 +227,8 @@ const buildProvidersCache = async (
       ...p,
       website_url: p.website_url || (p as any).website,
       website: p.website_url || (p as any).website,
-      is_memory: p.is_memory ?? false,
       ...(modelsError ? { models_error: modelsError } : {}),
+      ...(p.blocked_time_ranges != null ? { blocked_time_ranges: p.blocked_time_ranges } : {}),
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,

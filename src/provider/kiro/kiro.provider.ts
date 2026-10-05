@@ -89,7 +89,6 @@ export class KiroProvider implements Provider {
     connection_type: 'https',
     models: MODELS,
     is_pausable: false,
-    is_memory: false,
     can_regenerate: CAN_REGENERATE,
   };
 

@@ -12,8 +12,6 @@
  * - updateAccountHandler()     : Cập nhật email/credential của tài khoản theo id
  * - getAccounts()              : Lấy danh sách tài khoản với phân trang và filter
  * - deleteAccount()            : Xóa tài khoản theo id
- * - getAccountMemory()         : Lấy trạng thái memory của tài khoản
- * - updateAccountMemory()      : Cập nhật trạng thái memory
  * - getAccountBrowserStatus()  : Kiểm tra trạng thái browser của tài khoản
  * - startAccountBrowser()      : Khởi động browser cho tài khoản
  * ------------------------------------------------------------------
@@ -37,7 +35,6 @@ import {
   updateAccount,
   updateAccountEditableFields,
   updateAccountUserDataDir,
-  updateMemoryState,
   removeAccount,
   importAccounts as importAccountsService,
   previewImportAccounts as previewImportAccountsService,
@@ -55,6 +52,9 @@ import {
   releasePresence,
   countOtherWindows,
 } from '../services/presence.service';
+import {
+  computeLiveUsageFields,
+} from '../middleware/request-limit.middleware';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -220,94 +220,7 @@ export const overrideAccount = async (
   }
 };
 
-// GET /v1/accounts/:id/memory
-export const getAccountMemory = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const account = await getAccountById(id);
 
-    if (!account) {
-      res.status(404).json({
-        success: false,
-        message: 'Account not found',
-        error: { code: 'NOT_FOUND' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        account_id: account.id,
-        is_memory_enabled: account.is_memory_enabled === 1,
-      },
-      meta: { timestamp: new Date().toISOString() },
-    });
-  } catch (error) {
-    logger.error('Error in getAccountMemory', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: { code: 'INTERNAL_ERROR' },
-      meta: { timestamp: new Date().toISOString() },
-    });
-  }
-};
-
-// PUT /v1/accounts/:id/memory
-export const updateAccountMemory = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { is_memory_enabled } = req.body;
-
-    if (typeof is_memory_enabled !== 'boolean') {
-      res.status(400).json({
-        success: false,
-        message: 'is_memory_enabled must be a boolean',
-        error: { code: 'INVALID_INPUT' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    const account = getAccountById(id);
-    if (!account) {
-      res.status(404).json({
-        success: false,
-        message: 'Account not found',
-        error: { code: 'NOT_FOUND' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    updateMemoryState(id, is_memory_enabled);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        account_id: id,
-        is_memory_enabled,
-      },
-      meta: { timestamp: new Date().toISOString() },
-    });
-  } catch (error) {
-    logger.error('Error in updateAccountMemory', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: { code: 'INTERNAL_ERROR' },
-      meta: { timestamp: new Date().toISOString() },
-    });
-  }
-};
 
 // POST /v1/accounts
 export const addAccount = async (
@@ -508,6 +421,33 @@ export const updateAccountHandler = async (
   }
 };
 
+// GET /v1/accounts/:id
+export const getAccountByIdHandler = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const account = await getAccountById(id);
+    if (!account) {
+      res.status(404).json({ success: false, message: 'Account not found' });
+      return;
+    }
+
+    // usage được ghi trực tiếp vào DB → trả thẳng, không cần compute.
+    const computedUsage = account.usage ?? null;
+
+    res.status(200).json({
+      success: true,
+      data: { ...account, usage: computedUsage },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error) {
+    logger.error('Error in getAccountByIdHandler', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 // GET /v1/accounts
 export const getAccounts = async (
   req: Request,
@@ -555,9 +495,33 @@ export const getAccounts = async (
         period_requests: 0,
         period_tokens: 0,
       };
+
+      // Tính lại usage và reset_usage_at mới nhất từ requestLimit của provider.
+      // Không cần DB write — chỉ compute từ dữ liệu đã có sẵn.
+      const provider = providerRegistry.getProvider(row.provider_id);
+      const requestLimit = provider?.usagePolicy?.requestLimit;
+      const requestLimitPeriod: 'day' | 'week' | 'month' =
+        provider?.usagePolicy?.requestLimitPeriod ?? 'day';
+
+      let computedUsage: number | null = row.usage ?? null;
+      let computedResetAt: string | null = row.reset_usage_at ?? null;
+
+      if (requestLimit != null) {
+        const live = computeLiveUsageFields(
+          row.usage ?? null,
+          row.reset_usage_at ?? null,
+          requestLimit,
+          requestLimitPeriod,
+        );
+        computedUsage = live.usage;
+        computedResetAt = live.reset_usage_at;
+      }
+
       return {
         ...row,
         ...stats,
+        usage: computedUsage,
+        reset_usage_at: computedResetAt,
         last_used_at: row.last_used_at ?? null,
         used_by_windows: countOtherWindows(row.id, clientId),
       };
@@ -722,6 +686,98 @@ export const releaseAccountPresence = async (
       success: false,
       message: 'Internal server error',
       error: { code: 'INTERNAL_ERROR' },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  }
+};
+
+// ─── POST /v1/accounts/:id/session-cleanup ──────────────────────────
+/**
+ * Xóa toàn bộ conversation (chat session) của account phía provider.
+ * Được gọi bởi Zen webview khi phát hiện account không còn ở chat view
+ * (health-check interval) để dọn sạch lịch sử phía server.
+ *
+ * Chỉ hoạt động với provider có implement deleteAllSessions().
+ * Provider hỗ trợ được đánh dấu bằng field `supports_session_cleanup: true`
+ * trong response của GET /v1/providers.
+ */
+export const deleteAllAccountSessions = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        message: 'Account ID is required',
+        error: { code: 'INVALID_INPUT' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const account = await getAccountById(id);
+    if (!account) {
+      res.status(404).json({
+        success: false,
+        message: 'Account not found',
+        error: { code: 'NOT_FOUND' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    if (!account.credential) {
+      res.status(400).json({
+        success: false,
+        message: 'Account has no credential',
+        error: { code: 'NO_CREDENTIAL' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const provider = providerRegistry.getProvider(account.provider_id);
+    if (!provider?.deleteAllSessions) {
+      res.status(400).json({
+        success: false,
+        message: 'Provider does not support session cleanup',
+        error: { code: 'UNSUPPORTED_PROVIDER' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    const success = await provider.deleteAllSessions(account.credential);
+
+    if (!success) {
+      res.status(500).json({
+        success: false,
+        message: 'Session cleanup failed',
+        error: { code: 'CLEANUP_FAILED' },
+        meta: { timestamp: new Date().toISOString() },
+      });
+      return;
+    }
+
+    logger.info(
+      `[SessionCleanup] All sessions deleted — account=${id} provider=${account.provider_id}`,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'All sessions deleted successfully',
+      data: { account_id: id },
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (error: any) {
+    logger.error('[SessionCleanup] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: { code: 'INTERNAL_ERROR', details: error.message },
       meta: { timestamp: new Date().toISOString() },
     });
   }

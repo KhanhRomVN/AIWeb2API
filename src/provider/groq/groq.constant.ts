@@ -7,7 +7,8 @@
  * Main exports:
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD / GROQ_AUTH_METHODS
- * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / IS_PAUSABLE
+ * - MODELS              : Danh sách models hỗ trợ
  * - BASE_URL                  : Base URL của Groq console
  * - API_BASE_URL              : Base URL của Groq API
  * - API_CHAT_COMPLETIONS_URL  : URL chat completion
@@ -34,7 +35,6 @@ export const WEBSITE_URL = 'https://groq.com';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 export const GROQ_AUTH_METHODS = {

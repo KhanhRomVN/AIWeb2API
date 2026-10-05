@@ -70,7 +70,7 @@ export const recordMetrics = async (req: Request, res: Response) => {
 export const getStats = async (req: Request, res: Response) => {
   try {
     const period =
-      (req.query.period as 'day' | 'week' | 'month' | 'year') || 'day';
+      (req.query.period as 'day' | 'week' | 'month' | 'year' | 'all') || 'day';
     const page = parseInt(req.query.page as string) || 0;
     const offset = parseInt(req.query.offset as string) || page;
     const accountId = req.query.account_id as string | undefined;

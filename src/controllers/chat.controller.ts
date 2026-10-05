@@ -24,6 +24,14 @@ import {
   updateAccountUsageInfo,
 } from '../services/account.service';
 
+// ── Repositories ──
+
+// ── Middleware ──
+import { incrementRequestCountAndUsage } from '../middleware/request-limit.middleware';
+
+// ── Providers ──
+import { providerRegistry } from '../provider/registry';
+
 // ── Utils ──
 import { createLogger } from '../utils/logger';
 import { countMessagesTokens, countTokens } from '../utils/tokenizer';
@@ -281,6 +289,24 @@ export const sendMessage = async (
         onDone: () => {
           if (streamTimeoutId) clearTimeout(streamTimeoutId);
           if (stream !== false && res.writableEnded) return;
+
+          // Tăng request count + tính usage nếu provider có requestLimit (fire-and-forget)
+          if (resolvedAccount.id && !resolvedAccount.id.startsWith('anon-')) {
+            const provider = providerRegistry.getProvider(resolvedAccount.provider_id);
+            if (provider?.usagePolicy?.requestLimit !== undefined) {
+              // Tăng request count + ghi usage + reset_usage_at vào DB
+              const period = provider.usagePolicy.requestLimitPeriod ?? 'day';
+              incrementRequestCountAndUsage(
+                resolvedAccount.id,
+                provider.usagePolicy.requestLimit,
+                period,
+              ).catch((err: any) =>
+                logger.warn(
+                  `[RequestLimit] Failed to increment for account ${resolvedAccount.id}: ${err.message}`,
+                ),
+              );
+            }
+          }
 
           // Log transaction details
           const MAX_PREVIEW_LENGTH = 200;

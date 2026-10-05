@@ -19,7 +19,6 @@ export const AUTH_LOGIN_URL = 'https://freebuff.com/chat';
 export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 // ─── URLs ─────────────────────────────────────────────────────────────────

@@ -16,7 +16,6 @@
  * - insertAccount()                  : Thêm mới account
  * - insertAccountsBatch()            : Thêm batch accounts
  * - updateAccountCredential()        : Cập nhật credential
- * - updateAccountMemory()            : Cập nhật trạng thái memory
  * - deleteAccount()                  : Xóa account
  * - findBrowserAccountsByProvider()  : Tìm browser accounts
  * - updateAccountLastUsed()          : Cập nhật last_used_at
@@ -43,7 +42,6 @@ const ALLOWED_SORT_COLUMNS = new Set([
   'email',
   'usage',
   'reset_usage_at',
-  'is_memory_enabled',
   'last_used_at',
 ]);
 
@@ -56,7 +54,6 @@ export interface AccountRow {
   credential: string | null;
   usage?: number | null;
   reset_usage_at?: string | null;
-  is_memory_enabled?: number | null;
   user_data_dir?: string | null;
   last_used_at?: number | null;
   auth_method?: string | null;
@@ -181,7 +178,6 @@ export const insertAccount = async (account: {
   credential: string | null;
   usage?: number;
   reset_usage_at?: string;
-  is_memory_enabled?: number;
   user_data_dir?: string | null;
   auth_method?: string | null;
 }): Promise<void> => {
@@ -195,7 +191,6 @@ export const insertAccount = async (account: {
       credential: account.credential,
       usage: account.usage ?? null,
       reset_usage_at: account.reset_usage_at || null,
-      is_memory_enabled: account.is_memory_enabled === 1 ? 1 : 0,
       user_data_dir: account.user_data_dir || null,
       auth_method: account.auth_method || null,
     })
@@ -208,7 +203,6 @@ export const insertAccountsBatch = async (
     provider_id: string;
     email: string;
     credential: string;
-    is_memory_enabled?: boolean;
   }>,
 ): Promise<void> => {
   const db = getDataStore().kysely;
@@ -221,7 +215,6 @@ export const insertAccountsBatch = async (
           provider_id: a.provider_id,
           email: a.email,
           credential: a.credential,
-          is_memory_enabled: a.is_memory_enabled ? 1 : 0,
         })),
       )
       .execute();
@@ -292,18 +285,6 @@ export const updateAccountCredentialAndRefresh = async (
     .execute();
 };
 
-export const updateAccountMemory = async (
-  id: string,
-  isMemoryEnabled: boolean,
-): Promise<void> => {
-  const db = getDataStore().kysely;
-  await db
-    .updateTable('accounts')
-    .set({ is_memory_enabled: isMemoryEnabled ? 1 : 0 })
-    .where('id', '=', id)
-    .execute();
-};
-
 /**
  * Cập nhật thời điểm account được dùng gần nhất (ms timestamp).
  */
@@ -331,6 +312,8 @@ export const updateAccountUsage = async (
     .where('id', '=', id)
     .execute();
 };
+
+
 
 export const findAccountsNeedingRefresh = async (
   _threshold: number,

@@ -7,7 +7,7 @@
  * Main exports:
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD / GEMINI_AUTH_METHODS
- * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / IS_PAUSABLE
  * - MODELS              : Danh sách models hỗ trợ
  * - BASE_URL            : Base URL cho Gemini
  * - GEMINI_BL           : Build label (bl parameter)
@@ -42,7 +42,6 @@ export const WEBSITE_URL = 'https://gemini.google.com/';
 export const AUTH_METHOD = ['google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 export const GEMINI_AUTH_METHODS = {

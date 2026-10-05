@@ -40,9 +40,8 @@ function migrateAccounts(db: Database.Database): void {
         provider_id TEXT NOT NULL,
         email TEXT NOT NULL,
         credential TEXT NOT NULL,
-        usage REAL,
-        reset_usage_at TEXT,
-        is_memory_enabled INTEGER DEFAULT 0
+        usage REAL, 
+        reset_usage_at TEXT
       )
     `);
 
@@ -102,23 +101,11 @@ function migrateAccounts(db: Database.Database): void {
         logger.warn('Failed to add reset_usage_at to accounts', e);
       }
     }
-    // Migration: rename reset_period → reset_usage_at (drop old column via table rebuild not needed,
-    // SQLite doesn't support DROP COLUMN easily — just leave reset_period as dead column if exists)
-    if (!finalCols.includes('is_memory_enabled')) {
-      try {
-        db.exec(
-          'ALTER TABLE accounts ADD COLUMN is_memory_enabled INTEGER DEFAULT 0',
-        );
-      } catch (e) {
-        logger.warn('Failed to add is_memory_enabled to accounts', e);
-      }
-    }
-
     // Migration: add last_used_at (ms timestamp of last send)
-    const colsAfterMemory = (db.pragma('table_info(accounts)') as any[]).map(
-      (c) => c.name,
-    );
-    if (!colsAfterMemory.includes('last_used_at')) {
+    const colsAfterResetUsage = (
+      db.pragma('table_info(accounts)') as any[]
+    ).map((c) => c.name);
+    if (!colsAfterResetUsage.includes('last_used_at')) {
       try {
         db.exec('ALTER TABLE accounts ADD COLUMN last_used_at INTEGER');
       } catch (e) {
@@ -189,7 +176,6 @@ function migrateBrowserSessions(db: Database.Database): void {
         credential: string | null;
         usage: number | null;
         reset_usage_at: string | null;
-        is_memory_enabled: number | null;
         user_data_dir: string | null;
         last_used_at: number | null;
       }
@@ -209,16 +195,13 @@ function migrateBrowserSessions(db: Database.Database): void {
           credential TEXT,
           usage REAL,
           reset_usage_at TEXT,
-          is_memory_enabled INTEGER DEFAULT 0,
           user_data_dir TEXT,
           last_used_at INTEGER
-        )
-      `);
-
+        )`);
       // Restore data
       const insertStmt = db.prepare(`
-        INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, is_memory_enabled, user_data_dir, last_used_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO accounts (id, provider_id, email, credential, usage, reset_usage_at, user_data_dir, last_used_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const row of accountsData) {
@@ -229,7 +212,6 @@ function migrateBrowserSessions(db: Database.Database): void {
           row.credential,
           row.usage,
           row.reset_usage_at,
-          row.is_memory_enabled || 0,
           row.user_data_dir,
           row.last_used_at ?? null,
         );

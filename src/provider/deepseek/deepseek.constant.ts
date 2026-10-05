@@ -8,7 +8,7 @@
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD         : Danh sách auth method (legacy export)
  * - DEEPSEEK_AUTH_METHODS : Basic / Google auth literals
- * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / IS_PAUSABLE
  * - MODELS              : Danh sách models hỗ trợ
  * - BASE_URL            : Base URL của DeepSeek API
  * - API_PATHS           : Tất cả API endpoint paths
@@ -37,9 +37,48 @@ export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://deepseek.com';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
-export const IS_PAUSABLE = true;
-export const IS_MEMORY = false;
+export const IS_PAUSABLE = false;
 export const CAN_REGENERATE = true;
+
+/**
+ * Provider này hỗ trợ xóa toàn bộ conversation (chat session) của account.
+ * Được dùng bởi cơ chế session cleanup: khi Zen phát hiện account không còn
+ * đang được dùng trong chat view, AIWeb2API sẽ gọi deleteAllSessions() để
+ * dọn sạch lịch sử phía server.
+ * Provider khác muốn hỗ trợ tính năng này chỉ cần: set TRUE + implement deleteAllSessions().
+ */
+export const SUPPORTS_SESSION_CLEANUP = true;
+
+/**
+ * Giới hạn request/account. undefined = không giới hạn.
+ * Để tắt: comment dòng này hoặc set = undefined.
+ */
+export const REQUEST_LIMIT = 100;
+
+/**
+ * Chu kỳ reset cho REQUEST_LIMIT.
+ * 'day' = reset lúc 00:00 UTC mỗi ngày.
+ * 'week' = reset đầu tuần (thứ Hai 00:00 UTC).
+ * 'month' = reset ngày 1 hàng tháng 00:00 UTC.
+ */
+export const REQUEST_LIMIT_PERIOD: 'day' | 'week' | 'month' = 'day';
+
+/**
+ * Khung giờ bị chặn (UTC). Mỗi phần tử [startTime, endTime) exclusive.
+ * Giờ tính theo UTC chuẩn (0–23). Zen webview tự đổi sang múi giờ local của user để hiển thị.
+ * Để tắt hoàn toàn: set = [] hoặc xóa các phần tử.
+ *
+ *   UTC 03:00–04:00  ↔  GMT+7 10:00–11:00
+ *   UTC 19:00–21:00  ↔  GMT+7 02:00–04:00 (ngày hôm sau)
+ */
+export const BLOCKED_TIME_RANGES: Array<{
+  startTime: number;
+  endTime: number;
+}> = [
+  { startTime: 3, endTime: 4 },
+  { startTime: 19, endTime: 21 },
+  // { startTime: 1, endTime: 24 },
+];
 
 export const MODELS = [
   {
@@ -93,6 +132,7 @@ export const API_PATHS = {
   USERS_AUTH_TOKEN_CHECK_DEVICE: '/api/v0/users/auth_token/check_device',
   CHAT_CONTINUE: '/api/v0/chat/continue',
   CHAT_SESSION_CREATE: '/api/v0/chat_session/create',
+  CHAT_SESSION_DELETE_ALL: '/api/v0/chat_session/delete_all',
   CHAT_CREATE_POW_CHALLENGE: '/api/v0/chat/create_pow_challenge',
   CHAT_COMPLETION: '/api/v0/chat/completion',
   CHAT_STOP_GENERATION: '/api/v0/chat/stop_generation',

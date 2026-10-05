@@ -8,7 +8,8 @@
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD              : Danh sách auth method
  * - ZAI_BROWSER_AUTH_METHODS : Google / Basic auth literals
- * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / IS_PAUSABLE
+ * - MODELS              : Danh sách models hỗ trợ
  * - PLATFORM                 : Platform type (web)
  * - BROWSER_EXTENSION_FOLDER : Folder chứa browser extension
  * - MODELS                   : Danh sách models hỗ trợ
@@ -36,7 +37,6 @@ export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'browser';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 export const PLATFORM = 'web';
 export const BROWSER_EXTENSION_FOLDER = 'zai-bridge';

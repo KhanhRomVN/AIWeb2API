@@ -13,7 +13,6 @@ export interface ProviderRow {
   website_url?: string;
   auth_method?: string;
   is_pausable?: number;
-  is_memory?: number;
   browser_extension_folder?: string;
 }
 

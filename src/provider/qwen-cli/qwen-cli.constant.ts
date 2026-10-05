@@ -7,7 +7,8 @@
  * Main exports:
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD / QWEN_AUTH_METHODS
- * - CONNECTION_TYPE / MODELS / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / MODELS / IS_PAUSABLE
+ * - BASE_URL            : Base URL của Qwen CLI API
  * - QWEN_CLI_EVENTS         : Event names dùng trong proxy handler
  * - CHAT_QWEN_BASE_URL / PORTAL_QWEN_BASE_URL / CHAT_QWEN_HOST
  * - USER_INFO_URL / CHAT_COMPLETIONS_URL / OAUTH_PATHS
@@ -35,7 +36,6 @@ export const QWEN_AUTH_METHODS = {
 } as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 export const MODELS = [

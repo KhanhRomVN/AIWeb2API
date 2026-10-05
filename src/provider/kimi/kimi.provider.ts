@@ -62,9 +62,7 @@ import {
   WEBSITE_URL,
   AUTH_METHOD,
   CONNECTION_TYPE,
-  MODELS,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   KIMI_EVENTS,
   USER_AGENT,
@@ -94,6 +92,7 @@ import {
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
   FILE_PROCESS_STATUS,
+  MODELS,
 } from './kimi.constant';
 import { parseKimiSSE } from './kimi.sse-parser';
 import { kimiProxyHandler } from './kimi.proxy-handler';
@@ -118,7 +117,6 @@ export class KimiProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
@@ -642,14 +640,20 @@ export class KimiProvider implements Provider {
       if (!response.ok) {
         let detail = '';
         try {
-          const body = await response.json() as any;
-          detail = body?.error?.message ?? body?.message ?? body?.msg ?? JSON.stringify(body);
+          const body = (await response.json()) as any;
+          detail =
+            body?.error?.message ??
+            body?.message ??
+            body?.msg ??
+            JSON.stringify(body);
         } catch {
           detail = await response.text().catch(() => '');
         }
         const message = `Kimi API Error ${response.status}${detail ? `: ${detail.slice(0, 500)}` : ''}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Kimi. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Kimi. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;
@@ -773,12 +777,18 @@ export class KimiProvider implements Provider {
     if (!res.ok) {
       let detail = '';
       try {
-        const body = await res.json() as any;
-        detail = body?.error?.message || body?.message || body?.msg || JSON.stringify(body);
+        const body = (await res.json()) as any;
+        detail =
+          body?.error?.message ||
+          body?.message ||
+          body?.msg ||
+          JSON.stringify(body);
       } catch {
         detail = await res.text().catch(() => '');
       }
-      throw new Error(`Kimi API returned ${res.status}${detail ? `: ${detail}` : ''}`);
+      throw new Error(
+        `Kimi API returned ${res.status}${detail ? `: ${detail}` : ''}`,
+      );
     }
 
     const json = (await res.json()) as KimiAvailableModelsResponse;

@@ -46,9 +46,9 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'credential',
     'usage',
     'reset_usage_at',
-    'is_memory_enabled',
     'user_data_dir',
     'last_used_at',
+    'auth_method',
   ],
   model_stats: ['provider_id', 'model_id', 'success_rate', 'updated_at'],
   metrics: [
@@ -75,18 +75,18 @@ const MIGRATION_STATEMENTS: string[] = [
     credential TEXT,
     usage DOUBLE PRECISION,
     reset_usage_at TEXT,
-    is_memory_enabled INTEGER DEFAULT 0,
     user_data_dir TEXT,
-    last_used_at BIGINT
+    last_used_at BIGINT,
+    auth_method TEXT,
   )`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS provider_id TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS credential TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS usage DOUBLE PRECISION`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS reset_usage_at TEXT`,
-  `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_memory_enabled INTEGER DEFAULT 0`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS user_data_dir TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS last_used_at BIGINT`,
+  `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS auth_method TEXT`,
 
   // NOTE: bảng providers đã bị loại bỏ — metadata lấy từ provider registry.
   // Nếu bảng đã tồn tại trong DB cũ, để nguyên (không drop để tránh mất data lịch sử).

@@ -150,6 +150,11 @@ function getTimeRange(period: string, offset: number): TimeRange {
       endTime = new Date(targetYear, 11, 31, 23, 59, 59).getTime();
       break;
     }
+    case 'all': {
+      startTime = 0; // epoch — lấy tất cả
+      endTime = Date.now();
+      break;
+    }
     case 'month': {
       const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
       startTime = targetMonthDate.getTime();
@@ -175,7 +180,7 @@ function getTimeRange(period: string, offset: number): TimeRange {
 }
 
 export async function getUsageHistory(
-  period: 'day' | 'week' | 'month' | 'year' = 'day',
+  period: 'day' | 'week' | 'month' | 'year' | 'all' = 'day',
   offset: number = 0,
   accountId?: string,
 ) {
@@ -197,6 +202,17 @@ export async function getUsageHistory(
         const lbl = `${targetYear}-${String(m).padStart(2, '0')}`;
         if (offset === 0 && lbl > currentMonthStr) break;
         labels.push(lbl);
+      }
+      break;
+    }
+    case 'all': {
+      // Nhóm theo năm — từ epoch đến nay
+      startTime = 0;
+      endTime = now.getTime();
+      groupBy = '%Y';
+      const firstYear = 2024; // reasonable baseline
+      for (let y = firstYear; y <= now.getFullYear(); y++) {
+        labels.push(String(y));
       }
       break;
     }
@@ -266,7 +282,7 @@ export async function getUsageHistory(
 }
 
 export async function getAccountStatsByPeriod(
-  period: 'day' | 'week' | 'month' | 'year' = 'day',
+  period: 'day' | 'week' | 'month' | 'year' | 'all' = 'day',
   offset: number = 0,
   accountId?: string,
 ) {
@@ -275,7 +291,7 @@ export async function getAccountStatsByPeriod(
 }
 
 export async function getModelStatsByPeriod(
-  period: 'day' | 'week' | 'month' | 'year' = 'day',
+  period: 'day' | 'week' | 'month' | 'year' | 'all' = 'day',
   offset: number = 0,
 ) {
   const { startTime, endTime } = getTimeRange(period, offset);

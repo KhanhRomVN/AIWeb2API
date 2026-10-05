@@ -46,7 +46,6 @@ Lưu trữ thông tin tài khoản của các provider AI.
 - **`credential`** (TEXT, NULL) — Token/cookie/session JSON (NULL cho browser-based accounts)
 - **`usage`** (REAL) — Tỷ lệ usage từ 0.0 đến 100.0 (phần trăm)
 - **`reset_usage_at`** (TEXT) — Thời điểm reset usage (`YYYY-MM-DD` hoặc `YYYY-MM-DD HH:MM`)
-- **`is_memory_enabled`** (INTEGER, DEFAULT 0) — Trạng thái bật/tắt memory (1 = enabled)
 - **`user_data_dir`** (TEXT) — Đường dẫn thư mục profile Chrome cho browser-based provider
 - **`last_used_at`** (INTEGER, NULL) — Timestamp (ms) lần gần nhất account được dùng. NULL nếu chưa từng dùng.
 - **`auth_method`** (TEXT, NULL) — Auth method dùng để tạo account (e.g. `google`, `github`, `apple`, `discord`). NULL nếu không cần phân loại.

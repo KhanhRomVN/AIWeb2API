@@ -52,9 +52,7 @@ import {
   WEBSITE_URL,
   AUTH_METHOD,
   CONNECTION_TYPE,
-  MODELS,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   RESPONSES_URL,
   MODELS_URL,
@@ -76,6 +74,7 @@ import {
   OAUTH_CLIENT_ID,
   OAUTH_SCOPES,
   OAUTH_REFERRER,
+  MODELS,
 } from './grok-build-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -471,7 +470,6 @@ export class GrokBuildCLIProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 

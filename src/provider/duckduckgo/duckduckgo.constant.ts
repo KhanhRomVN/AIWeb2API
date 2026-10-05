@@ -26,7 +26,6 @@ export const WEBSITE_URL = 'https://duck.ai';
 export const AUTH_METHOD = [] as const; // No authentication required
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 // ─── API Configuration ───────────────────────────────────────────────

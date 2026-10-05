@@ -43,7 +43,6 @@ import {
   AUTH_METHOD,
   CONNECTION_TYPE,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   BASE_URL,
   CHAT_BASE_URL,
@@ -83,7 +82,6 @@ export class MistralProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 
@@ -253,14 +251,16 @@ export class MistralProvider implements Provider {
     if (!response.ok) {
       let detail = '';
       try {
-        const body = await response.json() as any;
+        const body = (await response.json()) as any;
         detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
       } catch {
         detail = await response.text().catch(() => '');
       }
       const message = `Mistral API returned ${response.status}${detail ? `: ${detail}` : ''}`;
       if (response.status === 401 || response.status === 403) {
-        const err = new Error(`Session expired or invalid. Please re-login to Mistral. (${message})`);
+        const err = new Error(
+          `Session expired or invalid. Please re-login to Mistral. (${message})`,
+        );
         (err as any).isAuthError = true;
         (err as any).statusCode = response.status;
         throw err;

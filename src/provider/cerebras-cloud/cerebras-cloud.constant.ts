@@ -6,7 +6,8 @@
  *
  * Main exports:
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
- * - AUTH_METHOD / CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - AUTH_METHOD / CONNECTION_TYPE / IS_PAUSABLE
+ * - MODELS              : Danh sách models hỗ trợ
  * - BASE_URL / API_BASE_URL / API_PATHS / HOSTS
  * - RATE_LIMITS / WINDOW_MS
  * - COOKIE_CONFIG / LOGIN_PARTITION_PREFIX
@@ -30,7 +31,6 @@ export const WEBSITE_URL = 'https://cloud.cerebras.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 // ─── API Configuration ───────────────────────────────────────────────

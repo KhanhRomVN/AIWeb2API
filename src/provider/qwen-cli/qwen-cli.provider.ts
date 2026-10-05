@@ -53,9 +53,7 @@ import {
   WEBSITE_URL,
   AUTH_METHOD,
   CONNECTION_TYPE,
-  MODELS,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   QWEN_CLI_EVENTS,
   USER_INFO_URL,
@@ -80,6 +78,7 @@ import {
   TERMINAL_EMULATORS,
   AUTHORIZE_URL_REGEX,
   DEFAULT_EXPIRES_IN_PROVIDER,
+  MODELS,
 } from './qwen-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -101,7 +100,6 @@ export class QwenCoderCLIProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 
@@ -238,8 +236,7 @@ export class QwenCoderCLIProvider implements Provider {
           logger.warn('[QwenCLI] Get Profile response missing email/username');
         }
         return {
-          email:
-            data[API_FIELDS.EMAIL] || data[API_FIELDS.USERNAME] || null,
+          email: data[API_FIELDS.EMAIL] || data[API_FIELDS.USERNAME] || null,
         };
       }
       logger.warn(`[QwenCLI] Get Profile returned status ${response.status}`);
@@ -267,8 +264,12 @@ export class QwenCoderCLIProvider implements Provider {
     if (!response.ok) {
       let detail = '';
       try {
-        const body = await response.json() as any;
-        detail = body?.error_description ?? body?.error ?? body?.message ?? JSON.stringify(body);
+        const body = (await response.json()) as any;
+        detail =
+          body?.error_description ??
+          body?.error ??
+          body?.message ??
+          JSON.stringify(body);
       } catch {
         detail = await response.text().catch(() => '');
       }
@@ -327,8 +328,7 @@ export class QwenCoderCLIProvider implements Provider {
           content: [{ type: CONTENT_BLOCK_TYPES.TEXT, text: m.content }],
         })),
         stream: stream !== false,
-        stream_options:
-          stream !== false ? { include_usage: true } : undefined,
+        stream_options: stream !== false ? { include_usage: true } : undefined,
       };
       return await fetch(url, {
         method: 'POST',
@@ -385,10 +385,14 @@ export class QwenCoderCLIProvider implements Provider {
         try {
           const body = JSON.parse(rawText);
           detail = body?.error?.message ?? body?.message ?? detail;
-        } catch { /* keep rawText slice */ }
+        } catch {
+          /* keep rawText slice */
+        }
         const message = `Qwen CLI API Error ${response.status}: ${detail}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Qwen CLI. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Qwen CLI. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;

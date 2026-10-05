@@ -123,45 +123,86 @@ const PLATFORM_BINARIES: Record<string, Record<string, string>> = {
  * platform + arch + mtime.
  */
 function resolveCycletlsExecutablePath(): string | undefined {
-  let cycletlsPkgDir: string;
-  try {
-    cycletlsPkgDir = path.dirname(require.resolve('cycletls'));
-  } catch {
-    return undefined;
-  }
-
   const binName = PLATFORM_BINARIES[process.platform]?.[os.arch()];
   if (!binName) return undefined;
 
-  const srcPath = path.join(cycletlsPkgDir, binName);
-  if (!fs.existsSync(srcPath)) {
-    logger.warn(`[ClaudeHttpClient] cycletls binary not found: ${srcPath}`);
-    return undefined;
-  }
+  // 1. Kiểm tra bên cạnh file thực thi hoặc trong thư mục resources (khi chạy từ pkg binary)
+  const exeDir = path.dirname(process.execPath);
+  const cwd = process.cwd();
+  const directCandidates = [
+    path.join(exeDir, 'cycletls-index.exe'),
+    path.join(exeDir, binName),
+    path.join(exeDir, 'resources', 'cycletls-index.exe'),
+    path.join(exeDir, 'resources', binName),
+    path.join(cwd, 'cycletls-index.exe'),
+    path.join(cwd, binName),
+    path.join(cwd, 'dist-bin', 'cycletls-index.exe'),
+  ];
 
-  // Path không có khoảng trắng → không cần copy, để cycletls tự resolve.
-  if (!srcPath.includes(' ')) return undefined;
-
-  try {
-    const stat = fs.statSync(srcPath);
-    const cacheDir = path.join(
-      os.tmpdir(),
-      `aiweb2api-cycletls-${process.platform}-${os.arch()}-${stat.mtimeMs}`,
-    );
-    const dstPath = path.join(cacheDir, binName);
-
-    if (!fs.existsSync(dstPath)) {
-      fs.mkdirSync(cacheDir, { recursive: true });
-      fs.copyFileSync(srcPath, dstPath);
-      if (process.platform !== 'win32') {
-        fs.chmodSync(dstPath, 0o755);
-      }
+  for (const candidate of directCandidates) {
+    if (!candidate.includes('snapshot') && fs.existsSync(candidate)) {
+      return candidate;
     }
-    return dstPath;
-  } catch (e) {
-    logger.warn('[ClaudeHttpClient] Failed to copy cycletls binary to tmp:', e);
-    return undefined;
   }
+
+  // 2. Tìm trong cycletls package (khi chạy từ node / source)
+  let cycletlsPkgDir: string | undefined;
+  try {
+    cycletlsPkgDir = path.dirname(require.resolve('cycletls'));
+  } catch {
+    // ignore
+  }
+
+  const srcPath = cycletlsPkgDir ? path.join(cycletlsPkgDir, binName) : undefined;
+  const isSnapshot = srcPath
+    ? srcPath.includes('snapshot') ||
+      process.execPath.includes('snapshot') ||
+      __dirname.includes('snapshot')
+    : false;
+
+  // Nếu file tồn tại trên ổ đĩa thật (không phải virtual snapshot và không có khoảng trắng)
+  if (
+    srcPath &&
+    fs.existsSync(srcPath) &&
+    !isSnapshot &&
+    !srcPath.includes(' ')
+  ) {
+    return srcPath;
+  }
+
+  // 3. Nếu chạy từ virtual snapshot hoặc đường dẫn có khoảng trắng:
+  // Copy / Extract ra os.tmpdir() để Windows CreateProcess có thể spawn được.
+  try {
+    const tmpDir = path.join(os.tmpdir(), 'aiweb2api-cycletls');
+    const dstPath = path.join(tmpDir, binName);
+
+    if (srcPath && fs.existsSync(srcPath)) {
+      const srcBuf = fs.readFileSync(srcPath);
+      let needsWrite = true;
+      if (fs.existsSync(dstPath)) {
+        try {
+          const dstStat = fs.statSync(dstPath);
+          if (dstStat.size === srcBuf.length) {
+            needsWrite = false;
+          }
+        } catch {
+          needsWrite = true;
+        }
+      }
+      if (needsWrite) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+        fs.writeFileSync(dstPath, srcBuf);
+        if (process.platform !== 'win32') {
+          fs.chmodSync(dstPath, 0o755);
+        }
+      }
+      return dstPath;
+    }
+  } catch (e) {
+    logger.warn('[ClaudeHttpClient] Failed to extract cycletls binary to tmp:', e);
+  }
+
+  return undefined;
 }
 
 /**
@@ -187,11 +228,17 @@ async function getClient(): Promise<CycleTLSClient> {
     }
 
     const executablePath = resolveCycletlsExecutablePath();
+    if (!executablePath || !fs.existsSync(executablePath)) {
+      throw new Error(
+        `cycletls binary not found. Claude provider requires cycletls-index.exe next to the executable.`,
+      );
+    }
+
     const factory = initCycleTLS.default || initCycleTLS;
     const client = (await factory({
       timeout: 120_000,
       autoExit: false,
-      ...(executablePath ? { executablePath } : {}),
+      executablePath,
     })) as CycleTLSClient;
     sharedClient = client;
     return client;

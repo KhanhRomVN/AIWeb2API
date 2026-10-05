@@ -12,7 +12,6 @@
  * - getAccounts()                              : Lấy danh sách accounts với phân trang
  * - createAccount()                            : Thêm account mới
  * - updateAccount()                            : Cập nhật credential của account
- * - updateMemoryState()                        : Cập nhật memory state của account
  * - removeAccount()                            : Xóa account
  * - importAccounts()                           : Import hàng loạt accounts
  * - getProviderConfig()                        : Lấy provider config theo ID
@@ -36,7 +35,6 @@ import {
   updateAccountCredential,
   updateAccountCredentialAndRefresh,
   updateAccountFields,
-  updateAccountMemory as updateAccountMemoryRepo,
   updateAccountUsage,
   updateAccountUserDataDir as updateAccountUserDataDirRepo,
   deleteAccount as deleteAccountRow,
@@ -284,16 +282,6 @@ export function updateAccountUserDataDir(
   userDataDir: string,
 ): void {
   updateAccountUserDataDirRepo(accountId, userDataDir);
-}
-
-/**
- * Cập nhật memory state của account
- */
-export function updateMemoryState(
-  accountId: string,
-  isMemoryEnabled: boolean,
-): void {
-  updateAccountMemoryRepo(accountId, isMemoryEnabled);
 }
 
 /**

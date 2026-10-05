@@ -30,7 +30,6 @@ import {
   AUTH_METHOD,
   CONNECTION_TYPE,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   STREAM_URL,
   SESSION_URL,
@@ -81,8 +80,6 @@ export class FreebuffProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
-    // models: không hardcode — lấy động qua getModels()
     can_regenerate: CAN_REGENERATE,
   };
 
@@ -353,7 +350,14 @@ export class FreebuffProvider implements Provider {
   async uploadFile(
     credential: string,
     file: Express.Multer.File,
-  ): Promise<{ id: string; url?: string; storageId: string; mediaType: string; name: string; descriptionStorageId?: string }> {
+  ): Promise<{
+    id: string;
+    url?: string;
+    storageId: string;
+    mediaType: string;
+    name: string;
+    descriptionStorageId?: string;
+  }> {
     const { cookies } = this.parseCredential(credential);
     const mimeType = file.mimetype || 'image/png';
     const fileName = file.originalname || 'image.png';

@@ -53,7 +53,6 @@ import {
   AUTH_METHOD,
   CONNECTION_TYPE,
   IS_PAUSABLE,
-  IS_MEMORY,
   CAN_REGENERATE,
   BASE_URL,
   ZAI_EVENTS,
@@ -87,7 +86,6 @@ export class ZAIProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
-    is_memory: IS_MEMORY,
     can_regenerate: CAN_REGENERATE,
   };
 
@@ -331,7 +329,9 @@ export class ZAIProvider implements Provider {
           const errText = await createResponse.text();
           const message = `Failed to create chat session: ${createResponse.status} - ${errText}`;
           if (createResponse.status === 401 || createResponse.status === 403) {
-            const err = new Error(`Session expired or invalid. Please re-login to Z.AI. (${message})`);
+            const err = new Error(
+              `Session expired or invalid. Please re-login to Z.AI. (${message})`,
+            );
             (err as any).isAuthError = true;
             (err as any).statusCode = createResponse.status;
             throw err;
@@ -434,7 +434,9 @@ export class ZAIProvider implements Provider {
         const errorText = await response.text();
         const message = `Z.AI API Error ${response.status}: ${errorText}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Z.AI. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Z.AI. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;

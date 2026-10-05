@@ -6,7 +6,8 @@
  *
  * Main exports:
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
- * - AUTH_METHOD / CLAUDE_AUTH_METHODS / CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - AUTH_METHOD / CLAUDE_AUTH_METHODS / CONNECTION_TYPE / IS_PAUSABLE
+ * - MODELS              : Danh sách models hỗ trợ
  * - FALLBACK_MODELS        : Danh sách models fallback (dùng khi bootstrap fail)
  * - BASE_URL               : Base URL của Claude AI
  * - CLAUDE_EVENTS          : Event names dùng trong proxy handler
@@ -39,7 +40,6 @@ export const WEBSITE_URL = 'https://claude.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = true;
 
 /**

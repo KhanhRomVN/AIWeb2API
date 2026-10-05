@@ -8,7 +8,7 @@
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD         : Danh sách auth method (legacy export)
  * - ZAI_AUTH_METHODS    : Google / Basic auth literals
- * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / IS_PAUSABLE
  * - MODELS              : Danh sách models hỗ trợ
  * - BASE_URL            : Base URL của Z.AI API
  * - API_PATHS           : Tất cả API endpoint paths
@@ -37,7 +37,6 @@ export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = false;
 export const CAN_REGENERATE = false;
 
 export const MODELS = [

@@ -8,7 +8,7 @@
  * - PROVIDER_ID / PROVIDER_NAME / IS_ENABLED / WEBSITE_URL
  * - AUTH_METHOD         : Danh sách auth method (legacy export)
  * - QWEN_AUTH_METHODS   : Basic / Google auth literals
- * - CONNECTION_TYPE / IS_PAUSABLE / IS_MEMORY
+ * - CONNECTION_TYPE / IS_PAUSABLE
  * - MODELS              : Danh sách models hỗ trợ
  * - BASE_URL            : Base URL của Qwen API
  * - API_PATHS           : Tất cả API endpoint paths
@@ -43,7 +43,6 @@ export const WEBSITE_URL = 'https://modelscope.cn/';
 export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const IS_MEMORY = true;
 export const CAN_REGENERATE = true;
 
 // Note: Models are fetched dynamically from API /api/v2/models/

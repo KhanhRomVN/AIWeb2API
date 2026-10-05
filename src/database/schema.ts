@@ -22,7 +22,6 @@ export interface AccountsTable {
   credential: string | null;
   usage: number | null;
   reset_usage_at: string | null;
-  is_memory_enabled: number | null;
   user_data_dir: string | null;
   last_used_at: number | null;
   auth_method: string | null;
