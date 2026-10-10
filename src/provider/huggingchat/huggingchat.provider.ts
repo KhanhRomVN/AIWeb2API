@@ -20,7 +20,6 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
-import { Router } from 'express';
 import * as crypto from 'crypto';
 import fetch from 'node-fetch';
 
@@ -34,7 +33,7 @@ import { proxyEvents } from '../../services/proxy.service';
 // ── Utils ──
 import { HttpClient } from '../../utils/http-client';
 import { createLogger } from '../../utils/logger';
-import { countTokens, countMessagesTokens } from '../../utils/tokenizer';
+import { countMessagesTokens } from '../../utils/tokenizer';
 
 // ── HuggingChat Constants ──
 import {
@@ -52,14 +51,11 @@ import {
   API_FIELDS,
   API_PATHS,
   CONTENT_TYPES,
-  ESCAPE_SEQUENCES,
   FORM_CONFIG,
   HTTP_HEADER_NAMES,
   HTTP_HEADERS,
   LOGIN_CONFIG,
   PAYLOAD_DEFAULTS,
-  STREAM_TYPES,
-  THINK_TAGS,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
 } from './huggingchat.constant';
@@ -72,7 +68,6 @@ import {
   HuggingChatModelEntry,
   HuggingChatModelOutput,
   HuggingChatModelsResponse,
-  HuggingChatSSEChunk,
   HuggingChatStreamPayload,
   HuggingChatUserInfo,
   HuggingChatUserResponse,
@@ -260,9 +255,7 @@ export class HuggingChatProvider implements Provider {
       const lastMessage = messages[messages.length - 1];
       const boundary =
         FORM_CONFIG.BOUNDARY_PREFIX +
-        crypto
-          .randomBytes(FORM_CONFIG.BOUNDARY_RANDOM_BYTES)
-          .toString('hex');
+        crypto.randomBytes(FORM_CONFIG.BOUNDARY_RANDOM_BYTES).toString('hex');
 
       const payload: HuggingChatStreamPayload = {
         inputs: lastMessage.content,
@@ -295,14 +288,17 @@ export class HuggingChatProvider implements Provider {
       if (!response.ok) {
         let detail = '';
         try {
-          const body = await response.json() as any;
-          detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+          const body = (await response.json()) as any;
+          detail =
+            body?.error?.message ?? body?.message ?? JSON.stringify(body);
         } catch {
           detail = await response.text().catch(() => '');
         }
         const message = `HuggingChat API returned ${response.status}${detail ? `: ${detail}` : ''}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to HuggingChat. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to HuggingChat. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;
@@ -351,12 +347,14 @@ export class HuggingChatProvider implements Provider {
     if (!res.ok) {
       let detail = '';
       try {
-        const body = await res.json() as any;
+        const body = (await res.json()) as any;
         detail = body?.error?.message || body?.message || JSON.stringify(body);
       } catch {
         detail = await res.text().catch(() => '');
       }
-      throw new Error(`HuggingChat API returned ${res.status}${detail ? `: ${detail}` : ''}`);
+      throw new Error(
+        `HuggingChat API returned ${res.status}${detail ? `: ${detail}` : ''}`,
+      );
     }
 
     const data = (await res.json()) as

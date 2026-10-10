@@ -2,125 +2,48 @@
  * ------------------------------------------------------------------
  * Gemini CLI Proxy Handler
  * ------------------------------------------------------------------
- * Proxy handler để capture tokens, project ID, và user info từ Gemini CLI.
- * Lắng nghe OAuth token response, project ID từ loadCodeAssist API,
- * và user info từ Google userinfo API.
+ * Bắt authorization code từ Google OAuth2 redirect đến localhost.
  *
- * Main features:
- * - onRequest()       : Capture cookies chứa token
- * - onResponseBody()  : Capture access token, project ID, email
+ * Khi browser navigate về http://localhost:11451/?code=AUTH_CODE&state=...,
+ * request đó đi qua proxy → onRequest emit event với code.
+ *
+ * Event: GEMINI_CLI_EVENTS.AUTH_CODE  →  { code, state }
  * ------------------------------------------------------------------
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── Services ──
-import { ProxyHandler } from '../../services/proxy.service';
-import { proxyEvents } from '../../services/proxy.service';
-
-// ── Utils ──
+import { ProxyHandler, proxyEvents } from '../../services/proxy.service';
 import { createLogger } from '../../utils/logger';
-
-// ── Constants ──
-import {
-  API_FIELDS,
-  API_PATHS,
-  COOKIE_NAMES,
-  GEMINI_CLI_EVENTS,
-  HOSTS,
-} from './gemini-cli.constant';
-
-// ── Types ──
-import {
-  GeminiLoadCodeAssistResponse,
-  GeminiTokenResponse,
-  GeminiUserInfoResponse,
-} from './gemini-cli.types';
+import { GEMINI_CLI_EVENTS, OAUTH_CALLBACK_HOST } from './gemini-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('GeminiCLIProvider');
+const logger = createLogger('GeminiCliProxy');
 
 // ─── Proxy Handler ────────────────────────────────────────────────────
 
 export const proxyHandler: ProxyHandler = {
   onRequest: (ctx: any, callback: () => void) => {
-    const host = ctx.clientToProxyRequest.headers.host;
-    const url = ctx.clientToProxyRequest.url;
+    try {
+      const host: string = ctx.clientToProxyRequest.headers.host ?? '';
+      const rawUrl: string = ctx.clientToProxyRequest.url ?? '';
 
-    if (
-      host &&
-      (host.includes(HOSTS.GOOGLE_ACCOUNTS) || host.includes(HOSTS.CLOUDCODE_PA))
-    ) {
-      const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-      if (
-        reqCookies &&
-        (reqCookies.includes(COOKIE_NAMES.ACCESS_TOKEN) ||
-          reqCookies.includes(COOKIE_NAMES.REFRESH_TOKEN))
-      ) {
-        proxyEvents.emit(GEMINI_CLI_EVENTS.TOKENS, reqCookies);
+      // Bắt redirect về localhost callback (port 11451)
+      if (host.startsWith(OAUTH_CALLBACK_HOST)) {
+        // rawUrl = /?code=4%2F0A...&scope=...&state=...
+        const urlObj = new URL(rawUrl, `http://${host}`);
+        const code = urlObj.searchParams.get('code');
+        const state = urlObj.searchParams.get('state');
+
+        if (code) {
+          proxyEvents.emit(GEMINI_CLI_EVENTS.AUTH_CODE, {
+            code,
+            state: state ?? '',
+          });
+        }
       }
+    } catch (e) {
+      // ignore — không được throw từ proxy handler
     }
     callback();
-  },
-
-  onResponseBody: (ctx: any, body: string) => {
-    const host = ctx.clientToProxyRequest.headers.host;
-    const url = ctx.clientToProxyRequest.url;
-
-    if (
-      host &&
-      host.includes(HOSTS.OAUTH2) &&
-      url.includes(API_PATHS.OAUTH_TOKEN)
-    ) {
-      try {
-        const json = JSON.parse(body) as GeminiTokenResponse;
-        if (json.access_token)
-          proxyEvents.emit(GEMINI_CLI_EVENTS.TOKENS, JSON.stringify(json));
-      } catch (e) {
-        logger.error('[Proxy] Failed to parse Gemini CLI token response:', e);
-      }
-    }
-
-    if (
-      host &&
-      host.includes(HOSTS.CLOUDCODE_PA) &&
-      url.includes(API_PATHS.LOAD_CODE_ASSIST)
-    ) {
-      try {
-        const json = JSON.parse(body) as GeminiLoadCodeAssistResponse;
-        const rawProject = json[API_FIELDS.PROJECT_ID];
-        if (rawProject) {
-          const projectId =
-            typeof rawProject === 'string'
-              ? rawProject
-              : rawProject[API_FIELDS.PROJECT_ID_NESTED] || '';
-          proxyEvents.emit(GEMINI_CLI_EVENTS.USER_INFO, { projectId });
-        }
-      } catch (e) {
-        logger.error(
-          '[Proxy] Failed to parse Gemini CLI loadCodeAssist response:',
-          e,
-        );
-      }
-    }
-
-    if (
-      host &&
-      host.includes(HOSTS.WWW_GOOGLEAPIS) &&
-      url.includes(API_PATHS.USERINFO)
-    ) {
-      try {
-        const json = JSON.parse(body) as GeminiUserInfoResponse;
-        if (json.email)
-          proxyEvents.emit(GEMINI_CLI_EVENTS.USER_INFO, {
-            email: json.email,
-            name: json.name,
-          });
-      } catch (e) {
-        logger.error(
-          '[Proxy] Failed to parse Gemini CLI userinfo response:',
-          e,
-        );
-      }
-    }
   },
 };

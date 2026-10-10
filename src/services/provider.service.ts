@@ -81,6 +81,11 @@ export interface Provider {
    * account không còn ở chat view). Detect tự động từ deleteAllSessions().
    */
   supports_session_cleanup?: boolean;
+  /**
+   * Loại login flow. "device_code" → không cần CDP/browser profile,
+   * user authorize trên bất kỳ browser nào qua verification_url + user_code.
+   */
+  login_flow?: 'device_code' | 'browser' | 'api_key';
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────

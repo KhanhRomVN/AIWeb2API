@@ -50,7 +50,6 @@ export interface QwenChatPayload {
   model: string;
   messages: QwenChatMessage[];
   stream: boolean;
-  stream_options?: { include_usage: boolean };
 }
 
 // ─── SSE ────────────────────────────────────────────────────────────────

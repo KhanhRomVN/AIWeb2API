@@ -30,9 +30,6 @@ import {
 // ── Types ──
 import { HuggingChatUserResponse } from './huggingchat.types';
 
-// ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('HuggingChatProvider');
-
 // ─── Proxy Handler ────────────────────────────────────────────────────
 
 export const proxyHandler: ProxyHandler = {

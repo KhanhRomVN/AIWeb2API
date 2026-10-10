@@ -77,7 +77,7 @@ const MIGRATION_STATEMENTS: string[] = [
     reset_usage_at TEXT,
     user_data_dir TEXT,
     last_used_at BIGINT,
-    auth_method TEXT,
+    auth_method TEXT
   )`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS provider_id TEXT`,
   `ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email TEXT`,

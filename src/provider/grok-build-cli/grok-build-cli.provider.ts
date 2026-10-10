@@ -471,6 +471,8 @@ export class GrokBuildCLIProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    /** Device code flow: không cần CDP/proxy browser, user authorize trực tiếp trên browser thường */
+    login_flow: 'device_code' as const,
   };
 
   // ─── Profile ─────────────────────────────────────────────────────────

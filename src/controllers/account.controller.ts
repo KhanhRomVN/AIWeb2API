@@ -52,9 +52,7 @@ import {
   releasePresence,
   countOtherWindows,
 } from '../services/presence.service';
-import {
-  computeLiveUsageFields,
-} from '../middleware/request-limit.middleware';
+import { computeLiveUsageFields } from '../middleware/request-limit.middleware';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -219,8 +217,6 @@ export const overrideAccount = async (
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
-
-
 
 // POST /v1/accounts
 export const addAccount = async (
@@ -761,10 +757,6 @@ export const deleteAllAccountSessions = async (
       });
       return;
     }
-
-    logger.info(
-      `[SessionCleanup] All sessions deleted — account=${id} provider=${account.provider_id}`,
-    );
 
     res.status(200).json({
       success: true,

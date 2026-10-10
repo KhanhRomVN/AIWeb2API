@@ -13,10 +13,12 @@
 // ── Providers ──
 import cerebrasCloud from './cerebras-cloud';
 import claude from './claude';
-import codexCli from './codex-cli';
+import cline from './cline';
+import codex from './codex';
 import deepseek from './deepseek';
 import duckduckgo from './duckduckgo';
 import freebuff from './freebuff';
+import freebuffCli from './freebuff-cli';
 import gemini from './gemini';
 import geminiCli from './gemini-cli';
 import grokBuildCli from './grok-build-cli';
@@ -27,6 +29,7 @@ import kiro from './kiro';
 import mistral from './mistral';
 import qwen from './qwen';
 import qwenCli from './qwen-cli';
+import workbuddy from './workbuddy';
 import zai from './zai';
 import zaiBrowser from './zai-browser';
 
@@ -39,10 +42,12 @@ import zaiBrowser from './zai-browser';
 export const ALL_PROVIDERS = [
   cerebrasCloud,
   claude,
-  codexCli,
+  cline,
+  codex,
   deepseek,
   duckduckgo,
   freebuff,
+  freebuffCli,
   gemini,
   geminiCli,
   grokBuildCli,
@@ -55,4 +60,5 @@ export const ALL_PROVIDERS = [
   qwenCli,
   zai,
   zaiBrowser,
+  workbuddy,
 ] as const;

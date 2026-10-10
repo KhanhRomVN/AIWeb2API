@@ -67,6 +67,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           accountResponse.verification_url = (result as any).verification_url;
           accountResponse.expires_in = (result as any).expires_in;
           accountResponse.poll_interval = (result as any).poll_interval;
+          // Truyền lại profile dir để frontend mở browser đúng profile (plain, không CDP)
+          if (profile.dir) {
+            accountResponse.profile_user_data_dir = profile.dir;
+          }
         }
       }
 

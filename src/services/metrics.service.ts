@@ -31,6 +31,7 @@ import { upsertModelStats, updateModelSuccessRate } from '../repositories/model-
 // ── Services ──
 import { invalidateProviderCache } from './provider.service';
 import { accountRefreshService } from './account.service';
+import { providerRegistry } from '../provider/registry';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -125,9 +126,12 @@ export function recordChatMetrics(
   );
 
   if (accountId) {
-    accountRefreshService.refreshUsage(accountId).catch((err: any) => {
-      logger.warn(`Failed to refresh usage for account ${accountId}: ${err.message}`);
-    });
+    const provider = providerRegistry.getProvider(providerId);
+    if (provider?.getUsage) {
+      accountRefreshService.refreshUsage(accountId).catch((err: any) => {
+        logger.warn(`Failed to refresh usage for account ${accountId}: ${err.message}`);
+      });
+    }
   }
 }
 

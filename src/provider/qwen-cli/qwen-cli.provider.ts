@@ -328,7 +328,6 @@ export class QwenCoderCLIProvider implements Provider {
           content: [{ type: CONTENT_BLOCK_TYPES.TEXT, text: m.content }],
         })),
         stream: stream !== false,
-        stream_options: stream !== false ? { include_usage: true } : undefined,
       };
       return await fetch(url, {
         method: 'POST',

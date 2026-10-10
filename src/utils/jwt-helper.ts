@@ -3,12 +3,12 @@
  * JWT Helper Utility
  * ------------------------------------------------------------------
  * Shared utility for JWT token validation and refresh management.
- * 
+ *
  * Features:
  * - JWT expiry checking with configurable threshold
  * - Token refresh state management (prevents duplicate refresh)
  * - Standardized across all providers
- * 
+ *
  * Best practices:
  * - Default threshold: 5 minutes (OAuth 2.0 standard)
  * - Thread-safe refresh state tracking
@@ -104,18 +104,6 @@ export function isJwtExpiringSoon(
   if (exp === null) return false;
   const now = Date.now() / 1000;
   return now >= exp - thresholdSec;
-}
-
-/**
- * Get remaining time until JWT expiry
- * @param jwt - JWT token string
- * @returns Seconds until expiry, or null if invalid token
- */
-export function getJwtTimeToExpiry(jwt: string): number | null {
-  const exp = getJwtExpiry(jwt);
-  if (exp === null) return null;
-  const now = Date.now() / 1000;
-  return Math.max(0, exp - now);
 }
 
 // ─── Refresh Management ─────────────────────────────────────────────────
