@@ -47,21 +47,22 @@ export const CAN_REGENERATE = true;
  * dọn sạch lịch sử phía server.
  * Provider khác muốn hỗ trợ tính năng này chỉ cần: set TRUE + implement deleteAllSessions().
  */
-export const SUPPORTS_SESSION_CLEANUP = true;
+export const SUPPORTS_SESSION_CLEANUP = false;
 
 /**
  * Giới hạn request/account. undefined = không giới hạn.
- * Để tắt: comment dòng này hoặc set = undefined.
+ * Để tắt: set = undefined.
  */
-export const REQUEST_LIMIT = 100;
+export const REQUEST_LIMIT: number | undefined = undefined;
 
 /**
  * Chu kỳ reset cho REQUEST_LIMIT.
  * 'day' = reset lúc 00:00 UTC mỗi ngày.
  * 'week' = reset đầu tuần (thứ Hai 00:00 UTC).
  * 'month' = reset ngày 1 hàng tháng 00:00 UTC.
+ * undefined = tắt tính năng giới hạn.
  */
-export const REQUEST_LIMIT_PERIOD: 'day' | 'week' | 'month' = 'day';
+export const REQUEST_LIMIT_PERIOD: 'day' | 'week' | 'month' | undefined = undefined;
 
 /**
  * Khung giờ bị chặn (UTC). Mỗi phần tử [startTime, endTime) exclusive.
@@ -75,10 +76,19 @@ export const BLOCKED_TIME_RANGES: Array<{
   startTime: number;
   endTime: number;
 }> = [
-  { startTime: 3, endTime: 4 },
-  { startTime: 19, endTime: 21 },
-  // { startTime: 1, endTime: 24 },
+  // { startTime: 3, endTime: 4 },
+  // { startTime: 19, endTime: 21 },
 ];
+
+/**
+ * Thời gian chờ tối thiểu (ms) giữa các request liên tiếp.
+ * Tính từ lúc nhận xong response đến khi cho phép gửi request tiếp theo.
+ * '0' hoặc xóa biến này = tắt tính năng, không cooldown.
+ * Dùng để tránh bị rate-limit do gửi request quá nhanh.
+ *
+ * Ví dụ: '5000' = chờ 5 giây sau khi nhận xong response trước.
+ */
+export const REQUEST_COOLDOWN_MS = '2000';
 
 export const MODELS = [
   {
@@ -250,6 +260,7 @@ export const DEEPSEEK_ERROR_CODES = {
   AUTHORIZATION_FAILED: 40003,
 } as const;
 export const HISTORY_MESSAGES_COUNT = 20;
+
 export const SUCCESS_CODE = 0;
 export const MASKED_EMAIL_INDICATOR = '***';
 export const MASKED_EMAIL_CHAR = '*';

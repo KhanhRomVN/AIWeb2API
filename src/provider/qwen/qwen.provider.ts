@@ -101,6 +101,7 @@ import {
   CHAT_HISTORY_QUERY,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
+  REQUEST_COOLDOWN_MS,
 } from './qwen.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -173,6 +174,12 @@ export class QwenProvider implements Provider {
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
+    request_cooldown_ms: (() => {
+      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
+      if (raw === undefined || raw === null) return 0;
+      const n = Number(raw);
+      return isNaN(n) || n === 0 ? 0 : n;
+    })(),
   };
 
   // ─── Token Helpers ─────────────────────────────────────────────────
@@ -873,14 +880,24 @@ export class QwenProvider implements Provider {
                   }
                 }
                 return {
-                  type: item.type || (fileInfoCache.get(item.file_id)?.type ?? 'image'),
+                  type:
+                    item.type ||
+                    (fileInfoCache.get(item.file_id)?.type ?? 'image'),
                   id: item.file_id,
                   url,
-                  name: item.name || (fileInfoCache.get(item.file_id)?.name ?? 'file'),
+                  name:
+                    item.name ||
+                    (fileInfoCache.get(item.file_id)?.name ?? 'file'),
                   status: 'uploaded',
-                  file_type: item.file_type || (fileInfoCache.get(item.file_id)?.file_type ?? 'image/png'),
-                  showType: item.showType || (fileInfoCache.get(item.file_id)?.showType ?? 'image'),
-                  file_class: item.file_class || (fileInfoCache.get(item.file_id)?.file_class ?? 'vision'),
+                  file_type:
+                    item.file_type ||
+                    (fileInfoCache.get(item.file_id)?.file_type ?? 'image/png'),
+                  showType:
+                    item.showType ||
+                    (fileInfoCache.get(item.file_id)?.showType ?? 'image'),
+                  file_class:
+                    item.file_class ||
+                    (fileInfoCache.get(item.file_id)?.file_class ?? 'vision'),
                 };
               },
             ),

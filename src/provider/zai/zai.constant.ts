@@ -190,6 +190,10 @@ export const SSE_PROTOCOL = {
   DONE: '[DONE]',
 } as const;
 
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
 // ─── Rate Limiting ───────────────────────────────────────────────────
 
 export const RATE_LIMIT = {

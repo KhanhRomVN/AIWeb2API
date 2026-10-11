@@ -220,6 +220,10 @@ export const WORKOS_AUTH_URL =
 export const CLINE_REGISTER_URL = `${BASE_URL}/auth/register`;
 export const WORKOS_CLIENT_ID = 'client_01K3A541FN8TA3EPPHTD2325AR';
 
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
 // ─── Token / Account Management ─────────────────────────────────────
 
 /**

@@ -172,7 +172,11 @@ export const UNSUPPORTED_PARAMS = [
   'reasoning_effort',
 ] as const;
 
-// ─── Misc ────────────────────────────────────────────────────────────
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
+// ─── Misc ───────────────────────────────────────────────────────────
 
 export const MAX_TOOLS = 200;
 export const REFRESH_MAX_ATTEMPTS = 3;

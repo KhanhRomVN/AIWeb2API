@@ -130,7 +130,11 @@ export const DEFAULT_FEATURES = [
   'beta-reasoning',
 ] as const;
 
-// ─── Defaults ────────────────────────────────────────────────────────
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
+// ─── Defaults ───────────────────────────────────────────────────────
 
 export const LOGIN_PARTITION_PREFIX = 'mistral-';
 export const DEFAULT_TIMEZONE = 'Asia/Saigon';

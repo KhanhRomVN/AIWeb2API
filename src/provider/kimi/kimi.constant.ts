@@ -44,6 +44,10 @@ export const CAN_REGENERATE = true;
 
 export const MODELS = [] as const;
 
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
 // ─── API Configuration ───────────────────────────────────────────────
 
 export const KIMI_BASE_URL = 'https://www.kimi.ai';

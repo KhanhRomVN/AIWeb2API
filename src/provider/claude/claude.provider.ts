@@ -86,8 +86,8 @@ import {
   THINKING_MODES,
   WEB_SEARCH_TOOL,
   ANTI_SYSTEM_PROMPT_INJECTION,
+  REQUEST_COOLDOWN_MS,
 } from './claude.constant';
-
 /**
  * Tách `effort` khỏi model id dạng `<base>-<effort>`.
  * Nếu suffix không khớp EFFORT_LEVELS → coi như không có effort.
@@ -160,6 +160,13 @@ export class ClaudeProvider implements Provider {
     color: PROVIDER_COLOR,
     anti_system_prompt_injection: ANTI_SYSTEM_PROMPT_INJECTION,
     can_regenerate: CAN_REGENERATE,
+    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
+    request_cooldown_ms: (() => {
+      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
+      if (raw === undefined || raw === null) return 0;
+      const n = Number(raw);
+      return isNaN(n) || n === 0 ? 0 : n;
+    })(),
   };
 
   // ─── Credential Parsing ────────────────────────────────────────────
@@ -589,7 +596,11 @@ export class ClaudeProvider implements Provider {
           }
           // Nhánh 2: đã upload trước qua /upload endpoint → có file_id + conversation_id
           // Upload service normalize file_uuid → file_id, và trả thêm conversation_id.
-          else if (typeof ref === 'object' && ref !== null && 'file_id' in asAny) {
+          else if (
+            typeof ref === 'object' &&
+            ref !== null &&
+            'file_id' in asAny
+          ) {
             fileUuids.push(asAny.file_id as string);
             // Dùng conversation_id từ upload để đảm bảo file và message cùng conversation
             if (asAny.conversation_id && !conversationId) {
@@ -597,7 +608,11 @@ export class ClaudeProvider implements Provider {
             }
           }
           // Nhánh 3: object có file_uuid trực tiếp (legacy format)
-          else if (typeof ref === 'object' && ref !== null && 'file_uuid' in ref) {
+          else if (
+            typeof ref === 'object' &&
+            ref !== null &&
+            'file_uuid' in ref
+          ) {
             fileUuids.push((ref as { file_uuid: string }).file_uuid);
           }
           // Nhánh 4: string thuần

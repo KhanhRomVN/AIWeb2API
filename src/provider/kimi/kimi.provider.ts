@@ -93,6 +93,7 @@ import {
   PROVIDER_COLOR,
   FILE_PROCESS_STATUS,
   MODELS,
+  REQUEST_COOLDOWN_MS,
 } from './kimi.constant';
 import { parseKimiSSE } from './kimi.sse-parser';
 import { kimiProxyHandler } from './kimi.proxy-handler';
@@ -120,6 +121,13 @@ export class KimiProvider implements Provider {
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
+    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
+    request_cooldown_ms: (() => {
+      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
+      if (raw === undefined || raw === null) return 0;
+      const n = Number(raw);
+      return isNaN(n) || n === 0 ? 0 : n;
+    })(),
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

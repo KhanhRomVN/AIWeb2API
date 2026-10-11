@@ -75,6 +75,7 @@ import {
   OAUTH_SCOPES,
   OAUTH_REFERRER,
   MODELS,
+  REQUEST_COOLDOWN_MS,
 } from './grok-build-cli.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -473,6 +474,13 @@ export class GrokBuildCLIProvider implements Provider {
     can_regenerate: CAN_REGENERATE,
     /** Device code flow: không cần CDP/proxy browser, user authorize trực tiếp trên browser thường */
     login_flow: 'device_code' as const,
+    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
+    request_cooldown_ms: (() => {
+      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
+      if (raw === undefined || raw === null) return 0;
+      const n = Number(raw);
+      return isNaN(n) || n === 0 ? 0 : n;
+    })(),
   };
 
   // ─── Profile ─────────────────────────────────────────────────────────

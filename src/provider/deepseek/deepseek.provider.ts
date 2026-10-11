@@ -95,6 +95,7 @@ import {
   DEEPSEEK_ERROR_CODES,
   MODELS,
   SUPPORTS_SESSION_CLEANUP,
+  REQUEST_COOLDOWN_MS,
 } from './deepseek.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -135,6 +136,12 @@ export class DeepSeekProvider implements Provider {
     can_regenerate: CAN_REGENERATE,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
+    request_cooldown_ms: (() => {
+      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
+      if (raw === undefined || raw === null) return 0;
+      const n = Number(raw);
+      return isNaN(n) || n === 0 ? 0 : n;
+    })(),
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

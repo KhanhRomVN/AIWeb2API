@@ -33,7 +33,8 @@
 
 export const PROVIDER_ID = 'claude';
 export const PROVIDER_NAME = 'Claude';
-export const PROVIDER_DESCRIPTION = 'Advanced AI assistant from Anthropic with strong reasoning';
+export const PROVIDER_DESCRIPTION =
+  'Advanced AI assistant from Anthropic with strong reasoning';
 export const PROVIDER_COLOR = '#CC785C';
 export const IS_ENABLED = true;
 export const WEBSITE_URL = 'https://claude.ai/';
@@ -49,7 +50,22 @@ export const CAN_REGENERATE = true;
  * system prompt do user/Zen gửi có thể bị override hoặc conflict với
  * system prompt nội bộ của Claude, nên cần thận trọng khi combine prompt.
  */
-export const ANTI_SYSTEM_PROMPT_INJECTION = true;
+/**
+ * Flag chống injection system prompt.
+ * Set `true` để kích hoạt cơ chế đặc biệt xử lý system prompt của Claude.
+ * Set `false` để tắt (hành vi mặc định giống các provider khác).
+ */
+export const ANTI_SYSTEM_PROMPT_INJECTION = false;
+
+/**
+ * Thời gian chờ tối thiểu (ms) giữa các request liên tiếp.
+ * Tính từ lúc nhận xong response đến khi cho phép gửi request tiếp theo.
+ * '0' hoặc xóa biến này = tắt tính năng, không cooldown.
+ * Dùng để tránh bị rate-limit do gửi request quá nhanh.
+ *
+ * Ví dụ: '5000' = chờ 5 giây sau khi nhận xong response trước.
+ */
+export const REQUEST_COOLDOWN_MS = '2000';
 
 // NOTE: Không có FALLBACK_MODELS. getModels() phải throw error khi fail,
 // không được trả về danh sách giả. Xem NO_FALLBACK_MODELS.md ở thư mục provider.
@@ -190,7 +206,8 @@ export const HTTP_HEADER_NAMES = {
  * Dùng chung cho mọi request tới claude.ai để qua Cloudflare.
  */
 export const CHROME_FINGERPRINT_HEADERS = {
-  SEC_CH_UA: '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+  SEC_CH_UA:
+    '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
   SEC_CH_UA_MOBILE: '?0',
   SEC_CH_UA_PLATFORM: '"Linux"',
   ACCEPT_LANGUAGE: 'en-US,en;q=0.9',
@@ -286,13 +303,7 @@ export const DEFAULT_CHAT_MEMORY_MODE = 'enabled';
  * Lưu ý: `xhigh` hiển thị trên UI là "Extra" — dễ nhầm với chuỗi "extra".
  * `ultracode` chỉ xuất hiện ở surface `code`/`cc`/`ccr`/`ccd`, không có ở `chat`.
  */
-export const EFFORT_LEVELS = [
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const;
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 /** Surface dùng cho chat completion thông thường trong `model_selector_config[]`. */
 export const MODEL_SELECTOR_SURFACE_CHAT = 'chat';

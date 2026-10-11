@@ -57,6 +57,7 @@ import {
   BASE_URL,
   ZAI_EVENTS,
   DEFAULT_USER_AGENT,
+  REQUEST_COOLDOWN_MS,
 } from './zai.constant';
 import {
   getAuthDataFromCredential,
@@ -87,6 +88,13 @@ export class ZAIProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
+    request_cooldown_ms: (() => {
+      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
+      if (raw === undefined || raw === null) return 0;
+      const n = Number(raw);
+      return isNaN(n) || n === 0 ? 0 : n;
+    })(),
   };
 
   // ─── User-Agent Rotation ───────────────────────────────────────────

@@ -307,6 +307,10 @@ export const GEMINI_CLI_EVENTS = {
  */
 export const TOKEN_REFRESH_BUFFER_SECONDS = 300;
 
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
 // ─── Retry Configuration ─────────────────────────────────────────────
 
 export const RETRY_CONFIG = {

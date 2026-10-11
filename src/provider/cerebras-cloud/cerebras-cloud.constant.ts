@@ -48,6 +48,10 @@ export const HOSTS = {
   CEREBRAS_CLOUD: 'cloud.cerebras.ai',
 } as const;
 
+// ─── Cooldown / Rate Limiting ────────────────────────────────────────
+
+export const REQUEST_COOLDOWN_MS = '2000';
+
 // ─── Rate Limits ─────────────────────────────────────────────────────
 
 export const RATE_LIMITS = {

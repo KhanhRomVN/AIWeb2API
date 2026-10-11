@@ -45,6 +45,16 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const CAN_REGENERATE = true;
 
+/**
+ * Thời gian chờ tối thiểu (ms) giữa các request liên tiếp.
+ * Tính từ lúc nhận xong response đến khi cho phép gửi request tiếp theo.
+ * '0' hoặc xóa biến này = tắt tính năng, không cooldown.
+ * Dùng để tránh bị rate-limit do gửi request quá nhanh.
+ *
+ * Ví dụ: '5000' = chờ 5 giây sau khi nhận xong response trước.
+ */
+export const REQUEST_COOLDOWN_MS = '2000';
+
 // Note: Models are fetched dynamically from API /api/v2/models/
 // No hardcoded models - all model info comes from the API response
 
