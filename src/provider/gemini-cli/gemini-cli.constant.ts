@@ -28,6 +28,7 @@ export const PROVIDER_DESCRIPTION =
   'Google Gemini models via Gemini CLI Code Assist API with OAuth authentication';
 export const PROVIDER_COLOR = '#4285F4';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://gemini.google.com';
 
 /**

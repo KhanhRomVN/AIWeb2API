@@ -64,6 +64,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   KIMI_EVENTS,
   USER_AGENT,
   MSH_HEADERS,
@@ -121,6 +122,7 @@ export class KimiProvider implements Provider {
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
     request_cooldown_ms: (() => {
       const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;

@@ -56,6 +56,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   REQUEST_LIMIT,
   REQUEST_LIMIT_PERIOD,
   BLOCKED_TIME_RANGES,
@@ -104,6 +105,7 @@ export class CodexProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
   };
@@ -135,7 +137,9 @@ export class CodexProvider implements Provider {
           };
         }
       } catch {
-        logger.warn('[CodexCLI] Credential JSON parse failed, treating as raw token');
+        logger.warn(
+          '[CodexCLI] Credential JSON parse failed, treating as raw token',
+        );
       }
     }
 
@@ -171,9 +175,7 @@ export class CodexProvider implements Provider {
     const claims = this.decodeJWTPayload(token);
     if (!claims) return null;
     return (
-      claims.email ||
-      claims['https://api.openai.com/profile']?.email ||
-      null
+      claims.email || claims['https://api.openai.com/profile']?.email || null
     );
   }
 
@@ -183,7 +185,9 @@ export class CodexProvider implements Provider {
    *
    * @returns credential mới (JSON string) hoặc null nếu thất bại.
    */
-  async refreshAccessToken(credential: CodexCredential): Promise<string | null> {
+  async refreshAccessToken(
+    credential: CodexCredential,
+  ): Promise<string | null> {
     const { refreshToken } = credential;
     if (!refreshToken) {
       logger.warn('[CodexCLI] No refresh token available');
@@ -241,7 +245,6 @@ export class CodexProvider implements Provider {
         ...(email ? { email } : {}),
       });
 
-      logger.info('[CodexCLI] Access token refreshed successfully');
       return newCredential;
     } catch (e: any) {
       clearTimeout(timeout);
@@ -286,9 +289,7 @@ export class CodexProvider implements Provider {
         if (data.cookies) {
           const accessToken = data.cookies;
           const email =
-            data.email ||
-            this.getEmailFromToken(accessToken) ||
-            null;
+            data.email || this.getEmailFromToken(accessToken) || null;
 
           if (email) {
             const jsonCredential = JSON.stringify({
@@ -378,7 +379,6 @@ export class CodexProvider implements Provider {
       onDone,
       onError,
       onRaw,
-      systemPrompt,
     } = options;
 
     const parsedCred = this.parseCredential(credential);
@@ -391,7 +391,10 @@ export class CodexProvider implements Provider {
         if (claims) {
           const exp = (claims as any).exp as number | undefined;
           const nowSecs = Math.floor(Date.now() / 1000);
-          if (exp && exp - nowSecs < TOKEN_REFRESH_CONFIG.REFRESH_BEFORE_EXPIRY_SECS) {
+          if (
+            exp &&
+            exp - nowSecs < TOKEN_REFRESH_CONFIG.REFRESH_BEFORE_EXPIRY_SECS
+          ) {
             const newCredStr = await this.refreshAccessToken(parsedCred);
             if (newCredStr) {
               const newCred = this.parseCredential(newCredStr);
@@ -400,7 +403,10 @@ export class CodexProvider implements Provider {
                 try {
                   await options.onCredentialRotated(newCredStr);
                 } catch (e: any) {
-                  logger.warn('[CodexCLI] onCredentialRotated callback failed:', e?.message);
+                  logger.warn(
+                    '[CodexCLI] onCredentialRotated callback failed:',
+                    e?.message,
+                  );
                 }
               }
             }
@@ -411,29 +417,6 @@ export class CodexProvider implements Provider {
       const resolvedModel = this.resolveModel(model);
       const inputItems = this.buildInputItems(messages);
 
-      const payload: CodexChatPayload = {
-        model: resolvedModel,
-        input: inputItems,
-        stream: true,
-      };
-
-      // System prompt → instructions field
-      if (systemPrompt) {
-        payload.instructions = systemPrompt;
-      } else if (messages[0]?.role === 'system') {
-        payload.instructions =
-          typeof messages[0].content === 'string'
-            ? messages[0].content
-            : '';
-        // Bỏ system message khỏi input items (đã dùng trong instructions)
-        payload.input = inputItems.filter((item) => item.role !== 'system');
-      }
-
-      // Thêm prompt_cache_key nếu có conversationId
-      if (options.conversationId) {
-        payload.prompt_cache_key = options.conversationId;
-      }
-
       // Build headers giả lập Codex
       const headers: Record<string, string> = {
         [HTTP_HEADER_NAMES.AUTHORIZATION]: `${BEARER_PREFIX}${accessToken}`,
@@ -442,7 +425,8 @@ export class CodexProvider implements Provider {
         [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.CODEX_CLI_LINUX,
         [HTTP_HEADER_NAMES.ORIGINATOR]: HTTP_HEADERS_CONFIG.ORIGINATOR,
         [HTTP_HEADER_NAMES.VERSION]: HTTP_HEADERS_CONFIG.VERSION,
-        [HTTP_HEADER_NAMES.X_CODEX_BETA_FEATURES]: HTTP_HEADERS_CONFIG.X_CODEX_BETA_FEATURES,
+        [HTTP_HEADER_NAMES.X_CODEX_BETA_FEATURES]:
+          HTTP_HEADERS_CONFIG.X_CODEX_BETA_FEATURES,
       };
 
       const client = new HttpClient({
@@ -450,11 +434,14 @@ export class CodexProvider implements Provider {
         headers,
       });
 
-      const response = await client.post(API_PATHS.CODEX_RESPONSES, payload);
+      const response = await client.post(API_PATHS.CODEX_RESPONSES);
 
       // Nếu response là JSON (lỗi) thay vì SSE
       const contentType = response.headers.get('content-type') ?? '';
-      if (contentType.includes('application/json') && !contentType.includes('text/event-stream')) {
+      if (
+        contentType.includes('application/json') &&
+        !contentType.includes('text/event-stream')
+      ) {
         const jsonText = await response.text();
         logger.error('[CodexCLI] Received JSON instead of SSE:', jsonText);
         throw new Error(`Codex returned JSON error: ${jsonText}`);
@@ -462,7 +449,9 @@ export class CodexProvider implements Provider {
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Codex API returned HTTP ${response.status}: ${errText}`);
+        throw new Error(
+          `Codex API returned HTTP ${response.status}: ${errText}`,
+        );
       }
 
       if (!response.body) {

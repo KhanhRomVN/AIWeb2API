@@ -27,6 +27,7 @@ export const PROVIDER_DESCRIPTION =
   'Cline AI API — reverse proxy hỗ trợ OpenAI/Anthropic format với token rotation';
 export const PROVIDER_COLOR = '#6B4FBB';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://cline.bot';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';

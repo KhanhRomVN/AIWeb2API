@@ -39,6 +39,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   STATUS_URL,
   CHAT_URL,
@@ -240,6 +241,7 @@ export class DuckDuckGoProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
   };
 
   private warmed = false;

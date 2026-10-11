@@ -34,6 +34,7 @@ export const PROVIDER_DESCRIPTION =
   'AI assistant with deep reasoning capabilities and web search';
 export const PROVIDER_COLOR = '#1E90FF';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://deepseek.com';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';

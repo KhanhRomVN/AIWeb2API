@@ -31,6 +31,7 @@ export const PROVIDER_DESCRIPTION =
   'Ultra-fast AI inference with LPU technology';
 export const PROVIDER_COLOR = '#F55036';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://groq.com';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';

@@ -32,6 +32,7 @@ export const PROVIDER_NAME = 'Kimi';
 export const PROVIDER_DESCRIPTION = 'Long-context AI with 260K context window and multi-agent capabilities';
 export const PROVIDER_COLOR = '#3B82F6';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://www.kimi.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const KIMI_AUTH_METHODS = {

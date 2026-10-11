@@ -32,6 +32,7 @@ export const PROVIDER_DESCRIPTION =
   'European AI with efficient models and extended reasoning';
 export const PROVIDER_COLOR = '#F2A93B';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://mistral.ai/';
 export const AUTH_METHOD = ['basic'] as const;
 export const MISTRAL_AUTH_METHODS = {

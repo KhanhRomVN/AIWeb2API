@@ -66,6 +66,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   QWEN_EVENTS,
   API_VERSION,
@@ -174,6 +175,7 @@ export class QwenProvider implements Provider {
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     request_cooldown_ms: (() => {
       const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
       if (raw === undefined || raw === null) return 0;

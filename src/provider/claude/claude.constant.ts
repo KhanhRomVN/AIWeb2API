@@ -37,6 +37,7 @@ export const PROVIDER_DESCRIPTION =
   'Advanced AI assistant from Anthropic with strong reasoning';
 export const PROVIDER_COLOR = '#CC785C';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://claude.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';

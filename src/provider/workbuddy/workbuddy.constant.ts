@@ -20,6 +20,7 @@ export const PROVIDER_DESCRIPTION =
   'Tencent CodeBuddy / WorkBuddy — OpenAI-compatible gateway for CN and Global realms';
 export const PROVIDER_COLOR = '#0052CC';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://www.workbuddy.ai';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';

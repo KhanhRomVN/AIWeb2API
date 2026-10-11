@@ -54,6 +54,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   ZAI_EVENTS,
   DEFAULT_USER_AGENT,
@@ -88,6 +89,7 @@ export class ZAIProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
     request_cooldown_ms: (() => {
       const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;

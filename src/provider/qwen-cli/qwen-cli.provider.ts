@@ -55,6 +55,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   QWEN_CLI_EVENTS,
   USER_INFO_URL,
   CHAT_COMPLETIONS_URL,
@@ -101,6 +102,7 @@ export class QwenCoderCLIProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────

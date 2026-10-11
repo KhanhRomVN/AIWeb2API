@@ -24,6 +24,7 @@ export const PROVIDER_DESCRIPTION =
   'Freebuff CLI / Bearer protocol — multi-model chat via codebuff.com. GLM 5.3, DeepSeek V4, MiMo, MiniMax, Solar, GPT-6.';
 export const PROVIDER_COLOR = '#4CAF50';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://freebuff.com/';
 export const AUTH_LOGIN_URL = 'https://www.codebuff.com';
 export const AUTH_METHOD = ['bearer'] as const;

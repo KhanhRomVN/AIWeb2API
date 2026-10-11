@@ -1,6 +1,6 @@
 {
   "name": "AIWeb2API",
-  "version": "2.0.4",
+  "version": "2.0.6",
   "description": "",
   "main": "dist/index.js",
   "bin": {
@@ -29,7 +29,7 @@
     "format": "prettier --write .",
     "prepare": "husky",
     "obfuscate": "javascript-obfuscator ./dist --output ./dist --compact true --self-defending false --string-array false --exclude \"**/services/db.js,**/utils/database.js\"",
-    "build": "tsc && tsc-alias && mkdir -p dist/provider && cp src/provider/*.wasm dist/provider/ && npm run obfuscate || true",
+    "build": "tsc && tsc-alias && mkdir -p dist/provider && find src/provider -name '*.wasm' | while read f; do rel=\"${f#src/provider/}\"; dest=\"dist/provider/$rel\"; mkdir -p \"$(dirname \"$dest\")\"; cp \"$f\" \"$dest\"; done && npm run obfuscate || true",
     "build:min": "tsup",
     "build:bin": "node scripts/build-bin.js",
     "build:release": "node scripts/build-bin.js",

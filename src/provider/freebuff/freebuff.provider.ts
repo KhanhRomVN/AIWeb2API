@@ -31,6 +31,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   STREAM_URL,
   SESSION_URL,
   THREADS_URL,
@@ -81,6 +82,7 @@ export class FreebuffProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
   };
 
   /**

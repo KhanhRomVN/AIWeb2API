@@ -68,6 +68,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   SUPPORTS_SESSION_CLEANUP,
   REQUEST_LIMIT,
   REQUEST_LIMIT_PERIOD,
@@ -123,6 +124,7 @@ export class WorkBuddyProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
   };

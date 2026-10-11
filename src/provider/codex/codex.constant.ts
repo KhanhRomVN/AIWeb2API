@@ -27,6 +27,7 @@ export const PROVIDER_DESCRIPTION =
   'OpenAI Codex via ChatGPT OAuth — powered by your ChatGPT account';
 export const PROVIDER_COLOR = '#10A37F';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://chatgpt.com';
 
 /**

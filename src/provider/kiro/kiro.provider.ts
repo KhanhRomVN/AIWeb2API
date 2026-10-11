@@ -49,6 +49,7 @@ import {
   resolveKiroRuntimeRegion,
   KIRO_PROFILE_REGIONS,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
 } from './kiro.constant';
 
 import type {
@@ -90,6 +91,7 @@ export class KiroProvider implements Provider {
     models: MODELS,
     is_pausable: false,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     /** Device code flow: không cần CDP/proxy browser, user authorize trực tiếp trên browser thường */
     login_flow: 'device_code' as const,
   };

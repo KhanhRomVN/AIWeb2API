@@ -38,6 +38,7 @@ export const PROVIDER_DESCRIPTION =
   'Google most capable AI model with multimodal understanding';
 export const PROVIDER_COLOR = '#4285F4';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://gemini.google.com/';
 export const AUTH_METHOD = ['google'] as const;
 export const CONNECTION_TYPE = 'https';

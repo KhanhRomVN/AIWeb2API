@@ -45,6 +45,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   HUGGINGCHAT_EVENTS,
   USER_AGENT,
@@ -98,6 +99,7 @@ export class HuggingChatProvider implements Provider {
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────

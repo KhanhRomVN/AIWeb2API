@@ -14,6 +14,7 @@ export const PROVIDER_DESCRIPTION =
   'Freebuff multi-model chat streaming. GLM 5.3 Flash, DeepSeek V4.1, MiMo, MiniMax, Solar, GPT-6.';
 export const PROVIDER_COLOR = '#10A37F';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://freebuff.com/';
 export const AUTH_LOGIN_URL = 'https://freebuff.com/chat';
 export const AUTH_METHOD = ['google', 'github'] as const;

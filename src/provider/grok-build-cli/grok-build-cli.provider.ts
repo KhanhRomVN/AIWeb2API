@@ -54,6 +54,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   RESPONSES_URL,
   MODELS_URL,
   TOKEN_URL,
@@ -472,6 +473,7 @@ export class GrokBuildCLIProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     /** Device code flow: không cần CDP/proxy browser, user authorize trực tiếp trên browser thường */
     login_flow: 'device_code' as const,
     /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */

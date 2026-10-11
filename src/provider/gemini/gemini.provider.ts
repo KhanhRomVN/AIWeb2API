@@ -48,6 +48,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   USER_AGENT,
   GEMINI_EVENTS,
@@ -96,6 +97,7 @@ export class GeminiProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
+    token_count_mode: TOKEN_COUNT_MODE,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
   };

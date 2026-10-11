@@ -21,6 +21,7 @@ export const PROVIDER_NAME = 'Kiro';
 export const PROVIDER_DESCRIPTION = 'AWS-powered AI coding assistant with OAuth authentication';
 export const PROVIDER_COLOR = '#8B5CF6';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://kiro.dev/';
 export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';

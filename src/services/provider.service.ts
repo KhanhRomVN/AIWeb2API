@@ -76,6 +76,7 @@ export interface Provider {
    * không cần hardcode — đổi 1 chỗ là sync toàn bộ.
    */
   blocked_time_ranges?: Array<{ startTime: number; endTime: number }>;
+  token_count_mode?: 'incremental' | 'cumulative';
   /**
    * Provider có hỗ trợ session cleanup không (xóa toàn bộ conversation khi
    * account không còn ở chat view). Detect tự động từ deleteAllSessions().
@@ -234,6 +235,7 @@ const buildProvidersCache = async (
       website: p.website_url || (p as any).website,
       ...(modelsError ? { models_error: modelsError } : {}),
       ...(p.blocked_time_ranges != null ? { blocked_time_ranges: p.blocked_time_ranges } : {}),
+      ...(p.token_count_mode != null ? { token_count_mode: p.token_count_mode } : {}),
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,

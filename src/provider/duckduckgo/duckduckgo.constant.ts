@@ -22,6 +22,7 @@ export const PROVIDER_DESCRIPTION =
   'Free AI chat powered by DuckDuckGo with multiple models';
 export const PROVIDER_COLOR = '#DE5833';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://duck.ai';
 export const AUTH_METHOD = [] as const; // No authentication required
 export const CONNECTION_TYPE = 'https';

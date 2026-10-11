@@ -46,6 +46,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   REQUEST_LIMIT,
   REQUEST_LIMIT_PERIOD,
   BLOCKED_TIME_RANGES,
@@ -92,6 +93,7 @@ export class FreebuffCliProvider implements Provider {
     models: MODELS,
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
   };
 

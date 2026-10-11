@@ -26,6 +26,7 @@ export const PROVIDER_DESCRIPTION =
   'Open-source AI models from Hugging Face community';
 export const PROVIDER_COLOR = '#FFD21E';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://huggingface.co/';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';

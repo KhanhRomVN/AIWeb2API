@@ -58,6 +58,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   CLAUDE_EVENTS,
   USER_AGENT,
@@ -160,6 +161,7 @@ export class ClaudeProvider implements Provider {
     color: PROVIDER_COLOR,
     anti_system_prompt_injection: ANTI_SYSTEM_PROMPT_INJECTION,
     can_regenerate: CAN_REGENERATE,
+    token_count_mode: TOKEN_COUNT_MODE,
     /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
     request_cooldown_ms: (() => {
       const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;

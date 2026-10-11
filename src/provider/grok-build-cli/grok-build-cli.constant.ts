@@ -20,6 +20,7 @@ export const PROVIDER_NAME = 'Grok Build CLI';
 export const PROVIDER_DESCRIPTION = 'Grok Build CLI with OAuth authentication';
 export const PROVIDER_COLOR = '#000000';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'cumulative';
 export const WEBSITE_URL = 'https://x.ai';
 export const AUTH_METHOD = ['x'] as const;
 export const CONNECTION_TYPE = 'https';

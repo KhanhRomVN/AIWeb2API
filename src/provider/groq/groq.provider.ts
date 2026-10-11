@@ -48,6 +48,7 @@ import {
   CONNECTION_TYPE,
   IS_PAUSABLE,
   CAN_REGENERATE,
+  TOKEN_COUNT_MODE,
   BASE_URL,
   API_CHAT_COMPLETIONS_URL,
   API_MODELS_URL,
@@ -89,6 +90,7 @@ export class GroqProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     is_pausable: IS_PAUSABLE,
+    token_count_mode: TOKEN_COUNT_MODE,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
   };

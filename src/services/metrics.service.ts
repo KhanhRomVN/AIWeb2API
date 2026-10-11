@@ -26,7 +26,10 @@ import {
   queryAccountStatsByPeriod,
   queryModelStatsByPeriod,
 } from '../repositories/metrics.repository';
-import { upsertModelStats, updateModelSuccessRate } from '../repositories/model-stats.repository';
+import {
+  upsertModelStats,
+  updateModelSuccessRate,
+} from '../repositories/model-stats.repository';
 
 // ── Services ──
 import { invalidateProviderCache } from './provider.service';
@@ -76,7 +79,9 @@ export async function recordError(
     logger.error('Error updating error stats:', error);
   }
   await recordMetric(accountId || 'anonymous', providerId, modelId, 0, 'error');
-  logger.warn(`Recorded error metric for ${providerId}/${modelId}: ${errorMessage || 'unknown error'}`);
+  logger.warn(
+    `Recorded error metric for ${providerId}/${modelId}: ${errorMessage || 'unknown error'}`,
+  );
 }
 
 export async function recordMetric(
@@ -94,7 +99,10 @@ export async function recordMetric(
   }
 }
 
-function updateModelSuccessRateAsync(providerId: string, modelId: string): void {
+function updateModelSuccessRateAsync(
+  providerId: string,
+  modelId: string,
+): void {
   setImmediate(async () => {
     try {
       const successRate = await calculateModelSuccessRate(providerId, modelId);
@@ -102,9 +110,19 @@ function updateModelSuccessRateAsync(providerId: string, modelId: string): void 
 
       invalidateProviderCache();
     } catch (error) {
-      logger.error(`Error updating success rate for model ${providerId}/${modelId}:`, error);
+      logger.error(
+        `Error updating success rate for model ${providerId}/${modelId}:`,
+        error,
+      );
     }
   });
+}
+
+function getIncrementalMessages(messages: any[]): any[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'assistant') return messages.slice(i + 1);
+  }
+  return messages;
 }
 
 export function recordChatMetrics(
@@ -114,7 +132,14 @@ export function recordChatMetrics(
   messages: any[],
   accumulatedAssistantContent: string,
 ): void {
-  const requestTokens = countMessagesTokens(messages);
+  const tokenCountMode: 'incremental' | 'cumulative' =
+    (providerRegistry.getProvider(providerId) as any)?.constructor?.config
+      ?.token_count_mode ?? 'incremental';
+  const requestTokens = countMessagesTokens(
+    tokenCountMode === 'cumulative'
+      ? messages
+      : getIncrementalMessages(messages),
+  );
   const responseTokens = countTokens(accumulatedAssistantContent);
   const totalTokens = requestTokens + responseTokens;
 
@@ -129,7 +154,9 @@ export function recordChatMetrics(
     const provider = providerRegistry.getProvider(providerId);
     if (provider?.getUsage) {
       accountRefreshService.refreshUsage(accountId).catch((err: any) => {
-        logger.warn(`Failed to refresh usage for account ${accountId}: ${err.message}`);
+        logger.warn(
+          `Failed to refresh usage for account ${accountId}: ${err.message}`,
+        );
       });
     }
   }
@@ -160,13 +187,26 @@ function getTimeRange(period: string, offset: number): TimeRange {
       break;
     }
     case 'month': {
-      const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const targetMonthDate = new Date(
+        now.getFullYear(),
+        now.getMonth() - offset,
+        1,
+      );
       startTime = targetMonthDate.getTime();
-      endTime = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth() + 1, 0, 23, 59, 59).getTime();
+      endTime = new Date(
+        targetMonthDate.getFullYear(),
+        targetMonthDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      ).getTime();
       break;
     }
     case 'week': {
-      const weekStart = new Date(now.getTime() - (offset * 7 + 6) * 24 * 60 * 60 * 1000);
+      const weekStart = new Date(
+        now.getTime() - (offset * 7 + 6) * 24 * 60 * 60 * 1000,
+      );
       weekStart.setHours(0, 0, 0, 0);
       startTime = weekStart.getTime();
       endTime = startTime + 7 * 24 * 60 * 60 * 1000 - 1;
@@ -221,14 +261,34 @@ export async function getUsageHistory(
       break;
     }
     case 'month': {
-      const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const targetMonthDate = new Date(
+        now.getFullYear(),
+        now.getMonth() - offset,
+        1,
+      );
       startTime = targetMonthDate.getTime();
-      const lastDay = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth() + 1, 0);
-      endTime = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59, 999).getTime();
+      const lastDay = new Date(
+        targetMonthDate.getFullYear(),
+        targetMonthDate.getMonth() + 1,
+        0,
+      );
+      endTime = new Date(
+        lastDay.getFullYear(),
+        lastDay.getMonth(),
+        lastDay.getDate(),
+        23,
+        59,
+        59,
+        999,
+      ).getTime();
       groupBy = '%Y-%m-%d';
       const todayStr = now.toISOString().split('T')[0];
       for (let d = 1; d <= lastDay.getDate(); d++) {
-        const dateObj = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth(), d);
+        const dateObj = new Date(
+          targetMonthDate.getFullYear(),
+          targetMonthDate.getMonth(),
+          d,
+        );
         const lbl = dateObj.toISOString().split('T')[0];
         if (offset === 0 && lbl > todayStr) break;
         labels.push(lbl);
@@ -236,9 +296,13 @@ export async function getUsageHistory(
       break;
     }
     case 'week': {
-      const endOfPeriod = new Date(now.getTime() - offset * 7 * 24 * 60 * 60 * 1000);
+      const endOfPeriod = new Date(
+        now.getTime() - offset * 7 * 24 * 60 * 60 * 1000,
+      );
       endOfPeriod.setHours(23, 59, 59, 999);
-      const startOfPeriod = new Date(endOfPeriod.getTime() - 6 * 24 * 60 * 60 * 1000);
+      const startOfPeriod = new Date(
+        endOfPeriod.getTime() - 6 * 24 * 60 * 60 * 1000,
+      );
       startOfPeriod.setHours(0, 0, 0, 0);
       startTime = startOfPeriod.getTime();
       endTime = endOfPeriod.getTime();
@@ -269,7 +333,12 @@ export async function getUsageHistory(
   }
 
   try {
-    const rows = await queryUsageHistory(groupBy, startTime, endTime, accountId);
+    const rows = await queryUsageHistory(
+      groupBy,
+      startTime,
+      endTime,
+      accountId,
+    );
     const dataMap = new Map<string, any>();
     rows.forEach((row) => {
       const key = period === 'day' ? row.date.split(' ')[1] : row.date;
@@ -277,7 +346,11 @@ export async function getUsageHistory(
     });
     return labels.map((label) => {
       const entry = dataMap.get(label);
-      return { date: label, requests: entry?.requests ?? 0, tokens: entry?.tokens ?? 0 };
+      return {
+        date: label,
+        requests: entry?.requests ?? 0,
+        tokens: entry?.tokens ?? 0,
+      };
     });
   } catch (error) {
     logger.error('Error getting usage history:', error);

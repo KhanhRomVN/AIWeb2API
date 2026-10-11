@@ -33,6 +33,7 @@ export const PROVIDER_DESCRIPTION =
   'GLM series models with enhanced coding and reasoning';
 export const PROVIDER_COLOR = '#7C3AED';
 export const IS_ENABLED = false;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'https';

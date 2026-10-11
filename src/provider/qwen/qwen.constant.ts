@@ -39,6 +39,7 @@ export const PROVIDER_DESCRIPTION =
   'Alibaba AI with extended thinking and multimodal capabilities';
 export const PROVIDER_COLOR = '#5B21B6';
 export const IS_ENABLED = true;
+export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
 export const WEBSITE_URL = 'https://modelscope.cn/';
 export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';
