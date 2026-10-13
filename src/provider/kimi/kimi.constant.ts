@@ -70,6 +70,27 @@ export const KIMI_EVENTS = {
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+/**
+ * JA3 fingerprint khớp với Chrome 124.
+ */
+export const CHROME_JA3 =
+  '771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0';
+
+/**
+ * HTTP/2 fingerprint khớp với Chrome.
+ */
+export const CHROME_HTTP2_FINGERPRINT =
+  '1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p';
+
+/**
+ * Profile giả lập Chrome dùng cho mọi request tới kimi.ai.
+ */
+export const KIMI_IMPERSONATE_PROFILE = {
+  ja3: CHROME_JA3,
+  http2Fingerprint: CHROME_HTTP2_FINGERPRINT,
+  userAgent: USER_AGENT,
+} as const;
+
 export const MSH_HEADERS = {
   'x-msh-platform': 'web',
   'x-msh-version': '2.2.0',

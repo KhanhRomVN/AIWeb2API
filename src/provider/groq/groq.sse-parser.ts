@@ -32,14 +32,25 @@ export interface ParseSSEOptions {
 // ─── Main Parser ────────────────────────────────────────────────────────
 
 export async function parseSSEStream(
-  responseBody: NodeJS.ReadableStream,
+  responseBody: AsyncIterable<any> | NodeJS.ReadableStream,
   opts: ParseSSEOptions,
 ): Promise<void> {
   const { onContent, onRaw } = opts;
 
   let buffer = '';
 
-  for await (const chunk of responseBody) {
+  // Đảm bảo responseBody là iterable
+  const iterable = 
+    Symbol.asyncIterator in (responseBody as any)
+      ? (responseBody as AsyncIterable<any>)
+      : (async function* () {
+          const rs = responseBody as NodeJS.ReadableStream;
+          for await (const chunk of rs as any) {
+            yield chunk;
+          }
+        })();
+
+  for await (const chunk of iterable) {
     const chunkStr = chunk.toString();
     if (onRaw) onRaw(chunkStr);
     buffer += chunkStr;

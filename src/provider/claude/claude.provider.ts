@@ -33,8 +33,10 @@ import { loginService } from '../../services/login.service';
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── Utils Imports ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
+
 // ── Claude Imports ──
-import { ClaudeHttpClient } from './claude.http-client';
 import { proxyHandler } from './claude.proxy-handler';
 import { parseSSEStream } from './claude.sse-parser';
 import { claudeUploadFile, ClaudeUploadFileInput } from './claude.upload';
@@ -88,6 +90,7 @@ import {
   WEB_SEARCH_TOOL,
   ANTI_SYSTEM_PROMPT_INJECTION,
   REQUEST_COOLDOWN_MS,
+  CLAUDE_IMPERSONATE_PROFILE,
 } from './claude.constant';
 /**
  * Tách `effort` khỏi model id dạng `<base>-<effort>`.
@@ -216,9 +219,10 @@ export class ClaudeProvider implements Provider {
       );
     }
 
-    const client = new ClaudeHttpClient({
+    const client = new ImpersonateHttpClient({
       baseURL: BASE_URL,
       headers: buildClaudeHeaders(credential.cookies),
+      profile: CLAUDE_IMPERSONATE_PROFILE,
     });
     const res = await client.get(
       API_PATHS.BOOTSTRAP(credential.organizationId),
@@ -466,9 +470,10 @@ export class ClaudeProvider implements Provider {
   private async fetchFirstOrganizationId(
     cookies: string,
   ): Promise<string | null> {
-    const client = new ClaudeHttpClient({
+    const client = new ImpersonateHttpClient({
       baseURL: BASE_URL,
       headers: buildClaudeHeaders(cookies),
+      profile: CLAUDE_IMPERSONATE_PROFILE,
     });
     const res = await client.get('/api/organizations');
     if (!res.ok) {
@@ -503,12 +508,13 @@ export class ClaudeProvider implements Provider {
     credential: ClaudeCredential,
     conversationId: string,
   ): Promise<ClaudeConversationResponse> {
-    const client = new ClaudeHttpClient({
+    const client = new ImpersonateHttpClient({
       baseURL: BASE_URL,
       headers: buildClaudeHeaders(
         credential.cookies,
         `${BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${conversationId}`,
       ),
+      profile: CLAUDE_IMPERSONATE_PROFILE,
     });
     const res = await client.get(
       API_PATHS.CONVERSATION(credential.organizationId!, conversationId),
@@ -674,13 +680,14 @@ export class ClaudeProvider implements Provider {
       // Referer phải là /new (khớp với traffic thực tế Claude.ai)
       // Không dùng /chat/{convId} vì Claude.ai dùng /new cho cả upload lẫn completion.
       const referer = `${BASE_URL}${REFERER_PATHS.NEW}`;
-      const client = new ClaudeHttpClient({
+      const client = new ImpersonateHttpClient({
         baseURL: BASE_URL,
         headers: {
           ...buildClaudeHeaders(cred.cookies, referer),
           [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
           [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.SSE,
         },
+        profile: CLAUDE_IMPERSONATE_PROFILE,
       });
 
       const url = API_PATHS.COMPLETION(cred.organizationId, convId);
@@ -839,13 +846,14 @@ export class ClaudeProvider implements Provider {
       // ── Gửi retry_completion request ──────────────────────────────
       // Referer /new khớp với traffic thực tế Claude.ai
       const referer = `${BASE_URL}${REFERER_PATHS.NEW}`;
-      const client = new ClaudeHttpClient({
+      const client = new ImpersonateHttpClient({
         baseURL: BASE_URL,
         headers: {
           ...buildClaudeHeaders(cred.cookies, referer),
           [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
           [HTTP_HEADER_NAMES.ACCEPT]: CONTENT_TYPES.SSE,
         },
+        profile: CLAUDE_IMPERSONATE_PROFILE,
       });
 
       const url = API_PATHS.RETRY_COMPLETION(cred.organizationId!, convId);

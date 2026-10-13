@@ -60,6 +60,7 @@ import { accountRefreshService } from './services/account.service';
 
 // ── Utils ──
 import { createLogger } from './utils/logger';
+import { closeImpersonateClient } from './utils/impersonate-client';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('Startup');
@@ -97,7 +98,12 @@ const main = async (options?: { dbPath?: string }) => {
   }
 
   const shutdown = () => {
-    if (require.main === module) process.exit(0);
+    // Đóng subprocess cycletls (Go) để không bị leak sau khi thoát.
+    closeImpersonateClient()
+      .catch(() => {})
+      .finally(() => {
+        if (require.main === module) process.exit(0);
+      });
   };
 
   process.on('SIGTERM', shutdown);

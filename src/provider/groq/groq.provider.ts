@@ -18,9 +18,6 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
-import fetch from 'node-fetch';
-
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
 
@@ -28,6 +25,7 @@ import { Provider, SendMessageOptions } from '../../types';
 import { loginService } from '../../services/login.service';
 
 // ── Utils ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
 import { createLogger } from '../../utils/logger';
 
 // ── Groq Imports ──
@@ -70,8 +68,8 @@ import {
   REGEX_PATTERNS,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
+  GROQ_IMPERSONATE_PROFILE,
 } from './groq.constant';
-
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('GroqProvider');
 
@@ -113,7 +111,11 @@ export class GroqProvider implements Provider {
         if (!email) {
           logger.warn('[Groq] Login: no email found in session JWT');
         }
-        return { isValid: true, cookies: JSON.stringify({ cookies: data.cookies }), email };
+        return {
+          isValid: true,
+          cookies: JSON.stringify({ cookies: data.cookies }),
+          email,
+        };
       },
     });
   }
@@ -133,14 +135,7 @@ export class GroqProvider implements Provider {
   // ─── Handle Message ─────────────────────────────────────────────────
 
   async handleMessage(options: SendMessageOptions): Promise<void> {
-    const {
-      credential,
-      messages,
-      model,
-      onContent,
-      onDone,
-      onError,
-    } = options;
+    const { credential, messages, model, onContent, onDone, onError } = options;
 
     const payload: GroqChatPayload = {
       model: model,
@@ -152,7 +147,10 @@ export class GroqProvider implements Provider {
     };
 
     try {
-      const response = await fetch(API_CHAT_COMPLETIONS_URL, {
+      const client = new ImpersonateHttpClient({
+        profile: GROQ_IMPERSONATE_PROFILE,
+      });
+      const response = await client.request(API_CHAT_COMPLETIONS_URL, {
         method: 'POST',
         headers: {
           [HTTP_HEADER_NAMES.COOKIE]: credential,
@@ -161,19 +159,23 @@ export class GroqProvider implements Provider {
           [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
         },
         body: JSON.stringify(payload),
+        stream: true,
       });
 
       if (!response.ok) {
         let detail = '';
         try {
-          const body = await response.json() as any;
-          detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
+          const body = (await response.json()) as any;
+          detail =
+            body?.error?.message ?? body?.message ?? JSON.stringify(body);
         } catch {
           detail = await response.text().catch(() => '');
         }
         const message = `Groq API returned ${response.status}${detail ? `: ${detail}` : ''}`;
         if (response.status === 401 || response.status === 403) {
-          const err = new Error(`Session expired or invalid. Please re-login to Groq. (${message})`);
+          const err = new Error(
+            `Session expired or invalid. Please re-login to Groq. (${message})`,
+          );
           (err as any).isAuthError = true;
           (err as any).statusCode = response.status;
           throw err;
@@ -185,7 +187,7 @@ export class GroqProvider implements Provider {
         throw new Error('No response body');
       }
 
-      await parseSSEStream(response.body, {
+      await parseSSEStream(response.body as AsyncIterable<any>, {
         onContent,
       });
 
@@ -220,7 +222,9 @@ export class GroqProvider implements Provider {
     }
 
     let organization = '';
-    const preferencesMatch = credential.match(REGEX_PATTERNS.PREFERENCES_COOKIE);
+    const preferencesMatch = credential.match(
+      REGEX_PATTERNS.PREFERENCES_COOKIE,
+    );
     if (preferencesMatch && preferencesMatch[1]) {
       try {
         const preferences = JSON.parse(decodeURIComponent(preferencesMatch[1]));
@@ -243,17 +247,22 @@ export class GroqProvider implements Provider {
       headers[HTTP_HEADER_NAMES.GROQ_ORGANIZATION] = organization;
     }
 
-    const response = await fetch(API_MODELS_URL, { method: 'GET', headers });
+    const client = new ImpersonateHttpClient({
+      profile: GROQ_IMPERSONATE_PROFILE,
+    });
+    const response = await client.get(API_MODELS_URL, { headers });
 
     if (!response.ok) {
       let detail = '';
       try {
-        const body = await response.json() as any;
+        const body = (await response.json()) as any;
         detail = body?.error?.message || body?.message || JSON.stringify(body);
       } catch {
         detail = await response.text().catch(() => '');
       }
-      throw new Error(`Groq API returned ${response.status}${detail ? `: ${detail}` : ''}`);
+      throw new Error(
+        `Groq API returned ${response.status}${detail ? `: ${detail}` : ''}`,
+      );
     }
 
     const json = (await response.json()) as { data?: GroqModelRaw[] };

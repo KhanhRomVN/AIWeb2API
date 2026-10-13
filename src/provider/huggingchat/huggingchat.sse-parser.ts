@@ -35,7 +35,7 @@ export interface ParseSSEOptions {
 // ─── Main Parser ────────────────────────────────────────────────────────
 
 export async function parseSSEStream(
-  responseBody: NodeJS.ReadableStream,
+  responseBody: AsyncIterable<any> | NodeJS.ReadableStream,
   opts: ParseSSEOptions,
 ): Promise<void> {
   const {

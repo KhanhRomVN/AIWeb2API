@@ -20,9 +20,10 @@
  * ------------------------------------------------------------------
  */
 
-// ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
-import fetch from 'node-fetch';
+// ─── Imports ───────────────────────────────────────────────────────────
+// ── Utils ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
+import { createLogger } from '../../utils/logger';
 
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
@@ -34,8 +35,7 @@ import { proxyEvents } from '../../services/proxy.service';
 // ── Repositories ──
 import { updateAccountCredential } from '../../repositories/account.repository';
 
-// ── Utils ──
-import { createLogger } from '../../utils/logger';
+// ── Utils (JWT) ──
 import {
   isJwtExpiringSoon,
   coordinateTokenRefresh,
@@ -95,6 +95,7 @@ import {
   FILE_PROCESS_STATUS,
   MODELS,
   REQUEST_COOLDOWN_MS,
+  KIMI_IMPERSONATE_PROFILE,
 } from './kimi.constant';
 import { parseKimiSSE } from './kimi.sse-parser';
 import { kimiProxyHandler } from './kimi.proxy-handler';
@@ -214,14 +215,16 @@ export class KimiProvider implements Provider {
         ...MSH_HEADERS,
       };
 
-      const res = await fetch(AUTH_REFRESH_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
+      const client = new ImpersonateHttpClient({
+        profile: KIMI_IMPERSONATE_PROFILE,
+      });
+      const res = await client.post(
+        AUTH_REFRESH_URL,
+        JSON.stringify({
           [AUTH_FIELDS.REFRESH_TOKEN]: tokenToUse,
         }),
-        timeout: 10000,
-      } as any);
+        { headers },
+      );
 
       if (res.ok) {
         const json = (await res.json()) as KimiTokenResponse;
@@ -333,12 +336,12 @@ export class KimiProvider implements Provider {
         headers[HTTP_HEADER_NAMES.COOKIE] =
           extraHeaders[HTTP_HEADER_NAMES.COOKIE];
 
-      const res = await fetch(GET_USER_URL, {
-        method: 'POST',
+      const client = new ImpersonateHttpClient({
+        profile: KIMI_IMPERSONATE_PROFILE,
+      });
+      const res = await client.post(GET_USER_URL, JSON.stringify({}), {
         headers,
-        body: JSON.stringify({}),
-        timeout: 5000,
-      } as any);
+      });
 
       if (res.ok) {
         const json = (await res.json()) as KimiUserResponse;
@@ -623,13 +626,18 @@ export class KimiProvider implements Provider {
       [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
     };
 
+    const client = new ImpersonateHttpClient({
+      profile: KIMI_IMPERSONATE_PROFILE,
+    });
+
     try {
-      let response = await fetch(CHAT_URL, {
+      let response = await client.request(CHAT_URL, {
         method: 'POST',
         headers,
         body: bodyWithEnvelope,
-        timeout: 120000,
-      } as any);
+        stream: true,
+        timeoutSeconds: 120,
+      });
 
       if (response.status === 401) {
         const refreshed = await this.refreshCredential(cred, options.accountId);
@@ -638,12 +646,13 @@ export class KimiProvider implements Provider {
           headers[HTTP_HEADER_NAMES.AUTHORIZATION] =
             `${AUTH_PREFIXES.BEARER}${activeToken}`;
 
-          response = await fetch(CHAT_URL, {
+          response = await client.request(CHAT_URL, {
             method: 'POST',
             headers,
             body: bodyWithEnvelope,
-            timeout: 120000,
-          } as any);
+            stream: true,
+            timeoutSeconds: 120,
+          });
         }
       }
 
@@ -700,12 +709,13 @@ export class KimiProvider implements Provider {
 
         const fallbackBody = this.encodeConnectFrame(payload);
 
-        const retryResponse = await fetch(CHAT_URL, {
+        const retryResponse = await client.request(CHAT_URL, {
           method: 'POST',
           headers,
           body: fallbackBody,
-          timeout: 120000,
-        } as any);
+          stream: true,
+          timeoutSeconds: 120,
+        });
 
         if (retryResponse.ok && retryResponse.body) {
           result = await parseKimiSSE(retryResponse.body as any, {
@@ -764,23 +774,22 @@ export class KimiProvider implements Provider {
       [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
     });
 
-    let res = await fetch(GET_AVAILABLE_MODELS_URL, {
-      method: 'POST',
+    const client = new ImpersonateHttpClient({
+      profile: KIMI_IMPERSONATE_PROFILE,
+    });
+    let res = await client.post(GET_AVAILABLE_MODELS_URL, JSON.stringify({}), {
       headers: buildHeaders(cred.accessToken),
-      body: JSON.stringify({}),
-      timeout: 8000,
-    } as any);
+      timeoutSeconds: 8,
+    });
 
     // Retry một lần sau khi refresh nếu 401
     if (res.status === 401) {
       const refreshed = await this.refreshCredential(cred, accountId);
       if (refreshed) {
-        res = await fetch(GET_AVAILABLE_MODELS_URL, {
-          method: 'POST',
+        res = await client.post(GET_AVAILABLE_MODELS_URL, JSON.stringify({}), {
           headers: buildHeaders(refreshed),
-          body: JSON.stringify({}),
-          timeout: 8000,
-        } as any);
+          timeoutSeconds: 8,
+        });
       }
     }
 
@@ -884,12 +893,17 @@ export class KimiProvider implements Provider {
       [HTTP_HEADER_NAMES.R_TIMEZONE]: DEFAULT_TIMEZONE,
     };
 
-    const res = await fetch(GET_SUBSCRIPTION_STATS_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({}),
-      timeout: 8000,
-    } as any);
+    const client = new ImpersonateHttpClient({
+      profile: KIMI_IMPERSONATE_PROFILE,
+    });
+    const res = await client.post(
+      GET_SUBSCRIPTION_STATS_URL,
+      JSON.stringify({}),
+      {
+        headers,
+        timeoutSeconds: 8,
+      },
+    );
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');

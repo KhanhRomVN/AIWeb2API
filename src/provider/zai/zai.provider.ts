@@ -24,12 +24,11 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
+// ── External ─
 import * as crypto from 'crypto';
 import { Router } from 'express';
-import fetch from 'node-fetch';
 
-// ── Types ──
+// ── Types ─
 import { Provider, SendMessageOptions } from '../../types';
 
 // ── Services ──
@@ -38,7 +37,8 @@ import { loginService } from '../../services/login.service';
 // ── Database ──
 import { getDb } from '../../database';
 
-// ── Utils ──
+// ── Utils ─
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
 import { createLogger } from '../../utils/logger';
 
 // ── ZAI Imports ──
@@ -59,6 +59,7 @@ import {
   ZAI_EVENTS,
   DEFAULT_USER_AGENT,
   REQUEST_COOLDOWN_MS,
+  ZAI_IMPERSONATE_PROFILE,
 } from './zai.constant';
 import {
   getAuthDataFromCredential,
@@ -261,6 +262,9 @@ export class ZAIProvider implements Provider {
     const modelName = rawModel === 'GLM-5' ? 'GLM-5-Turbo' : rawModel;
 
     try {
+      const impersonateClient = new ImpersonateHttpClient({
+        profile: ZAI_IMPERSONATE_PROFILE,
+      });
       let chatId = conversationId;
       const userMessageId = crypto.randomUUID();
 
@@ -329,7 +333,7 @@ export class ZAIProvider implements Provider {
           );
         }
 
-        const createResponse = await fetch(createChatUrl, {
+        const createResponse = await impersonateClient.request(createChatUrl, {
           method: 'POST',
           headers: createHeaders,
           body: JSON.stringify(createChatPayload),
@@ -434,10 +438,11 @@ export class ZAIProvider implements Provider {
         timestamp: Number(sigRes.timestamp),
       };
 
-      const response = await fetch(url, {
+      const response = await impersonateClient.request(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        stream: true,
       });
 
       if (!response.ok) {
@@ -457,7 +462,7 @@ export class ZAIProvider implements Provider {
       if (!response.body) throw new Error('No response body');
 
       let buffer = '';
-      for await (const chunk of response.body) {
+      for await (const chunk of response.body as AsyncIterable<any>) {
         const chunkStr = chunk.toString();
         if (onRaw) onRaw(chunkStr);
         buffer += chunkStr;

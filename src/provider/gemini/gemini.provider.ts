@@ -22,20 +22,18 @@
  * ------------------------------------------------------------------
  */
 
-// ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
-import fetch from 'node-fetch';
+// ─── Imports ───────────────────────────────────────────────────────────
+// ── Utils ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
+import { createLogger } from '../../utils/logger';
+import { countMessagesTokens } from '../../utils/tokenizer';
 
-// ── Types ──
+// ── Types ─
 import { Provider, SendMessageOptions } from '../../types';
 
 // ── Services ──
 import { loginService } from '../../services/login.service';
 import { proxyEvents } from '../../services/proxy.service';
-
-// ── Utils ──
-import { createLogger } from '../../utils/logger';
-import { countMessagesTokens } from '../../utils/tokenizer';
 
 // ── Gemini Imports ──
 import { GeminiCredential, GeminiModelConfig } from './gemini.types';
@@ -49,6 +47,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  GEMINI_IMPERSONATE_PROFILE,
   BASE_URL,
   USER_AGENT,
   GEMINI_EVENTS,
@@ -126,7 +125,10 @@ export class GeminiProvider implements Provider {
         headers[HTTP_HEADER_NAMES.X_GOOG_AUTH_USER] = cred.authUser;
       }
 
-      const response = await fetch(url, { method: 'GET', headers });
+      const client = new ImpersonateHttpClient({
+        profile: GEMINI_IMPERSONATE_PROFILE,
+      });
+      const response = await client.get(url, { headers });
 
       if (response.ok) {
         const html = await response.text();
@@ -322,7 +324,15 @@ export class GeminiProvider implements Provider {
           currentCred.xsrfToken,
         );
         const headers = buildHeaders(currentCred);
-        const response = await fetch(url, { method: 'POST', headers, body });
+        const client = new ImpersonateHttpClient({
+          profile: GEMINI_IMPERSONATE_PROFILE,
+        });
+        const response = await client.request(url, {
+          method: 'POST',
+          headers,
+          body,
+          stream: true,
+        });
 
         if (!response.ok) {
           const errorText = await response.text();

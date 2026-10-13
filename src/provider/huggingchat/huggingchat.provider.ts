@@ -21,7 +21,6 @@
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
 import * as crypto from 'crypto';
-import fetch from 'node-fetch';
 
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
@@ -30,8 +29,8 @@ import { Provider, SendMessageOptions } from '../../types';
 import { loginService } from '../../services/login.service';
 import { proxyEvents } from '../../services/proxy.service';
 
-// ── Utils ──
-import { HttpClient } from '../../utils/http-client';
+// ── Utils ─
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
 import { createLogger } from '../../utils/logger';
 import { countMessagesTokens } from '../../utils/tokenizer';
 
@@ -49,6 +48,7 @@ import {
   BASE_URL,
   HUGGINGCHAT_EVENTS,
   USER_AGENT,
+  HUGGINGCHAT_IMPERSONATE_PROFILE,
   API_FIELDS,
   API_PATHS,
   CONTENT_TYPES,
@@ -168,7 +168,10 @@ export class HuggingChatProvider implements Provider {
 
   async getUserProfile(credential: string): Promise<HuggingChatUserInfo> {
     try {
-      const response = await fetch(`${BASE_URL}${API_PATHS.CHAT_USER}`, {
+      const client = new ImpersonateHttpClient({
+        profile: HUGGINGCHAT_IMPERSONATE_PROFILE,
+      });
+      const response = await client.get(`${BASE_URL}${API_PATHS.CHAT_USER}`, {
         headers: {
           [HTTP_HEADER_NAMES.COOKIE]: credential,
           [HTTP_HEADER_NAMES.USER_AGENT]: HTTP_HEADERS.USER_AGENT_SHORT,
@@ -216,7 +219,16 @@ export class HuggingChatProvider implements Provider {
     } = options;
 
     const cookieHeader = credential;
-    const client = this.createClient(cookieHeader);
+    const impersonateClient = new ImpersonateHttpClient({
+      profile: HUGGINGCHAT_IMPERSONATE_PROFILE,
+    });
+
+    // Helper để build headers cơ bản cho mọi request
+    const buildBaseHeaders = (): Record<string, string> => ({
+      [HTTP_HEADER_NAMES.COOKIE]: cookieHeader,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+    });
 
     try {
       let conversationId = options.conversationId;
@@ -225,9 +237,10 @@ export class HuggingChatProvider implements Provider {
           model: model,
           preprompt: PAYLOAD_DEFAULTS.PREPROMPT,
         };
-        const createRes = await client.post(
-          API_PATHS.CHAT_CONVERSATION,
-          createBody,
+        const createRes = await impersonateClient.post(
+          `${BASE_URL}${API_PATHS.CHAT_CONVERSATION}`,
+          JSON.stringify(createBody),
+          { headers: buildBaseHeaders() },
         );
         const createData =
           (await createRes.json()) as HuggingChatConversationCreateResponse;
@@ -236,8 +249,9 @@ export class HuggingChatProvider implements Provider {
 
       if (!conversationId) throw new Error('Failed to obtain conversation ID');
 
-      const detailRes = await client.get(
-        `${API_PATHS.CHAT_CONVERSATIONS}/${conversationId}`,
+      const detailRes = await impersonateClient.get(
+        `${BASE_URL}${API_PATHS.CHAT_CONVERSATIONS}/${conversationId}`,
+        { headers: buildBaseHeaders() },
       );
       const detail = (await detailRes.json()) as HuggingChatConversationDetails;
       const details = detail[API_FIELDS.JSON] || detail;
@@ -275,16 +289,16 @@ export class HuggingChatProvider implements Provider {
       const formBuffer = Buffer.from(formData, 'utf-8');
 
       const conversationUrl = `${BASE_URL}${API_PATHS.CHAT_CONVERSATION}/${conversationId}`;
-      const response = await fetch(conversationUrl, {
+      const response = await impersonateClient.request(conversationUrl, {
         method: 'POST',
         headers: {
-          [HTTP_HEADER_NAMES.COOKIE]: cookieHeader,
+          ...buildBaseHeaders(),
           [HTTP_HEADER_NAMES.CONTENT_TYPE]: `${CONTENT_TYPES.MULTIPART_PREFIX}${boundary}`,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
           [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
           [HTTP_HEADER_NAMES.REFERER]: conversationUrl,
         },
         body: formBuffer,
+        stream: true,
       });
 
       if (!response.ok) {
@@ -343,8 +357,19 @@ export class HuggingChatProvider implements Provider {
   // ─── Get Models ─────────────────────────────────────────────────────
 
   async getModels(credential: string): Promise<HuggingChatModelOutput[]> {
-    const client = this.createClient(credential);
-    const res = await client.get(API_PATHS.CHAT_MODELS);
+    const impersonateClient = new ImpersonateHttpClient({
+      profile: HUGGINGCHAT_IMPERSONATE_PROFILE,
+    });
+    const headers = {
+      [HTTP_HEADER_NAMES.COOKIE]: credential,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
+      [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
+    };
+
+    const res = await impersonateClient.get(
+      `${BASE_URL}${API_PATHS.CHAT_MODELS}`,
+      { headers },
+    );
 
     if (!res.ok) {
       let detail = '';
@@ -387,19 +412,6 @@ export class HuggingChatProvider implements Provider {
         is_thinking: false,
         max_context_length: contextLength,
       };
-    });
-  }
-
-  // ─── Helpers ────────────────────────────────────────────────────────
-
-  private createClient(cookie: string) {
-    return new HttpClient({
-      baseURL: BASE_URL,
-      headers: {
-        [HTTP_HEADER_NAMES.COOKIE]: cookie,
-        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENT,
-        [HTTP_HEADER_NAMES.ACCEPT]: HTTP_HEADERS.ACCEPT_JSON,
-      },
     });
   }
 }

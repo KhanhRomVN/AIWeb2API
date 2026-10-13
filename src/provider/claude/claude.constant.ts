@@ -203,6 +203,18 @@ export const HTTP_HEADER_NAMES = {
 } as const;
 
 /**
+ * Profile giả lập Chrome 146 dùng cho mọi request tới claude.ai (truyền vào
+ * ImpersonateHttpClient). `headerOrder` là riêng của Claude vì chứa các header
+ * anthropic-client-*; ja3 / http2Fingerprint / userAgent là của Chrome nói chung.
+ */
+export const CLAUDE_IMPERSONATE_PROFILE = {
+  ja3: CHROME_JA3,
+  http2Fingerprint: CHROME_HTTP2_FINGERPRINT,
+  headerOrder: CHROME_HEADER_ORDER,
+  userAgent: USER_AGENT,
+} as const;
+
+/**
  * Giá trị header fingerprint của Chrome 146 (khớp USER_AGENT).
  * Dùng chung cho mọi request tới claude.ai để qua Cloudflare.
  */

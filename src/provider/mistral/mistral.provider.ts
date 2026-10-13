@@ -16,17 +16,17 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
+// ── External ─
 import * as crypto from 'crypto';
-import fetch from 'node-fetch';
 
-// ── Types ──
+// ── Types ─
 import { Provider, SendMessageOptions } from '../../types';
 
 // ── Services ──
 import { loginService } from '../../services/login.service';
 
 // ── Utils ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
 import { createLogger } from '../../utils/logger';
 
 // ── Mistral Imports ──
@@ -62,8 +62,8 @@ import {
   DEFAULT_STABLE_ID,
   API_FIELDS,
   REQUEST_COOLDOWN_MS,
+  MISTRAL_IMPERSONATE_PROFILE,
 } from './mistral.constant';
-
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('MistralProvider');
 
@@ -132,8 +132,10 @@ export class MistralProvider implements Provider {
     credential: string,
   ): Promise<{ email: string | null; name?: string; id?: string }> {
     try {
-      const response = await fetch(`${BASE_URL}${API_PATHS.USERS_ME}`, {
-        method: 'GET',
+      const client = new ImpersonateHttpClient({
+        profile: MISTRAL_IMPERSONATE_PROFILE,
+      });
+      const response = await client.get(`${BASE_URL}${API_PATHS.USERS_ME}`, {
         headers: {
           [HTTP_HEADER_NAMES.COOKIE]: credential,
           [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.PROFILE,
@@ -246,7 +248,10 @@ export class MistralProvider implements Provider {
       payload.integrations = [];
     }
 
-    const response = await fetch(`${CHAT_BASE_URL}${API_PATHS.CHAT}`, {
+    const client = new ImpersonateHttpClient({
+      profile: MISTRAL_IMPERSONATE_PROFILE,
+    });
+    const response = await client.request(`${CHAT_BASE_URL}${API_PATHS.CHAT}`, {
       method: 'POST',
       headers: {
         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
@@ -256,6 +261,7 @@ export class MistralProvider implements Provider {
         [HTTP_HEADER_NAMES.REFERER]: `${CHAT_BASE_URL}${REFERER_PATHS.CHAT_PREFIX}${chatId}`,
       },
       body: JSON.stringify(payload),
+      stream: true,
     });
 
     if (!response.ok) {
@@ -279,7 +285,7 @@ export class MistralProvider implements Provider {
     }
 
     if (response.body) {
-      await parseSSEStream(response.body as NodeJS.ReadableStream, {
+      await parseSSEStream(response.body as AsyncIterable<any>, {
         onContent,
       });
       onDone();

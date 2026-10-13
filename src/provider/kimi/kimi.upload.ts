@@ -19,12 +19,12 @@
 // ─── Imports ────────────────────────────────────────────────────────────
 // ── External ──
 import * as crypto from 'crypto';
-import fetch from 'node-fetch';
 
 // ── Utils ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
 import { createLogger } from '../../utils/logger';
 
-// ── Types ──
+// ── Types ─
 import {
   KimiUploadResponse,
   KimiFileParseProgressResponse,
@@ -45,9 +45,8 @@ import {
   DEFAULT_TIMEZONE,
   UPLOAD_CONFIG,
   FILE_PROCESS_STATUS,
+  KIMI_IMPERSONATE_PROFILE,
 } from './kimi.constant';
-
-// ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('KimiUpload');
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -99,12 +98,15 @@ export async function kimiUploadFile(
     'x-traffic-id': 'zen-upload',
   };
 
-  const uploadRes = await fetch(FILE_UPLOAD_URL, {
+  const client = new ImpersonateHttpClient({
+    profile: KIMI_IMPERSONATE_PROFILE,
+  });
+  const uploadRes = await client.request(FILE_UPLOAD_URL, {
     method: 'POST',
     headers: uploadHeaders,
-    body,
-    timeout: 30000,
-  } as any);
+    body, // Buffer
+    timeoutSeconds: 30,
+  });
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text().catch(() => '');
@@ -142,12 +144,11 @@ export async function kimiUploadFile(
     );
 
     try {
-      const progressRes = await fetch(GET_FILE_PARSE_PROGRESS_URL, {
-        method: 'POST',
-        headers: pollHeaders,
-        body: JSON.stringify({ file_ids: [fileId] }),
-        timeout: 10000,
-      } as any);
+      const progressRes = await client.post(
+        GET_FILE_PARSE_PROGRESS_URL,
+        JSON.stringify({ file_ids: [fileId] }),
+        { headers: pollHeaders, timeoutSeconds: 10 },
+      );
 
       if (!progressRes.ok) {
         logger.warn(

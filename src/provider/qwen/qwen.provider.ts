@@ -25,22 +25,22 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
+// ── External ─
 import * as crypto from 'crypto';
-import fetch from 'node-fetch';
 
-// ── Types ──
+// ── Types ─
 import { Provider, SendMessageOptions } from '../../types';
 
 // ── Services ──
 import { loginService } from '../../services/login.service';
 import { proxyEvents } from '../../services/proxy.service';
 
-// ── Database ──
+// ── Database ─
 import { getDb } from '../../database';
 import { updateAccountCredential } from '../../repositories/account.repository';
 
 // ── Utils ──
+import { ImpersonateHttpClient } from '../../utils/impersonate-client';
 import { createLogger } from '../../utils/logger';
 import {
   getJwtExpiry,
@@ -103,8 +103,8 @@ import {
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
   REQUEST_COOLDOWN_MS,
+  QWEN_IMPERSONATE_PROFILE,
 } from './qwen.constant';
-
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenProvider');
 
@@ -266,17 +266,22 @@ export class QwenProvider implements Provider {
     if (!accessToken) return null;
 
     try {
-      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
-        method: 'GET',
-        headers: {
-          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
-          [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
-          [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
-            ACCEPT_LANGUAGES.EN_US_Q09,
-          [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
-          [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
-        },
+      const client = new ImpersonateHttpClient({
+        profile: QWEN_IMPERSONATE_PROFILE,
       });
+      const response = await client.get(
+        `${BASE_URL}${API_PATHS.AUTH_SESSION}`,
+        {
+          headers: {
+            [HTTP_HEADER_NAMES.AUTHORIZATION]: `${AUTH_PREFIXES.BEARER}${accessToken}`,
+            [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT]: ACCEPT_VALUES.JSON,
+            [HTTP_HEADER_NAMES_LOWERCASE.ACCEPT_LANGUAGE]:
+              ACCEPT_LANGUAGES.EN_US_Q09,
+            [HTTP_HEADER_NAMES_LOWERCASE.SOURCE]: 'web',
+            [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
+          },
+        },
+      );
 
       if (!response.ok) {
         logger.warn(`[Qwen] Token refresh failed: HTTP ${response.status}`);
@@ -468,7 +473,10 @@ export class QwenProvider implements Provider {
         [HTTP_HEADER_NAMES.SEC_CH_UA_MOBILE]: SEC_CH_UA.MOBILE,
       };
 
-      const response = await fetch(
+      const client = new ImpersonateHttpClient({
+        profile: QWEN_IMPERSONATE_PROFILE,
+      });
+      const response = await client.get(
         `${BASE_URL}${API_PATHS.CHATS}${CHATS_LIST_QUERY}`,
         { headers },
       );
@@ -506,9 +514,15 @@ export class QwenProvider implements Provider {
         [HTTP_HEADER_NAMES_LOWERCASE.VERSION]: API_VERSION,
       };
 
-      const response = await fetch(`${BASE_URL}${API_PATHS.AUTH_SESSION}`, {
-        headers,
+      const client = new ImpersonateHttpClient({
+        profile: QWEN_IMPERSONATE_PROFILE,
       });
+      const response = await client.get(
+        `${BASE_URL}${API_PATHS.AUTH_SESSION}`,
+        {
+          headers,
+        },
+      );
 
       if (response.ok) {
         const json: any = await response.json();
@@ -569,7 +583,10 @@ export class QwenProvider implements Provider {
     if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
     if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
-    const response = await fetch(`${BASE_URL}${API_PATHS.CHATS_NEW}`, {
+    const client = new ImpersonateHttpClient({
+      profile: QWEN_IMPERSONATE_PROFILE,
+    });
+    const response = await client.request(`${BASE_URL}${API_PATHS.CHATS_NEW}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -582,9 +599,8 @@ export class QwenProvider implements Provider {
       }),
     });
 
-    const actualStatusCode = response.headers.get(
-      HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE,
-    );
+    const actualStatusCode =
+      response.headers[HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE];
     if (actualStatusCode && actualStatusCode !== '200') {
       const errorText = await response.text();
       throw new Error(`Create chat failed: ${actualStatusCode} - ${errorText}`);
@@ -655,7 +671,10 @@ export class QwenProvider implements Provider {
     if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
     if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
-    const response = await fetch(
+    const client = new ImpersonateHttpClient({
+      profile: QWEN_IMPERSONATE_PROFILE,
+    });
+    const response = await client.get(
       `${BASE_URL}${API_PATHS.CHATS}${conversationId}${CHAT_HISTORY_QUERY}`,
       { headers },
     );
@@ -974,15 +993,18 @@ export class QwenProvider implements Provider {
         ? `${BASE_URL}${API_PATHS.CHAT_COMPLETIONS}?chat_id=${conversationId}`
         : `${BASE_URL}${API_PATHS.CHAT_COMPLETIONS}`;
 
-      const response = await fetch(url, {
+      const client = new ImpersonateHttpClient({
+        profile: QWEN_IMPERSONATE_PROFILE,
+      });
+      const response = await client.request(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        stream: true,
       });
 
-      const actualStatusCode = response.headers.get(
-        HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE,
-      );
+      const actualStatusCode =
+        response.headers[HTTP_HEADER_NAMES.X_ACTUAL_STATUS_CODE];
       if (actualStatusCode && actualStatusCode !== '200') {
         const errText = await response.text();
         logger.error(
@@ -1031,7 +1053,7 @@ export class QwenProvider implements Provider {
       // Set when a top-level error is detected inside SSE stream; thrown after exiting the loop
       let sseStreamError: Error | null = null;
 
-      for await (const chunk of response.body as any) {
+      for await (const chunk of response.body as AsyncIterable<any>) {
         chunkCounter++;
         const chunkStr = chunk.toString();
 
@@ -1381,7 +1403,10 @@ export class QwenProvider implements Provider {
           if (bxUmidToken)
             selectHeaders[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
-          const selectResponse = await fetch(
+          const selectClient = new ImpersonateHttpClient({
+            profile: QWEN_IMPERSONATE_PROFILE,
+          });
+          const selectResponse = await selectClient.request(
             `${BASE_URL}${API_PATHS.CHATS}${conversationId}/messages/select`,
             {
               method: 'POST',
@@ -1516,10 +1541,13 @@ export class QwenProvider implements Provider {
     if (bxUa) headers[HTTP_HEADER_NAMES.BX_UA] = bxUa;
     if (bxUmidToken) headers[HTTP_HEADER_NAMES.BX_UMIDTOKEN] = bxUmidToken;
 
-    const response = await fetch(`${BASE_URL}${API_PATHS.MODELS}`, {
+    const client = new ImpersonateHttpClient({
+      profile: QWEN_IMPERSONATE_PROFILE,
+    });
+    const response = await client.request(`${BASE_URL}${API_PATHS.MODELS}`, {
+      method: 'GET',
       headers,
-      timeout: DEFAULT_TIMEOUT_MS,
-    } as any);
+    });
 
     if (!response.ok) {
       let detail = '';
