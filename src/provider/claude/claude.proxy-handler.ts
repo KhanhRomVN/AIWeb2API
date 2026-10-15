@@ -204,11 +204,3 @@ export const proxyHandler: ProxyHandler = {
     }
   },
 };
-
-/**
- * Xóa state của 1 host khi login session kết thúc.
- * Login flow nên gọi hàm này để tránh leak state giữa các session.
- */
-export function clearClaudeSessionState(host: string = CLAUDE_HOST): void {
-  sessionState.delete(host);
-}

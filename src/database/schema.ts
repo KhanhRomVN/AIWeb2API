@@ -32,6 +32,7 @@ export interface ModelStatsTable {
   provider_id: string;
   model_id: string;
   success_rate: number | null;
+  max_input_token: number | null;
   updated_at: number;
 }
 

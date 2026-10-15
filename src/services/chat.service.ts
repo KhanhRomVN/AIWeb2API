@@ -12,11 +12,7 @@
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── External ──
-import * as crypto from 'crypto';
-import { Request } from 'express';
-
-// ── Types ──
+// ── Types ─
 import type { SendMessageOptions } from '../types';
 
 // ── Providers ──
@@ -34,6 +30,9 @@ import {
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
+
+// ── Services ──
+import { waitForProviderCooldown } from './cooldown.service';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ChatService');
@@ -135,6 +134,10 @@ export const sendMessage = async (
       );
     }
   }
+
+  // Áp dụng cooldown delay nếu cần thiết (theo accountId để granular control)
+  const cooldownKey = accountId || provider_id;
+  await waitForProviderCooldown(cooldownKey, provider_id);
 
   try {
     return await provider.handleMessage(wrappedOptions);

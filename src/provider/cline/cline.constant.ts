@@ -12,7 +12,6 @@
  * - BASE_URL            : Base URL của Cline API
  * - API_PATHS           : Tất cả API endpoint paths
  * - HTTP_HEADERS        : Header values dùng chung (X-Client-*)
- * - CLINE_EVENTS        : Event names dùng trong proxy handler
  * - DEFAULT_MODEL       : Model mặc định
  * - MODELS_TTL          : TTL cho cache model list
  * - FREE_MODEL_WHITELIST: Danh sách model free được hardcode
@@ -148,16 +147,6 @@ export const FREE_MODEL_WHITELIST = [
   'cline-free/solar-pro4',
 ] as const;
 
-/**
- * Prefix của model cần force streaming về phía upstream.
- * Upstream không hỗ trợ non-stream cho các prefix này → phải stream + aggregate.
- */
-export const FORCE_STREAM_PREFIXES = [
-  'deepseek/',
-  'cline-free/',
-  'cline-pass/',
-] as const;
-
 // ─── API Configuration ───────────────────────────────────────────────
 
 export const BASE_URL = 'https://api.cline.bot/api/v1';
@@ -206,10 +195,6 @@ export const HTTP_HEADER_NAMES = {
   X_TASK_ID: 'X-Task-ID',
 } as const;
 
-export const CONTENT_TYPES = {
-  JSON: 'application/json',
-} as const;
-
 export const AUTH_PREFIX = 'Bearer workos:';
 
 // ─── WorkOS OAuth ────────────────────────────────────────────────────
@@ -239,9 +224,6 @@ export const MAX_RETRIES = 4;
 /** Thời gian cooldown khi token refresh thất bại (ms). */
 export const ACCOUNT_COOLDOWN_MS = 60 * 1000;
 
-/** Thời gian cooldown khi account trả empty content (ms). */
-export const EMPTY_CONTENT_COOLDOWN_MS = 30 * 1000;
-
 /** Thời gian cooldown mặc định khi 429 (ms). */
 export const DEFAULT_429_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -251,18 +233,7 @@ export const DEFAULT_EMPTY_COOLDOWN_MS = 60 * 1000;
 /** Cooldown tối đa (ms). Upper bound khi parse "Try again in Xh Ym". */
 export const MAX_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
-/** Số lần thử tối đa khi aggregate non-stream với content check. */
-export const MAX_NONSTREAM_ATTEMPTS = 3;
-
-// ─── Cline Events ────────────────────────────────────────────────────
-
-export const CLINE_EVENTS = {
-  LOGIN_TOKEN: 'cline-login-token',
-  LOGIN_EMAIL: 'cline-login-email',
-} as const;
-
 // ─── SSE ─────────────────────────────────────────────────────────────
 
 export const SSE_DONE = '[DONE]';
 export const DATA_PREFIX = 'data:';
-export const VERSION = '1.1.8';

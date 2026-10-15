@@ -50,7 +50,7 @@ import { Provider, SendMessageOptions } from '../../types';
 import { loginService } from '../../services/login.service';
 import { proxyEvents } from '../../services/proxy.service';
 
-// ── Utils ──
+// ── Utils ─
 import { createLogger } from '../../utils/logger';
 
 // ── Gemini CLI Imports ──
@@ -106,7 +106,6 @@ import {
   OAUTH_CALLBACK_HOST,
   OAUTH_CALLBACK_URI,
   GEMINI_CLI_EVENTS,
-  REQUEST_COOLDOWN_MS,
 } from './gemini-cli.constant';
 
 import { proxyHandler } from './gemini-cli.proxy-handler';
@@ -426,13 +425,6 @@ export class GeminiCliProvider implements Provider {
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
-    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
-    request_cooldown_ms: (() => {
-      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
-      if (raw === undefined || raw === null) return 0;
-      const n = Number(raw);
-      return isNaN(n) || n === 0 ? 0 : n;
-    })(),
   };
 
   // ─── Credential Helpers ──────────────────────────────────────────────

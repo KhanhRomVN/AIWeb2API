@@ -40,9 +40,7 @@ const logger = createLogger('ClineTokenManager');
 // ─── Account Pool State ──────────────────────────────────────────────────
 
 let accounts: ClineAccount[] = [];
-let accountIndex = 0;
 let currentAccount: ClineAccount | null = null;
-let currentToken = '';
 
 // ─── Serial Queue ────────────────────────────────────────────────────────
 
@@ -58,9 +56,7 @@ function sleep(ms: number): Promise<void> {
  * Mỗi request phải đợi request trước xong + MIN_GAP_MS trước khi gửi tiếp.
  */
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queueTail
-    .then(() => sleep(MIN_GAP_MS))
-    .then(fn);
+  const run = queueTail.then(() => sleep(MIN_GAP_MS)).then(fn);
   // Không để queue bị vỡ khi fn throw
   queueTail = run.then(
     () => {},
@@ -91,10 +87,7 @@ export function parseAccounts(credential: string): ClineAccount[] {
       try {
         const parsed = JSON.parse(line);
         return (
-          parsed.refreshToken ||
-          parsed.refresh_token ||
-          parsed.token ||
-          line
+          parsed.refreshToken || parsed.refresh_token || parsed.token || line
         );
       } catch {
         return line;
@@ -117,7 +110,6 @@ export function parseAccounts(credential: string): ClineAccount[] {
       expiry: 0,
       cooldownUntil: 0,
     }));
-    accountIndex = 0;
   }
 
   return accounts;
@@ -264,7 +256,6 @@ export async function clineFetch(
   retried = false,
 ): Promise<NodeFetchResponse> {
   const token = await getAccessToken(credential);
-  currentToken = token;
   const headers = buildClineHeaders(token, sessionId);
 
   const resp = await fetch(`${BASE_URL}${path}`, {
@@ -363,7 +354,9 @@ export async function clineFetchWithRetry(
         (a) => !a.cooldownUntil || a.cooldownUntil <= Date.now(),
       );
       if (!hasOther) {
-        logger.warn('[ClineToken] All accounts in cooldown, returning upstream response');
+        logger.warn(
+          '[ClineToken] All accounts in cooldown, returning upstream response',
+        );
         return resp;
       }
       await sleep(500 + Math.floor(Math.random() * 500));

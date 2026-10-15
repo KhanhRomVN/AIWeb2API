@@ -25,8 +25,9 @@ import {
 } from '../services/account.service';
 
 // ── Repositories ──
+import { updateMaxInputToken } from '../repositories/model-stats.repository';
 
-// ── Middleware ──
+// ── Middleware ─
 import { incrementRequestCountAndUsage } from '../middleware/request-limit.middleware';
 
 // ── Providers ──
@@ -210,23 +211,9 @@ export const sendMessage = async (
     let accumulatedContent = '';
     let accumulatedMetadata: any = { ...initialMeta };
     let finalOutputMessage = '';
-    let finalError: Error | null = null;
 
     try {
       recordRequest(resolvedAccount.provider_id, model);
-
-      const lastMsg = messages?.[messages.length - 1];
-      const lastMsgSnippet =
-        typeof lastMsg?.content === 'string'
-          ? lastMsg.content.slice(0, 120).replace(/\n/g, ' ')
-          : '';
-      const roleBreakdown = messages?.reduce(
-        (acc: Record<string, number>, m: any) => {
-          acc[m.role] = (acc[m.role] || 0) + 1;
-          return acc;
-        },
-        {},
-      );
 
       let accumulatedResponse = '';
 
@@ -290,6 +277,27 @@ export const sendMessage = async (
           if (streamTimeoutId) clearTimeout(streamTimeoutId);
           if (stream !== false && res.writableEnded) return;
 
+          // --- Cập nhật max_input_token (Fire-and-forget) ---
+          // Chỉ thực hiện khi có messages input hợp lệ
+          if (messages && Array.isArray(messages) && messages.length > 0) {
+            try {
+              const inputTokens = countMessagesTokens(messages);
+              if (inputTokens > 0) {
+                updateMaxInputToken(
+                  resolvedAccount.provider_id,
+                  model,
+                  inputTokens,
+                ).catch((err: any) =>
+                  logger.warn(
+                    `[ModelStats] Failed to update max_input_token for ${model}: ${err.message}`,
+                  ),
+                );
+              }
+            } catch (e: any) {
+              logger.warn(`[ModelStats] Token counting error: ${e.message}`);
+            }
+          }
+
           // Tăng request count + tính usage nếu provider có requestLimit (fire-and-forget)
           if (resolvedAccount.id && !resolvedAccount.id.startsWith('anon-')) {
             const provider = providerRegistry.getProvider(resolvedAccount.provider_id);
@@ -307,13 +315,6 @@ export const sendMessage = async (
               );
             }
           }
-
-          // Log transaction details
-          const MAX_PREVIEW_LENGTH = 200;
-          const truncate = (str: string) => {
-            if (str.length <= MAX_PREVIEW_LENGTH) return str;
-            return str.slice(0, MAX_PREVIEW_LENGTH) + '...';
-          };
 
           if (stream !== false) {
             if (!accumulatedResponse || accumulatedResponse.trim() === '') {
@@ -359,17 +360,6 @@ export const sendMessage = async (
         },
         onError: (error: Error) => {
           if (streamTimeoutId) clearTimeout(streamTimeoutId);
-
-          // Log transaction details with error
-          const MAX_PREVIEW_LENGTH = 200;
-          const truncate = (str: string) => {
-            if (str.length <= MAX_PREVIEW_LENGTH) return str;
-            return str.slice(0, MAX_PREVIEW_LENGTH) + '...';
-          };
-
-          const outputPreview = finalOutputMessage
-            ? truncate(finalOutputMessage)
-            : '';
 
           // Calculate tokens
           const inputToken = messages ? countMessagesTokens(messages) : 0;

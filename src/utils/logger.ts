@@ -20,7 +20,6 @@
  * Main exports:
  * - Logger         : Class with info / warn / error / debug
  * - createLogger() : Factory that creates a logger bound to a context
- * - setLogLevel()  : Change the minimum level at runtime
  * ------------------------------------------------------------------
  */
 
@@ -64,13 +63,6 @@ let minLevel: number =
   LEVEL_WEIGHT[
     (process.env['LOG_LEVEL'] ?? 'info').toUpperCase() as Level | 'SILENT'
   ] ?? LEVEL_WEIGHT.INFO;
-
-/** Change the minimum level at runtime. */
-export function setLogLevel(
-  level: Level | 'SILENT' | Lowercase<Level | 'SILENT'>,
-): void {
-  minLevel = LEVEL_WEIGHT[level.toUpperCase() as Level | 'SILENT'] ?? minLevel;
-}
 
 function useColor(stream: NodeJS.WriteStream): boolean {
   if (process.env['NO_COLOR']) return false;

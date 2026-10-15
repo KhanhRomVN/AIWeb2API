@@ -360,7 +360,6 @@ export const CLAUDE_TOOL_MARKER = {
 
 // ─── Path / Partition ────────────────────────────────────────────────
 
-export const AUTH_PATH_PREFIX = '/api/auth';
 export const CLAUDE_BOOTSTRAP_PATH_PREFIX = '/edge-api/bootstrap';
 export const DEFAULT_LOGIN_PATH = '/login';
 export const LOGIN_PARTITION_PREFIX = 'claude-';

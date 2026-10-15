@@ -31,7 +31,6 @@ import { Provider, SendMessageOptions } from '../../types';
 // ── Services ──
 import { loginService } from '../../services/login.service';
 import { proxyEvents } from '../../services/proxy.service';
-
 // ── Repositories ──
 import { updateAccountCredential } from '../../repositories/account.repository';
 
@@ -94,7 +93,6 @@ import {
   PROVIDER_COLOR,
   FILE_PROCESS_STATUS,
   MODELS,
-  REQUEST_COOLDOWN_MS,
   KIMI_IMPERSONATE_PROFILE,
 } from './kimi.constant';
 import { parseKimiSSE } from './kimi.sse-parser';
@@ -124,13 +122,6 @@ export class KimiProvider implements Provider {
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
-    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
-    request_cooldown_ms: (() => {
-      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
-      if (raw === undefined || raw === null) return 0;
-      const n = Number(raw);
-      return isNaN(n) || n === 0 ? 0 : n;
-    })(),
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

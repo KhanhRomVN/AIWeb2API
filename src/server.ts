@@ -4,11 +4,6 @@
  * ------------------------------------------------------------------
  * HTTP/HTTPS server khởi tạo và quản lý.
  * Hỗ trợ tự động kill port khi đang sử dụng (interactive mode).
- *
- * Main functions:
- * - startServer() : Khởi động server
- * - stopServer()  : Dừng server
- * - getServerInfo(): Lấy thông tin server
  * ------------------------------------------------------------------
  */
 
@@ -22,8 +17,7 @@ import * as https from 'https';
 import { createApp } from './app';
 
 // ── Config ──
-import { getServerConfig, defaultConfig } from './config/server.config';
-
+import { getServerConfig } from './config/server.config';
 // ── Utils ──
 import { createLogger } from './utils/logger';
 import { askYesNo } from './utils/prompt';

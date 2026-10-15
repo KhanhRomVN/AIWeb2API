@@ -7,10 +7,6 @@
  * Main functions:
  * - setCookie()      : Thêm cookie từ Set-Cookie header
  * - getCookieString(): Lấy cookies dạng string cho Cookie header
- * - getCookies()     : Lấy danh sách cookies
- * - clear()          : Xóa tất cả cookies
- * - toJSON()         : Serialize cookies thành JSON
- * - fromJSON()       : Deserialize từ JSON
  * ------------------------------------------------------------------
  */
 
@@ -27,8 +23,6 @@ export class CookieJar {
     this.jar = new ToughCookieJar();
   }
 
-  // ─── Set Cookie ──────────────────────────────────────────────────────
-
   setCookie(cookieStr: string, url: string): void {
     try {
       this.jar.setCookieSync(cookieStr, url);
@@ -37,39 +31,11 @@ export class CookieJar {
     }
   }
 
-  // ─── Get Cookies ─────────────────────────────────────────────────────
-
   getCookieString(url: string): string {
     try {
       return this.jar.getCookieStringSync(url);
     } catch (error) {
       return '';
     }
-  }
-
-  getCookies(url: string): Cookie[] {
-    try {
-      return this.jar.getCookiesSync(url);
-    } catch (error) {
-      return [];
-    }
-  }
-
-  // ─── Clear ───────────────────────────────────────────────────────────
-
-  clear(): void {
-    this.jar.removeAllCookiesSync();
-  }
-
-  // ─── Serialization ──────────────────────────────────────────────────
-
-  toJSON(): any {
-    return this.jar.toJSON();
-  }
-
-  static fromJSON(json: any): CookieJar {
-    const jar = new CookieJar();
-    jar.jar = ToughCookieJar.fromJSON(json);
-    return jar;
   }
 }

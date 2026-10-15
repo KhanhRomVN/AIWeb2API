@@ -22,9 +22,6 @@ import * as path from 'path';
 // ── Types ──
 import { Provider } from '../types/index';
 
-// ── Services ──
-import { proxyService } from '../services/proxy.service';
-
 // ── Utils ──
 import { createLogger } from '../utils/logger';
 
@@ -58,10 +55,6 @@ class ProviderRegistry {
       if (!this.providers.has(alias)) {
         this.providers.set(alias, provider);
       }
-    }
-
-    if (provider.proxyHandler) {
-      proxyService.registerHandler(provider.proxyHandler);
     }
   }
 

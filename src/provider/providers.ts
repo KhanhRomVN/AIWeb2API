@@ -28,7 +28,6 @@ import kimi from './kimi';
 import kiro from './kiro';
 import mistral from './mistral';
 import qwen from './qwen';
-import qwenCli from './qwen-cli';
 import workbuddy from './workbuddy';
 import zai from './zai';
 import zaiBrowser from './zai-browser';
@@ -57,7 +56,6 @@ export const ALL_PROVIDERS = [
   kiro,
   mistral,
   qwen,
-  qwenCli,
   zai,
   zaiBrowser,
   workbuddy,

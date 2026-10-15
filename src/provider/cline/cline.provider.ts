@@ -38,7 +38,6 @@ import { createLogger } from '../../utils/logger';
 
 // ── Types ──
 import { Provider, SendMessageOptions } from '../../types';
-
 // ── Cline Imports ──
 import type {
   ClineCredential,
@@ -47,13 +46,8 @@ import type {
   WorkOSTokenResponse,
   ClineChatBody,
 } from './cline.types';
-import {
-  parseAccounts,
-  getAccessToken,
-  clineFetchWithRetry,
-  buildClineHeaders,
-} from './cline.token-manager';
-import { getModelUpstreamId, needsForceStream } from './cline.model-manager';
+import { clineFetchWithRetry } from './cline.token-manager';
+import { getModelUpstreamId } from './cline.model-manager';
 import { unwrapData } from './cline.sse-parser';
 import {
   PROVIDER_ID,
@@ -73,14 +67,12 @@ import {
   BLOCKED_TIME_RANGES,
   MODELS,
   DEFAULT_MODEL,
-  BASE_URL,
   API_PATHS,
   WORKOS_DEVICE_URL,
   WORKOS_AUTH_URL,
   CLINE_REGISTER_URL,
   WORKOS_CLIENT_ID,
   HTTP_HEADER_NAMES,
-  REQUEST_COOLDOWN_MS,
 } from './cline.constant';
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -121,13 +113,6 @@ export class ClineProvider implements Provider {
     token_count_mode: TOKEN_COUNT_MODE,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
-    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
-    request_cooldown_ms: (() => {
-      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
-      if (raw === undefined || raw === null) return 0;
-      const n = Number(raw);
-      return isNaN(n) || n === 0 ? 0 : n;
-    })(),
   };
 
   // ─── Credential Helpers ──────────────────────────────────────────

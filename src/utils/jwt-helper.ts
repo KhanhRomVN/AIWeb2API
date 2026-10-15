@@ -59,11 +59,6 @@ setInterval(cleanupOldRefreshStates, 5 * 60 * 1000);
 
 // ─── JWT Helpers ────────────────────────────────────────────────────────
 
-/**
- * Extract expiry timestamp from JWT token
- * @param jwt - JWT token string
- * @returns Expiry timestamp (seconds since epoch) or null if invalid
- */
 export function getJwtExpiry(jwt: string): number | null {
   try {
     const parts = jwt.split('.');
@@ -79,23 +74,12 @@ export function getJwtExpiry(jwt: string): number | null {
   }
 }
 
-/**
- * Check if JWT token is expired
- * @param jwt - JWT token string
- * @returns true if token is expired
- */
 export function isJwtExpired(jwt: string): boolean {
   const exp = getJwtExpiry(jwt);
   if (exp === null) return false;
   return Date.now() / 1000 >= exp;
 }
 
-/**
- * Check if JWT token is expiring soon (within threshold)
- * @param jwt - JWT token string
- * @param thresholdSec - Seconds before expiry to trigger refresh (default: 5 minutes)
- * @returns true if token will expire within threshold
- */
 export function isJwtExpiringSoon(
   jwt: string,
   thresholdSec: number = DEFAULT_REFRESH_THRESHOLD_SEC,
@@ -108,34 +92,16 @@ export function isJwtExpiringSoon(
 
 // ─── Refresh Management ─────────────────────────────────────────────────
 
-/**
- * Generate a simple hash for token (for tracking refresh state)
- * @param token - Token string
- * @returns Hash string
- */
 function hashToken(token: string): string {
   // Simple hash: take first 16 and last 16 chars
   if (token.length <= 32) return token;
   return token.slice(0, 16) + token.slice(-16);
 }
 
-/**
- * Get refresh state key
- * @param providerId - Provider identifier (e.g., 'qwen', 'kimi')
- * @param token - Token string
- * @returns State key
- */
 function getRefreshStateKey(providerId: string, token: string): string {
   return `${providerId}:${hashToken(token)}`;
 }
 
-/**
- * Coordinate token refresh to prevent duplicate refresh operations
- * @param providerId - Provider identifier
- * @param token - Current token
- * @param refreshFn - Async function that performs the actual refresh
- * @returns New token or null if refresh failed
- */
 export async function coordinateTokenRefresh(
   providerId: string,
   token: string,
@@ -168,26 +134,4 @@ export async function coordinateTokenRefresh(
   });
 
   return refreshPromise;
-}
-
-/**
- * Check if token needs refresh and is not currently being refreshed
- * @param providerId - Provider identifier
- * @param token - Token to check
- * @param thresholdSec - Threshold in seconds
- * @returns true if token should be refreshed
- */
-export function shouldRefreshToken(
-  providerId: string,
-  token: string,
-  thresholdSec: number = DEFAULT_REFRESH_THRESHOLD_SEC,
-): boolean {
-  // Check if already refreshing
-  const key = getRefreshStateKey(providerId, token);
-  if (refreshStates.get(key)?.isRefreshing) {
-    return false;
-  }
-
-  // Check if token is expiring soon
-  return isJwtExpiringSoon(token, thresholdSec);
 }

@@ -14,11 +14,6 @@
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
-export interface DeepSeekThinkingChunk {
-  type: 'thinking';
-  content: string;
-}
-
 export interface DeepSeekThinkingMetadata {
   elapsed_secs?: number;
 }
@@ -69,22 +64,6 @@ export class DeepSeekThinkingParser {
     }
 
     return result;
-  }
-
-  /**
-   * Get accumulated thinking content
-   */
-  getBuffer(): string {
-    return this.buffer;
-  }
-
-  /**
-   * Reset parser state
-   */
-  reset(): void {
-    this.buffer = '';
-    this.isThinkingStarted = false;
-    this.isThinkingEnded = false;
   }
 }
 

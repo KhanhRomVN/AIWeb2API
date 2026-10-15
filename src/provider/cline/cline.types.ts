@@ -41,8 +41,6 @@ export interface ClineAccount {
 export interface ClineModelEntry {
   id: string;
   upstream: string;
-  provider: string;
-  cost: 'free' | 'pass' | 'paid';
 }
 
 export interface ClineModelsResponse {
@@ -59,11 +57,6 @@ export interface ClineRecommendedResponse {
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────
-
-export interface ClineAuthRefreshRequest {
-  refreshToken: string;
-  grantType: 'refresh_token';
-}
 
 export interface ClineAuthRefreshData {
   accessToken?: string;

@@ -113,7 +113,7 @@ export const getBrowserStatus = async (
 
 export const startBrowserForAccount = async (
   userDataDir: string,
-  providerId: string,
+  _providerId: string,
   loginUrl: string = 'https://chat.z.ai/',
   extensionPath?: string,
 ): Promise<{ pid: number; userDataDir: string }> => {
@@ -171,22 +171,11 @@ export const startBrowserForAccount = async (
 
   runningBrowsers.set(userDataDir, chromeProcess);
 
-  chromeProcess.stderr.on('data', (data) => {
-    const output = data.toString();
-    if (
-      output.includes('extension') ||
-      output.includes('Extension') ||
-      output.includes('manifest') ||
-      output.includes('CRX') ||
-      output.includes('Failed to load') ||
-      output.includes('error')
-    ) {
-    }
-  });
+  chromeProcess.stderr.on('data', () => {});
 
-  chromeProcess.stdout.on('data', (data) => {});
+  chromeProcess.stdout.on('data', () => {});
 
-  chromeProcess.on('exit', (code, signal) => {
+  chromeProcess.on('exit', () => {
     runningBrowsers.delete(userDataDir);
   });
 
@@ -213,7 +202,6 @@ export const browserInstanceManager = {
   createProfile: async (
     providerId: string,
     profileName: string,
-    email?: string,
   ): Promise<{ id: string; userDataDir: string }> => {
     const profilePath = browserInstanceManager.getProfilePath(
       providerId,

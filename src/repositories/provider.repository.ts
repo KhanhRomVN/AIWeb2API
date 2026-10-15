@@ -17,9 +17,6 @@ export interface ProviderRow {
 }
 
 /** @deprecated providers table removed */
-export const findAllProviders = async (): Promise<ProviderRow[]> => [];
-
-/** @deprecated providers table removed */
 export const findProviderById = async (
   _id: string,
 ): Promise<ProviderRow | null> => null;
@@ -28,9 +25,4 @@ export const findProviderById = async (
 export const ensureProviderExists = async (
   _id: string,
   _title: string,
-): Promise<void> => {};
-
-/** @deprecated providers table removed */
-export const upsertProvider = async (
-  _provider: Partial<ProviderRow> & { id: string; title: string },
 ): Promise<void> => {};

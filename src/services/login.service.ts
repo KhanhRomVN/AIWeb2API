@@ -42,12 +42,9 @@ export interface LoginOptions {
   loginUrl: string;
   partition?: string;
   timeout?: number;
-  keepBrowserOpen?: boolean;
   cookieEvent?: string;
-  headerEvent?: string;
   infoEvent?: string;
   extraEvents?: string[];
-  skipProxy?: boolean;
   validate?: (data: {
     cookies: string;
     headers?: any;
@@ -505,7 +502,7 @@ export class LoginService extends EventEmitter {
   async captureBrowserProfileViaCDP(
     providerId: string,
     loginUrl: string,
-    profileName?: string,
+    _profileName?: string,
   ): Promise<{ user_data_dir: string }> {
     const provider = await findProviderById(providerId);
     let extensionPath: string | null = null;

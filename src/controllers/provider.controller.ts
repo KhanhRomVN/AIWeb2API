@@ -31,7 +31,7 @@ const logger = createLogger('ProviderController');
 
 // ─── GET /v1/providers ──────────────────────────────────────────────
 export const getProviders = async (
-  req: Request,
+  _req: Request,
   res: Response,
 ): Promise<void> => {
   try {

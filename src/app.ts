@@ -29,12 +29,6 @@ import { login } from './controllers/login.controller';
 import { providerRegistry } from './provider/registry';
 import { ALL_PROVIDERS } from './provider/providers';
 
-// ── Utils ──
-import { createLogger } from './utils/logger';
-
-// ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('App');
-
 // ─── App Factory ──────────────────────────────────────────────────────
 
 export const createApp = async () => {
@@ -51,7 +45,7 @@ export const createApp = async () => {
   app.use(databaseContextMiddleware);
 
   // ─── Health Check ────────────────────────────────────────────────────
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
@@ -61,19 +55,19 @@ export const createApp = async () => {
   // ─── Legacy Login ────────────────────────────────────────────────────
   app.post(
     '/login/:provider',
-    (req, res, next) => {
+    (_req, _res, next) => {
       next();
     },
     login,
   );
 
   // ─── Event Logging ──────────────────────────────────────────────────
-  app.post('/api/event_logging/batch', (req, res) =>
+  app.post('/api/event_logging/batch', (_req, res) =>
     res.status(200).json({ status: 'ok' }),
   );
 
   // ─── 404 Handler ─────────────────────────────────────────────────────
-  app.use((req, res, next) => {
+  app.use((req, res, _next) => {
     res.status(404).json({
       success: false,
       message: `Cannot ${req.method} ${req.path}`,

@@ -8,9 +8,7 @@
  *
  * Main functions:
  * - initMetricsDatabase()  : Khởi tạo kết nối + chạy schema
- * - getMetricsDb()         : Lấy instance đã khởi tạo
  * - getMetricsDataStore()  : Lấy DataStore (Kysely) cho metrics DB
- * - resetMetricsDb()       : Reset singleton (dùng khi reinitialize)
  * ------------------------------------------------------------------
  */
 
@@ -70,16 +68,6 @@ export const initMetricsDatabase = (customPath?: string): void => {
 };
 
 /**
- * Lấy instance metrics database. Throw nếu chưa khởi tạo.
- */
-export const getMetricsDb = (): Database.Database => {
-  if (!metricsDb) {
-    throw new Error('Metrics database not initialized');
-  }
-  return metricsDb;
-};
-
-/**
  * Lấy DataStore (Kysely) cho metrics database.
  */
 export const getMetricsDataStore = (): DataStore => {
@@ -87,16 +75,6 @@ export const getMetricsDataStore = (): DataStore => {
     throw new Error('Metrics database not initialized');
   }
   return metricsDataStore;
-};
-
-/**
- * Reset singleton — dùng khi cần reinitialize.
- * @internal
- */
-export const resetMetricsDb = (): void => {
-  try { metricsDb?.close(); } catch (_) {}
-  metricsDb = null;
-  metricsDataStore = null;
 };
 
 // ─── Migrations ──────────────────────────────────────────────────────────
@@ -110,13 +88,20 @@ function migrateModelStats(db: Database.Database): void {
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS model_stats (
-        provider_id TEXT NOT NULL,
-        model_id    TEXT NOT NULL,
-        success_rate REAL DEFAULT NULL,
-        updated_at  INTEGER NOT NULL,
+        provider_id     TEXT NOT NULL,
+        model_id        TEXT NOT NULL,
+        success_rate    REAL DEFAULT NULL,
+        max_input_token INTEGER DEFAULT NULL,
+        updated_at      INTEGER NOT NULL,
         PRIMARY KEY (provider_id, model_id)
       )
     `);
+
+    // Add column if missing (for existing databases)
+    const cols = (db.pragma('table_info(model_stats)') as any[]).map((c) => c.name);
+    if (!cols.includes('max_input_token')) {
+      db.exec('ALTER TABLE model_stats ADD COLUMN max_input_token INTEGER DEFAULT NULL');
+    }
   } catch (err) {
     logger.error('Error initializing model_stats table', err);
   }

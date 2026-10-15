@@ -66,17 +66,6 @@ export const getConfigDb = (): Database.Database => {
 };
 
 /**
- * Reset singleton — dùng khi cần reinitialize sau khi phát hiện file corrupt.
- * @internal
- */
-export const resetConfigDb = (): void => {
-  try {
-    configDb?.close();
-  } catch (_) {}
-  configDb = null;
-};
-
-/**
  * Schema cho bảng `config` (single-row, id luôn = 1).
  * - chromium_profile_dir     : system path tới thư mục chứa các profile Chromium.
  * - chromium_profile_subpath : relative path từ [profile_email]/ tới folder chứa Default/.

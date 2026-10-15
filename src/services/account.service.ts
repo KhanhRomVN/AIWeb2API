@@ -191,16 +191,6 @@ export async function getAccountById(
 }
 
 /**
- * Lấy account theo email và provider
- */
-export async function getAccountByEmailAndProvider(
-  email: string,
-  providerId: string,
-): Promise<AccountRow | undefined> {
-  return (await findAccountByEmailAndProvider(email, providerId)) || undefined;
-}
-
-/**
  * Lấy account theo ID hoặc email+provider
  */
 export async function getAccountByIdOrEmailProvider(
@@ -473,16 +463,6 @@ export class AccountRefreshService {
   }
 
   /**
-   * Dừng background service
-   */
-  stop() {
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
-  }
-
-  /**
    * Kiểm tra và refresh token cho tất cả accounts
    */
   async checkAndRefresh() {
@@ -504,7 +484,6 @@ export class AccountRefreshService {
 
         const refreshToken =
           credential.refreshToken || credential.refresh_token;
-        const now = Date.now();
 
         // Check if token needs refresh
         if (refreshToken) {

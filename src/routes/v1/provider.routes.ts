@@ -30,7 +30,7 @@ const router = express.Router();
 
 router.get('/', getProviders);
 router.get('/:providerId/models', getProviderModels);
-router.post('/cache/clear', (req, res) => {
+router.post('/cache/clear', (_req, res) => {
   invalidateProviderCache();
   res.json({ success: true, message: 'Provider cache cleared' });
 });

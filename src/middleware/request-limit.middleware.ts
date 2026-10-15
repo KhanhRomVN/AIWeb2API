@@ -165,7 +165,6 @@ export function parseResetAt(raw: string): Date {
 export function computeLiveUsageFields(
   rawUsage: number | null,
   rawResetAt: string | null,
-  requestLimit: number,
   period: 'day' | 'week' | 'month',
 ): { usage: number | null; reset_usage_at: string } {
   const now = new Date();

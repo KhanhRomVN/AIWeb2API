@@ -5,29 +5,16 @@
  * Rate limiter cho Cerebras Cloud API. Theo dõi số request và token
  * consumption theo sliding window (minute, hour, day) cho từng account.
  *
- * Main functions:
+* Main functions:
  * - checkLimit()    : Kiểm tra xem account có vượt rate limit không
  * - recordRequest() : Ghi nhận một request
  * - recordTokens()  : Ghi nhận token consumption
- * - getUsageSummary(): Lấy tổng quan usage cho account
  * ------------------------------------------------------------------
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-// ── Utils ──
-import { createLogger } from '../../utils/logger';
-
-// ── Types ──
-import { CerebrasUsageData } from './cerebras-cloud.types';
-
-// ── Constants ──
+// ── Constants ─
 import { RATE_LIMITS, WINDOW_MS } from './cerebras-cloud.constant';
-
-// ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('CerebrasRateLimiter');
-
-// ─── Types ──────────────────────────────────────────────────────────────
-
 interface UsageWindow {
   requestTimestamps: number[];
   tokenEntries: Array<{ ts: number; tokens: number }>;
@@ -134,25 +121,6 @@ export class CerebrasUsageTracker {
     u.day.tokenEntries.push(entry);
   }
 
-  getUsageSummary(accountId: string): CerebrasUsageData {
-    const u = this.getOrCreate(accountId);
-    this.prune(u.minute, WINDOW_MS.minute);
-    this.prune(u.hour, WINDOW_MS.hour);
-    this.prune(u.day, WINDOW_MS.day);
-
-    return {
-      requests: {
-        minute: { used: u.minute.requestTimestamps.length, limit: RATE_LIMITS.requests.perMinute },
-        hour: { used: u.hour.requestTimestamps.length, limit: RATE_LIMITS.requests.perHour },
-        day: { used: u.day.requestTimestamps.length, limit: RATE_LIMITS.requests.perDay },
-      },
-      tokens: {
-        minute: { used: this.countTokens(u.minute), limit: RATE_LIMITS.tokens.perMinute },
-        hour: { used: this.countTokens(u.hour), limit: RATE_LIMITS.tokens.perHour },
-        day: { used: this.countTokens(u.day), limit: RATE_LIMITS.tokens.perDay },
-      },
-    };
-  }
 }
 
 // ─── Singleton ─────────────────��────────────────────────────────────────

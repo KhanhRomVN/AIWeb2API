@@ -16,7 +16,6 @@
  *
  * Main functions:
  * - databaseContextMiddleware() : Gắn DB + DataStore vào res.locals + ALS
- * - getRequestDb()              : Lấy DB sync từ res.locals (fallback)
  * ------------------------------------------------------------------
  */
 
@@ -345,10 +344,4 @@ export const preconnectAllManagers = async (): Promise<void> => {
   }
 };
 
-/**
- * Lấy Database instance (sync) từ res.locals (đã được set bởi middleware).
- * Fallback về `getDb()` nếu chưa qua middleware (an toàn).
- */
-export const getRequestDb = (res: Response): Database.Database => {
-  return (res.locals.db as Database.Database | undefined) ?? getDb();
-};
+

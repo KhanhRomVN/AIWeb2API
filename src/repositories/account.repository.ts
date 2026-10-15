@@ -29,11 +29,7 @@ import { sql } from 'kysely';
 // ── Database ──
 import { getDataStore } from '../database';
 
-// ── Utils ──
-import { createLogger } from '../utils/logger';
-
-// ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('AccountRepository');
+// ─── Constants ─────────────────────────────────────────────────────────
 
 /** Cột được phép dùng trong ORDER BY — whitelist chống SQL injection. */
 const ALLOWED_SORT_COLUMNS = new Set([
@@ -85,14 +81,24 @@ export const findAccountById = async (
 export const findAccountByEmailAndProvider = async (
   email: string,
   providerId: string,
+  authMethod?: string | null,
 ): Promise<AccountRow | null> => {
   const db = getDataStore().kysely;
-  const row = await db
+  let query = db
     .selectFrom('accounts')
     .selectAll()
     .where('email', '=', email)
-    .where('provider_id', '=', providerId)
-    .executeTakeFirst();
+    .where('provider_id', '=', providerId);
+
+  // Nếu cung cấp authMethod, lọc theo cả auth_method để phân biệt các phương thức đăng nhập khác nhau
+  if (authMethod !== undefined && authMethod !== null) {
+    query = query.where('auth_method', '=', authMethod);
+  } else {
+    // Trường hợp không có authMethod hoặc null, tìm những record cũng có auth_method IS NULL
+    query = query.where('auth_method', 'is', null);
+  }
+
+  const row = await query.executeTakeFirst();
   return (row as AccountRow | undefined) ?? null;
 };
 
@@ -100,14 +106,22 @@ export const findAccountByIdOrEmailProvider = async (
   id: string,
   email: string,
   providerId: string,
+  authMethod?: string | null,
 ): Promise<AccountRow | null> => {
   const db = getDataStore().kysely;
+
   const row = await db
     .selectFrom('accounts')
     .selectAll()
     .where((eb) =>
       eb.or([
-        eb.and([eb('email', '=', email), eb('provider_id', '=', providerId)]),
+        eb.and([
+          eb('email', '=', email),
+          eb('provider_id', '=', providerId),
+          ...(authMethod !== undefined && authMethod !== null
+            ? [eb('auth_method', '=', authMethod)]
+            : [eb('auth_method', 'is', null)]),
+        ]),
         eb('id', '=', id),
       ]),
     )
@@ -203,6 +217,7 @@ export const insertAccountsBatch = async (
     provider_id: string;
     email: string;
     credential: string;
+    auth_method?: string | null;
   }>,
 ): Promise<void> => {
   const db = getDataStore().kysely;
@@ -215,6 +230,7 @@ export const insertAccountsBatch = async (
           provider_id: a.provider_id,
           email: a.email,
           credential: a.credential,
+          auth_method: a.auth_method ?? null,
         })),
       )
       .execute();

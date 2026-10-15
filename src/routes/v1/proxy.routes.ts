@@ -28,7 +28,7 @@ import { getCertificateManager } from '../../utils/cert-manager';
 
 const router = Router();
 
-router.get('/config', (req, res) => {
+router.get('/config', (_req, res) => {
   res.json({ success: true, config: proxyService.getConfig() });
 });
 
@@ -41,11 +41,11 @@ router.post('/config', (req, res) => {
   }
 });
 
-router.get('/server-info', (req, res) => {
+router.get('/server-info', (_req, res) => {
   res.json({ success: true, info: proxyService.getServerInfo() });
 });
 
-router.get('/certificate-info', (req, res) => {
+router.get('/certificate-info', (_req, res) => {
   try {
     const certManager = getCertificateManager();
     res.json({
@@ -61,7 +61,7 @@ router.get('/certificate-info', (req, res) => {
   }
 });
 
-router.get('/export-certificate', (req, res) => {
+router.get('/export-certificate', (_req, res) => {
   try {
     const certManager = getCertificateManager();
     const cert = certManager.exportCertificate();
@@ -71,7 +71,7 @@ router.get('/export-certificate', (req, res) => {
   }
 });
 
-router.post('/regenerate-certificates', async (req, res) => {
+router.post('/regenerate-certificates', async (_req, res) => {
   try {
     const certManager = getCertificateManager();
     certManager.deleteCertificates();

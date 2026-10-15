@@ -102,7 +102,6 @@ import {
   CHAT_HISTORY_QUERY,
   PROVIDER_DESCRIPTION,
   PROVIDER_COLOR,
-  REQUEST_COOLDOWN_MS,
   QWEN_IMPERSONATE_PROFILE,
 } from './qwen.constant';
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -176,12 +175,6 @@ export class QwenProvider implements Provider {
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
-    request_cooldown_ms: (() => {
-      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
-      if (raw === undefined || raw === null) return 0;
-      const n = Number(raw);
-      return isNaN(n) || n === 0 ? 0 : n;
-    })(),
   };
 
   // ─── Token Helpers ─────────────────────────────────────────────────

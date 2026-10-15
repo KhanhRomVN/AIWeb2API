@@ -38,12 +38,6 @@ export class ThinkingTimer {
     return this.elapsedSecs;
   }
 
-  /** Trả về elapsed hiện tại (không freeze) — dùng để đọc mid-stream. */
-  peek(): number | null {
-    if (this.startTime === null) return null;
-    return (Date.now() - this.startTime) / 1000;
-  }
-
   /** Reset về trạng thái ban đầu. */
   reset(): void {
     this.startTime = null;

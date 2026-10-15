@@ -157,11 +157,9 @@ export const OAUTH_CONFIG = {
  */
 export const USER_AGENTS = {
   /** Codex trên Linux (chuỗi UA chính thức) */
-  CODEX_CLI_LINUX:
-    'codex/0.1.0 (linux; x86_64) node/22.14.0',
+  CODEX_CLI_LINUX: 'codex/0.1.0 (linux; x86_64) node/22.14.0',
   /** Codex trên macOS */
-  CODEX_CLI_MACOS:
-    'codex/0.1.0 (darwin; arm64) node/22.14.0',
+  CODEX_CLI_MACOS: 'codex/0.1.0 (darwin; arm64) node/22.14.0',
 } as const;
 
 /**
@@ -252,8 +250,6 @@ export const TOKEN_REFRESH_CONFIG = {
 
 // ─── Misc ─────────────────────────────────────────────────────────────────
 
-export const SUCCESS_HTTP_STATUSES = [200, 201] as const;
-
 /** Prefix của Bearer token trong Authorization header */
 export const BEARER_PREFIX = 'Bearer ';
 
@@ -273,5 +269,5 @@ export const MODEL_ALIASES: Record<string, string> = {
   'gpt-4o': 'codex-mini-latest',
   'gpt-4': 'codex-mini-latest',
   'o4-mini': 'o4-mini',
-  'o3': 'o3',
+  o3: 'o3',
 };

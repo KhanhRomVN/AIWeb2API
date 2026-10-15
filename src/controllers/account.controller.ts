@@ -104,7 +104,6 @@ export const previewImport = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const managerId = req.headers['x-database-manager-id'] ?? '(none)';
     const accounts: AccountInput[] = req.body;
     if (!Array.isArray(accounts) || accounts.length === 0) {
       res.status(400).json({
@@ -506,7 +505,6 @@ export const getAccounts = async (
         const live = computeLiveUsageFields(
           row.usage ?? null,
           row.reset_usage_at ?? null,
-          requestLimit,
           requestLimitPeriod,
         );
         computedUsage = live.usage;

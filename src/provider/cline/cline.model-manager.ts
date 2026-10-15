@@ -147,32 +147,4 @@ export async function getModelUpstreamId(externalId: string): Promise<string> {
   return found?.upstream ?? externalId;
 }
 
-/**
- * Trả về danh sách model ở format OpenAI /v1/models response.
- */
-export async function getModelsListPayload(): Promise<
-  Array<{ id: string; object: string; created: number; owned_by: string }>
-> {
-  const list = await refreshModels();
-  const now = Math.floor(Date.now() / 1000);
-  return list.map((m) => ({
-    id: m.id,
-    object: 'model',
-    created: now,
-    owned_by: 'cline',
-  }));
-}
-
-/**
- * Kiểm tra model có cần force stream về phía upstream không.
- * Upstream không hỗ trợ non-stream cho deepseek/ / cline-free/ / cline-pass/.
- */
-export function needsForceStream(upstreamModel: string): boolean {
-  return (
-    upstreamModel.startsWith('deepseek/') ||
-    upstreamModel.startsWith('cline-free/') ||
-    upstreamModel.startsWith('cline-pass/')
-  );
-}
-
 export { DEFAULT_MODEL };

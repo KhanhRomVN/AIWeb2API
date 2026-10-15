@@ -42,12 +42,10 @@ import { parseSSEStream } from './claude.sse-parser';
 import { claudeUploadFile, ClaudeUploadFileInput } from './claude.upload';
 import {
   ClaudeCredential,
-  ClaudeUserProfile,
   ClaudeBootstrapResponse,
   ClaudeCompletionPayload,
   ClaudeRetryCompletionPayload,
   ClaudeConversationResponse,
-  ClaudeLoginTokenPayload,
   ClaudeModelSelectorModel,
 } from './claude.types';
 import {
@@ -83,13 +81,11 @@ import {
   DEFAULT_THINKING_MODE,
   DEFAULT_RENDERING_MODE,
   DEFAULT_CHAT_MEMORY_MODE,
-  CHROME_FINGERPRINT_HEADERS,
   EFFORT_LEVELS,
   MODEL_SELECTOR_SURFACE_CHAT,
   THINKING_MODES,
   WEB_SEARCH_TOOL,
   ANTI_SYSTEM_PROMPT_INJECTION,
-  REQUEST_COOLDOWN_MS,
   CLAUDE_IMPERSONATE_PROFILE,
 } from './claude.constant';
 /**
@@ -110,12 +106,7 @@ function splitModelAndEffort(modelId: string): {
   return { base: modelId, effort: null };
 }
 
-/** Viết hoa chữ cái đầu để ghép vào tên hiển thị: `medium` → `Medium`. */
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Constants ─────────────────────────────────────────────────────────
 const logger = createLogger('ClaudeProvider');
 
 // ─── Helper: build common headers ──────────────────────────────────────
@@ -165,13 +156,6 @@ export class ClaudeProvider implements Provider {
     anti_system_prompt_injection: ANTI_SYSTEM_PROMPT_INJECTION,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
-    /** Thời gian cooldown (ms) giữa các request — 0 / '0' = tắt */
-    request_cooldown_ms: (() => {
-      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
-      if (raw === undefined || raw === null) return 0;
-      const n = Number(raw);
-      return isNaN(n) || n === 0 ? 0 : n;
-    })(),
   };
 
   // ─── Credential Parsing ────────────────────────────────────────────
@@ -815,7 +799,6 @@ export class ClaudeProvider implements Provider {
       const lastMessage = messages[messages.length - 1];
       // Prompt rỗng = regenerate giữ nguyên; có nội dung = edit message
       const prompt = lastMessage?.content || '';
-      const isEdit = prompt.length > 0;
 
       const { base: baseModel, effort: parsedEffort } =
         splitModelAndEffort(model);

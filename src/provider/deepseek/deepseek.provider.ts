@@ -26,17 +26,16 @@ import * as path from 'path';
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
 import { randomUUID } from 'crypto';
 
-// ── Types ──
+// ── Types ─
 import { Provider, SendMessageOptions } from '../../types';
 
 // ── Services ──
 import { loginService } from '../../services/login.service';
 
-// ── Utils ──
+// ── Utils ─
 import { HttpClient } from '../../utils/http-client';
 import { createLogger } from '../../utils/logger';
 import { countMessagesTokens } from '../../utils/tokenizer';
-
 // ── DeepSeek Imports ──
 import {
   PoWChallenge,
@@ -96,9 +95,7 @@ import {
   DEEPSEEK_ERROR_CODES,
   MODELS,
   SUPPORTS_SESSION_CLEANUP,
-  REQUEST_COOLDOWN_MS,
 } from './deepseek.constant';
-
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DeepSeekProvider');
 
@@ -138,12 +135,6 @@ export class DeepSeekProvider implements Provider {
     token_count_mode: TOKEN_COUNT_MODE,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
-    request_cooldown_ms: (() => {
-      const raw: string | number | undefined = REQUEST_COOLDOWN_MS as any;
-      if (raw === undefined || raw === null) return 0;
-      const n = Number(raw);
-      return isNaN(n) || n === 0 ? 0 : n;
-    })(),
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

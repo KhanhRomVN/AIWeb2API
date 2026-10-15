@@ -50,7 +50,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'last_used_at',
     'auth_method',
   ],
-  model_stats: ['provider_id', 'model_id', 'success_rate', 'updated_at'],
+  model_stats: ['provider_id', 'model_id', 'success_rate', 'max_input_token', 'updated_at'],
   metrics: [
     'id',
     'provider_id',
@@ -96,10 +96,12 @@ const MIGRATION_STATEMENTS: string[] = [
     provider_id TEXT NOT NULL,
     model_id TEXT NOT NULL,
     success_rate DOUBLE PRECISION DEFAULT NULL,
+    max_input_token INTEGER DEFAULT NULL,
     updated_at BIGINT NOT NULL,
     PRIMARY KEY (provider_id, model_id)
   )`,
   `ALTER TABLE model_stats ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION DEFAULT NULL`,
+  `ALTER TABLE model_stats ADD COLUMN IF NOT EXISTS max_input_token INTEGER DEFAULT NULL`,
   `ALTER TABLE model_stats ADD COLUMN IF NOT EXISTS updated_at BIGINT`,
 
   // ── metrics ──

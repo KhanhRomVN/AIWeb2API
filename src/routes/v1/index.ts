@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { providerRegistry } from '../../provider/registry';
 
 const router = Router();
 
@@ -14,7 +13,7 @@ try {
 }
 
 // Health check
-router.get('/health', (req, res) => {
+router.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     aiweb2api: 'khanhromvn/AIWeb2API',

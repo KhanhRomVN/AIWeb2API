@@ -1,4 +1,3 @@
-import { Router } from 'express';
 import { Message } from './message.types';
 
 export interface SendMessageOptions {
@@ -23,7 +22,6 @@ export interface SendMessageOptions {
       }
   >;
   thinking?: boolean;
-  stream?: boolean;
   // Edit message support
   edit_message_id?: string; // ID của message cần edit (fid trong Qwen)
   user_action?: 'chat' | 'edit'; // Action type: chat (mới), edit (sửa nội dung hoặc regenerate)

@@ -59,16 +59,6 @@ const DEFAULT_RECORD_ID = '__aiweb2api_default__';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-/** Kiểm tra file tồn tại và có quyền đọc. */
-function fileAccessible(filePath: string): boolean {
-  try {
-    fs.accessSync(filePath, fs.constants.R_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** Kiểm tra file có phải SQLite hợp lệ không (magic bytes). */
 function isSqliteFile(filePath: string): boolean {
   try {

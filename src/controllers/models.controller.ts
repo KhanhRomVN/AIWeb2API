@@ -26,7 +26,7 @@ const logger = createLogger('ModelsController');
 
 // ─── GET /v1/models/all ─────────────────────────────────────────────
 export const getAllModels = async (
-  req: Request,
+  _req: Request,
   res: Response,
 ): Promise<void> => {
   try {
