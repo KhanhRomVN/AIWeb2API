@@ -16,6 +16,9 @@
 import { countTokens } from '../../utils/tokenizer';
 import { createLogger } from '../../utils/logger';
 
+// ── Shared ──
+import { readTextLines } from '../_shared/sse';
+
 // ── Types ──
 import {
   SSEMetadata,
@@ -79,7 +82,6 @@ export async function parseSSEStream(
     priorContentLength = 0,
   } = opts;
 
-  let buffer = '';
   let currentEventType = '';
   let isIncomplete = false;
   let responseMessageId: number | null = null;
@@ -93,15 +95,14 @@ export async function parseSSEStream(
   // Initialize thinking parser
   const thinkingParser = createDeepSeekThinkingParser();
 
-  for await (const chunk of responseBody) {
-    const chunkStr = chunk.toString();
-    totalBytesProcessed += chunkStr.length;
-    if (onRaw) onRaw(chunkStr);
-    buffer += chunkStr;
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+  const lines = readTextLines(responseBody, {
+    onRaw: (chunk) => {
+      totalBytesProcessed += chunk.length;
+      if (onRaw) onRaw(chunk);
+    },
+  });
 
-    for (const line of lines) {
+  for await (const line of lines) {
       if (line.startsWith(SSE_PROTOCOL.EVENT_PREFIX)) {
         currentEventType = line
           .substring(SSE_PROTOCOL.EVENT_PREFIX.length)
@@ -399,7 +400,6 @@ export async function parseSSEStream(
           },
         );
       }
-    }
   }
 
   return { incomplete: isIncomplete, responseMessageId, accumulatedContent };

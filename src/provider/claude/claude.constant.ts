@@ -42,6 +42,7 @@ export const WEBSITE_URL = 'https://claude.ai/';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
 
 /**
@@ -84,21 +85,8 @@ export const CLAUDE_EVENTS = {
 export const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36';
 
-/**
- * JA3 fingerprint khớp với Chrome 146.
- * Lấy từ cycletls README (bộ cipher/extension/curve Chrome điển hình).
- * Nếu update USER_AGENT lên Chrome version mới hơn, phải cập nhật JA3 tương ứng
- * để tránh Cloudflare mismatch giữa UA và TLS ClientHello.
- */
-export const CHROME_JA3 =
-  '771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0';
-
-/**
- * HTTP/2 fingerprint khớp với Chrome (MASP priority, window size lớn).
- * Format: `<settings>|<windowUpdate>|<priority>|<pseudoHeaderOrder>`.
- */
-export const CHROME_HTTP2_FINGERPRINT =
-  '1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p';
+import { CHROME_JA3, CHROME_HTTP2_FINGERPRINT } from '../_shared/constants/chrome-fingerprint';
+export { CHROME_JA3, CHROME_HTTP2_FINGERPRINT };
 
 /**
  * Thứ tự header chuẩn Chrome gửi cho API call JSON.
@@ -178,16 +166,12 @@ export const CLAUDE_AUTH_METHODS = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
+import { STANDARD_HTTP_HEADERS, LOWERCASE_HEADER_NAMES } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  AUTHORIZATION: 'Authorization',
-  COOKIE: 'Cookie',
-  CONTENT_TYPE: 'Content-Type',
-  ACCEPT: 'Accept',
+  ...STANDARD_HTTP_HEADERS,
   ACCEPT_LANGUAGE: 'Accept-Language',
   ACCEPT_ENCODING: 'Accept-Encoding',
-  USER_AGENT: 'User-Agent',
-  ORIGIN: 'Origin',
-  REFERER: 'Referer',
   SEC_CH_UA: 'sec-ch-ua',
   SEC_CH_UA_MOBILE: 'sec-ch-ua-mobile',
   SEC_CH_UA_PLATFORM: 'sec-ch-ua-platform',
@@ -232,17 +216,19 @@ export const CHROME_FINGERPRINT_HEADERS = {
 } as const;
 
 export const HTTP_HEADER_NAMES_LOWERCASE = {
-  AUTHORIZATION: 'authorization',
-  COOKIE: 'cookie',
-  SET_COOKIE: 'set-cookie',
+  AUTHORIZATION: LOWERCASE_HEADER_NAMES.AUTHORIZATION,
+  COOKIE: LOWERCASE_HEADER_NAMES.COOKIE,
+  SET_COOKIE: LOWERCASE_HEADER_NAMES.SET_COOKIE,
 } as const;
 
 // ─── Content Types ───────────────────────────────────────────────────
 
+import { CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
-  SSE: 'text/event-stream',
-  MULTIPART_PREFIX: 'multipart/form-data; boundary=',
+  JSON: SHARED_CONTENT_TYPES.JSON,
+  SSE: SHARED_CONTENT_TYPES.SSE,
+  MULTIPART_PREFIX: SHARED_CONTENT_TYPES.MULTIPART_PREFIX,
 } as const;
 
 // ─── Referer Paths ────────��──────────────────────────────────────────
@@ -337,10 +323,8 @@ export const WEB_SEARCH_TOOL = {
 
 // ─── SSE Protocol ────────────────────────────────────────────────────
 
-export const SSE_PROTOCOL = {
-  DATA_PREFIX: 'data: ',
-  DONE: '[DONE]',
-} as const;
+import { SSE_PROTOCOL } from '../_shared/constants/sse.constants';
+export { SSE_PROTOCOL };
 
 export const SSE_EVENT_TYPES = {
   CONTENT_BLOCK_DELTA: 'content_block_delta',

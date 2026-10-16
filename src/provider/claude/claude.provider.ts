@@ -59,6 +59,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   BASE_URL,
   CLAUDE_EVENTS,
   USER_AGENT,
@@ -106,7 +107,12 @@ function splitModelAndEffort(modelId: string): {
   return { base: modelId, effort: null };
 }
 
-// ─── Constants ─────────────────────────────────────────────────────────
+// ─── Shared 
+import { throwIfNotOk, ProviderHttpError } from '../_shared/http';
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+
+// ─── Constants ───────────────────────────────────────────────────────
 const logger = createLogger('ClaudeProvider');
 
 // ─── Helper: build common headers ──────────────────────────────────────
@@ -143,6 +149,7 @@ export class ClaudeProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     is_enabled: IS_ENABLED,
@@ -156,36 +163,34 @@ export class ClaudeProvider implements Provider {
     anti_system_prompt_injection: ANTI_SYSTEM_PROMPT_INJECTION,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   // ─── Credential Parsing ────────────────────────────────────────────
 
   private parseCredential(credential: string): ClaudeCredential {
-    if (credential.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(credential);
-        const cookies =
-          parsed.cookies ||
-          parsed.secretKey ||
-          parsed.secret_key ||
-          parsed.token ||
-          '';
-        const organizationId =
-          parsed.organizationId ||
-          parsed.organization_id ||
-          parsed.orgId ||
-          null;
-        if (cookies) {
-          return { cookies, organizationId };
-        }
-      } catch (e) {
-        logger.warn(
-          '[Claude] Credential is not valid JSON, treating as raw cookie:',
-          e,
-        );
-      }
+    interface ClaudeBase {
+      accessToken: string; // maps to 'cookies' in our context
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
     }
-    return { cookies: credential, organizationId: null };
+
+    const result = parseTokenCredential<ClaudeBase>(credential, {
+      accessKeys: ['cookies', 'secretKey', 'secret_key', 'token'],
+      logger,
+      label: 'Claude',
+    });
+
+    const organizationId =
+      (result.jsonPayload?.organizationId as string) ||
+      (result.jsonPayload?.organization_id as string) ||
+      (result.jsonPayload?.orgId as string) ||
+      null;
+
+    return {
+      cookies: result.accessToken,
+      organizationId,
+    };
   }
 
   // ─── Bootstrap (account + models) ──────────────────────────────────
@@ -220,17 +225,10 @@ export class ClaudeProvider implements Provider {
       } catch {
         detail = await res.text().catch(() => '');
       }
-      const message = `Claude bootstrap API returned ${res.status}${detail ? `: ${detail}` : ''}`;
-      // 401/403 = session hết hạn hoặc cookie invalid → cần re-login
-      if (res.status === 401 || res.status === 403) {
-        const err = new Error(
-          `Session expired or invalid. Please re-login to Claude. (${message})`,
-        );
-        (err as any).isAuthError = true;
-        (err as any).statusCode = res.status;
-        throw err;
-      }
-      throw new Error(message);
+      await throwIfNotOk(res, {
+        label: 'Claude',
+        preReadDetail: detail,
+      });
     }
     return (await res.json()) as ClaudeBootstrapResponse;
   }
@@ -690,14 +688,7 @@ export class ClaudeProvider implements Provider {
           /* keep rawText slice */
         }
         const message = `Claude API returned ${response.status}: ${rawText.slice(0, 500)}`;
-        if (response.status === 401 || response.status === 403) {
-          const err = new Error(
-            `Session expired or invalid. Please re-login to Claude. (${message})`,
-          );
-          (err as any).isAuthError = true;
-          (err as any).statusCode = response.status;
-          throw err;
-        }
+        
         // Xử lý lỗi 429 hết usage tạm thời (exceeded_limit) — có resetsAt
         if (
           response.status === 429 &&
@@ -705,12 +696,18 @@ export class ClaudeProvider implements Provider {
           parsedBody?.resetsAt
         ) {
           const resetsAt = new Date(parsedBody.resetsAt * 1000).toISOString();
-          const err = new Error(message);
+          const err = new ProviderHttpError(message, response.status);
           (err as any).isUsageLimitError = true;
           (err as any).resetsAt = resetsAt;
           throw err;
         }
-        throw new Error(message);
+
+        // Delegate standard errors (including Auth) to shared guard
+        await throwIfNotOk(response, {
+          label: 'Claude',
+          preReadDetail: detail,
+          buildMessage: () => message,
+        });
       }
 
       if (!response.body) {
@@ -846,23 +843,18 @@ export class ClaudeProvider implements Provider {
 
       if (!response.ok) {
         const rawText = await response.text();
-        let detail = rawText.slice(0, 500);
-        try {
-          const parsedBody = JSON.parse(rawText);
-          detail = parsedBody?.error?.message ?? parsedBody?.message ?? detail;
-        } catch {
-          /* keep rawText slice */
-        }
-        const message = `Claude retry_completion returned ${response.status}: ${rawText.slice(0, 500)}`;
-        if (response.status === 401 || response.status === 403) {
-          const err = new Error(
-            `Session expired or invalid. Please re-login to Claude. (${message})`,
-          );
-          (err as any).isAuthError = true;
-          (err as any).statusCode = response.status;
-          throw err;
-        }
-        throw new Error(message);
+        await throwIfNotOk(response, {
+          label: 'Claude',
+          preReadDetail: (() => {
+            let d = rawText.slice(0, 500);
+            try {
+              const p = JSON.parse(rawText);
+              d = p?.error?.message ?? p?.message ?? d;
+            } catch {}
+            return d;
+          })(),
+          buildMessage: () => `Claude retry_completion returned ${response.status}: ${rawText.slice(0, 500)}`,
+        });
       }
 
       if (!response.body) {
@@ -890,10 +882,6 @@ export class ClaudeProvider implements Provider {
   }
 
   // ─── Continue Message ───────────────────────────────────────────────
-
-  async continueMessage(options: SendMessageOptions): Promise<void> {
-    return this.handleMessage(options);
-  }
 
   // ─── File Upload ────────────────────────────────────────────────────
 

@@ -44,6 +44,7 @@ export const WEBSITE_URL = 'https://modelscope.cn/';
 export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
 
 /**
@@ -70,9 +71,8 @@ export const QWEN_EVENTS = {
   LOGIN_EMAIL: 'qwen-login-email',
 } as const;
 
-export const MAX_CONTINUATIONS = 10;
-export const HISTORY_MESSAGES_COUNT = 20;
-export const SUCCESS_CODE = 0;
+import { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE } from '../_shared/constants/chat-limits.constants';
+export { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE };
 
 export const API_VERSION = '0.2.91';
 export const BX_VERSION = '2.5.37';
@@ -140,15 +140,11 @@ export const REFERER_PATHS = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
+import { STANDARD_HTTP_HEADERS } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  AUTHORIZATION: 'Authorization',
-  CONTENT_TYPE: 'Content-Type',
-  ACCEPT: 'Accept',
+  ...STANDARD_HTTP_HEADERS,
   ACCEPT_LANGUAGE: 'Accept-Language',
-  USER_AGENT: 'User-Agent',
-  ORIGIN: 'Origin',
-  REFERER: 'Referer',
-  COOKIE: 'Cookie',
   SOURCE: 'source',
   VERSION: 'version',
   BX_V: 'bx-v',
@@ -184,8 +180,10 @@ export const HTTP_HEADER_NAMES_LOWERCASE = {
 
 // ─── Content Types / Accept Values ───────────────────────────────────
 
+import { CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
+  JSON: SHARED_CONTENT_TYPES.JSON,
 } as const;
 
 export const ACCEPT_VALUES = {
@@ -208,10 +206,8 @@ export const SEC_CH_UA = {
 
 // ─── Auth Prefixes ───────────────────────────────────────────────────
 
-export const AUTH_PREFIXES = {
-  BEARER: 'Bearer ',
-  JWT: 'eyJ',
-} as const;
+import { AUTH_PREFIXES } from '../_shared/constants/http.constants';
+export { AUTH_PREFIXES };
 
 // ─── Cookie / Token Keys ─────────────────────────────────────────────
 
@@ -219,8 +215,9 @@ export const AUTH_PREFIXES = {
 export const TOKEN_COOKIE_KEY = COOKIE_CONFIG.TOKEN_NAME;
 /** @deprecated Use COOKIE_CONFIG.CSRF_TOKEN_NAME instead */
 export const CSRF_TOKEN_COOKIE_KEY = COOKIE_CONFIG.CSRF_TOKEN_NAME;
-export const MASKED_EMAIL_INDICATOR = '***';
-export const MASKED_EMAIL_CHAR = '*';
+
+import { MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR } from '../_shared/constants/chat-limits.constants';
+export { MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR };
 
 // ─── Regex Patterns ──────────────────────────────────────────────────
 

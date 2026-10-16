@@ -40,6 +40,7 @@ export const MISTRAL_AUTH_METHODS = {
 } as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = false;
 
 // ─── API Configuration ───────────────────────────────────────────────
@@ -62,19 +63,17 @@ export const MISTRAL_HOSTS = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
+import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  COOKIE: 'Cookie',
-  CONTENT_TYPE: 'Content-Type',
-  USER_AGENT: 'User-Agent',
-  ORIGIN: 'Origin',
-  REFERER: 'Referer',
+  ...STANDARD_HTTP_HEADERS,
   ACCEPT: 'accept',
 } as const;
 
 // ─── Content Types ───────────────────────────────────────────────────
 
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
+  JSON: SHARED_CONTENT_TYPES.JSON,
 } as const;
 
 // ─── Referer Paths ───────────────────────────────────────────────────

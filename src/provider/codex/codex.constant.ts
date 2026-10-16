@@ -37,6 +37,7 @@ export const WEBSITE_URL = 'https://chatgpt.com';
 export const AUTH_METHOD = ['oauth'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
 export const SUPPORTS_SESSION_CLEANUP = false;
 
@@ -192,10 +193,8 @@ export const HTTP_HEADER_NAMES = {
 
 // ─── SSE Protocol ─────────────────────────────────────────────────────────
 
-export const SSE_PROTOCOL = {
-  DATA_PREFIX: 'data: ',
-  DONE: '[DONE]',
-} as const;
+import { SSE_PROTOCOL } from '../_shared/constants/sse.constants';
+export { SSE_PROTOCOL };
 
 /**
  * SSE event types từ Codex /responses stream.

@@ -15,6 +15,9 @@
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── Shared ──
+import { readTextLines } from '../_shared/sse';
+
 // ── Types ──
 import { MistralStreamEvent } from './mistral.types';
 
@@ -48,56 +51,37 @@ export async function parseSSEStream(
   const { onContent, onRaw } = opts;
 
   let accumulatedContent = '';
-  let buffer = '';
 
-  // Chuyển đổi ReadableStream sang AsyncIterable nếu cần
-  const iterable = 
-    Symbol.asyncIterator in (responseBody as any)
-      ? (responseBody as AsyncIterable<any>)
-      : (async function* () {
-          const rs = responseBody as NodeJS.ReadableStream;
-          for await (const chunk of rs as any) {
-            yield chunk;
-          }
-        })();
+  for await (const line of readTextLines(responseBody)) {
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) continue;
+    if (onRaw) onRaw(line);
 
-  for await (const chunk of iterable) {
-    buffer += chunk.toString();
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const colonIndex = line.indexOf(':');
-      if (colonIndex === -1) continue;
-      if (onRaw) onRaw(line);
-
-      try {
-        const jsonStr = line.slice(colonIndex + 1);
-        const data = JSON.parse(jsonStr) as MistralStreamEvent;
-        if (data?.json?.patches) {
-          for (const patch of data.json.patches) {
-            if (
-              (patch.op === PATCH_OPS.APPEND || patch.op === PATCH_OPS.ADD) &&
-              patch.path.includes(PATCH_PATH_TEXT_SUFFIX) &&
-              patch.value
-            ) {
-              const text = patch.value as string;
-              accumulatedContent += text;
-              onContent(text);
-            } else if (
-              patch.value &&
-              typeof patch.value === 'string' &&
-              patch.path.endsWith(PATCH_PATH_TEXT_SUFFIX)
-            ) {
-              accumulatedContent += patch.value;
-              onContent(patch.value);
-            }
+    try {
+      const jsonStr = line.slice(colonIndex + 1);
+      const data = JSON.parse(jsonStr) as MistralStreamEvent;
+      if (data?.json?.patches) {
+        for (const patch of data.json.patches) {
+          if (
+            (patch.op === PATCH_OPS.APPEND || patch.op === PATCH_OPS.ADD) &&
+            patch.path.includes(PATCH_PATH_TEXT_SUFFIX) &&
+            patch.value
+          ) {
+            const text = patch.value as string;
+            accumulatedContent += text;
+            onContent(text);
+          } else if (
+            patch.value &&
+            typeof patch.value === 'string' &&
+            patch.path.endsWith(PATCH_PATH_TEXT_SUFFIX)
+          ) {
+            accumulatedContent += patch.value;
+            onContent(patch.value);
           }
         }
-      } catch (e) {
-        logger.warn('[Mistral] Failed to parse SSE line:', e);
       }
+    } catch (e) {
+      logger.warn('[Mistral] Failed to parse SSE line:', e);
     }
   }
 

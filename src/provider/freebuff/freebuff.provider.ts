@@ -32,6 +32,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   STREAM_URL,
   SESSION_URL,
   THREADS_URL,
@@ -61,6 +62,12 @@ import {
   extractImagesFromMessages,
 } from './freebuff.upload';
 
+// ─── Shared 
+import { throwIfNotOk } from '../_shared/http';
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+import { captureCookieLogin, CapturedLoginData, ValidateResult } from '../_shared/auth/cookie-login';
+
 const logger = createLogger('FreebuffProvider');
 
 // ─── Provider Class ───────────────────────────────────────────────────────
@@ -72,17 +79,16 @@ export class FreebuffProvider implements Provider {
   // ─── Provider Configuration ───────────────────────────────────────────
 
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
-    is_enabled: IS_ENABLED,
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
-    is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
-    token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   /**
@@ -100,20 +106,21 @@ export class FreebuffProvider implements Provider {
    * Fallback: raw cookie string (backward compat với account cũ).
    */
   private parseCredential(credential: string): FreebuffCredential {
-    if (!credential) return { cookies: '' };
-    const trimmed = credential.trim();
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        const cookies = parsed.cookies ?? parsed.token ?? '';
-        if (cookies) {
-          return { cookies };
-        }
-      } catch {
-        // Không phải JSON hợp lệ — fall through
-      }
+    interface FreebuffBase {
+      accessToken: string; // maps to cookies
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
     }
-    return { cookies: credential };
+
+    const result = parseTokenCredential<FreebuffBase>(credential, {
+      accessKeys: ['cookies', 'token'],
+      logger,
+      label: 'Freebuff',
+    });
+
+    return {
+      cookies: result.accessToken,
+    };
   }
 
   // ─── Prompt Extraction ────────────────────────────────────────────────
@@ -176,17 +183,13 @@ export class FreebuffProvider implements Provider {
   // ─── Login ────────────────────────────────────────────────────────────
 
   async login() {
-    return await loginService.captureCredentialsViaCDP({
+    return captureCookieLogin({
       providerId: PROVIDER_ID,
       loginUrl: AUTH_LOGIN_URL,
-      partition: `freebuff_${Date.now()}`,
+      partitionPrefix: 'freebuff',
       cookieEvent: FREEBUFF_EVENTS.LOGIN_TOKEN,
       infoEvent: FREEBUFF_EVENTS.LOGIN_EMAIL,
-      validate: async (data: {
-        cookies: string;
-        headers?: any;
-        email?: string;
-      }) => {
+      validate: async (data: CapturedLoginData): Promise<ValidateResult> => {
         if (!data.cookies?.length) return { isValid: false };
 
         const hasSessionToken =
@@ -511,18 +514,14 @@ export class FreebuffProvider implements Provider {
           `[Freebuff] API error ${response.status}: ${errorText.slice(0, 300)}`,
         );
 
-        if (response.status === 401 || response.status === 403) {
-          const err = new Error(
-            `Session expired or invalid. Please re-login to Freebuff. (${response.status})`,
-          );
-          (err as any).isAuthError = true;
-          (err as any).statusCode = response.status;
-          throw err;
-        }
-
-        throw new Error(
-          `Freebuff API error (${response.status}): ${errorText.slice(0, 200)}`,
-        );
+        await throwIfNotOk(response, {
+          label: 'Freebuff',
+          preReadDetail: errorText,
+          buildMessage: (status, detail) =>
+            status === 401 || status === 403
+              ? `Session expired or invalid. Please re-login to Freebuff. (${status})`
+              : `Freebuff API error (${status}): ${detail.slice(0, 200)}`,
+        });
       }
 
       if (!response.body) {

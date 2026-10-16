@@ -26,6 +26,7 @@ export const WEBSITE_URL = 'https://kiro.dev/';
 export const AUTH_METHOD = ['google', 'github'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = false;
 
 // ─── Models ───────────────────────────────────────────────────────────
@@ -393,15 +394,17 @@ export const HTTP_HEADERS = {
   BEARER_PREFIX: 'Bearer ',
 } as const;
 
+import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  AUTHORIZATION: 'Authorization',
-  CONTENT_TYPE: 'Content-Type',
-  ACCEPT: 'Accept',
+  AUTHORIZATION: STANDARD_HTTP_HEADERS.AUTHORIZATION,
+  CONTENT_TYPE: STANDARD_HTTP_HEADERS.CONTENT_TYPE,
+  ACCEPT: STANDARD_HTTP_HEADERS.ACCEPT,
 } as const;
 
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
-  FORM: 'application/x-www-form-urlencoded',
+  JSON: SHARED_CONTENT_TYPES.JSON,
+  FORM: SHARED_CONTENT_TYPES.FORM_URLENCODED,
 } as const;
 
 // ─── Credential Fields (authData JSON) ────────────────────────────────

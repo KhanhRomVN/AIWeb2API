@@ -64,6 +64,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   KIMI_EVENTS,
   USER_AGENT,
   MSH_HEADERS,
@@ -99,7 +100,12 @@ import { parseKimiSSE } from './kimi.sse-parser';
 import { kimiProxyHandler } from './kimi.proxy-handler';
 import { kimiUploadFile } from './kimi.upload';
 
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Shared 
+import { throwIfNotOk } from '../_shared/http';
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+
+// ─── Constants ───────────────────────────────────────────────────────
 const logger = createLogger('KimiProvider');
 
 // ─── Provider Class ────────────────────────────────────────────────────
@@ -110,6 +116,7 @@ export class KimiProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     is_enabled: IS_ENABLED,
@@ -122,6 +129,7 @@ export class KimiProvider implements Provider {
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────
@@ -141,49 +149,25 @@ export class KimiProvider implements Provider {
   // ─── Credential Parser ─────────────────────────────────────────────
 
   private parseCredential(credential: string): KimiCredential {
-    if (!credential) return { accessToken: '' };
-
-    if (credential.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(credential) as KimiCredential &
-          Record<string, unknown>;
-        const accessToken =
-          parsed[AUTH_FIELDS.ACCESS_TOKEN] ||
-          parsed[AUTH_FIELDS.ACCESS_TOKEN_SNAKE] ||
-          parsed[AUTH_FIELDS.TOKEN] ||
-          '';
-        return {
-          accessToken: accessToken as string,
-          refreshToken:
-            (parsed[AUTH_FIELDS.REFRESH_TOKEN] as string) ||
-            (parsed[AUTH_FIELDS.REFRESH_TOKEN_SNAKE] as string) ||
-            '',
-        };
-      } catch {
-        logger.warn(
-          '[Kimi] Credential is not valid JSON, falling through to raw token parsing',
-        );
-      }
+    interface KimiBase {
+      accessToken: string;
+      refreshToken: string;
     }
 
-    // raw JWT
-    if (credential.startsWith(AUTH_PREFIXES.JWT)) {
-      return { accessToken: credential };
-    }
+    const result = parseTokenCredential<KimiBase>(credential, {
+      accessKeys: [AUTH_FIELDS.ACCESS_TOKEN, AUTH_FIELDS.ACCESS_TOKEN_SNAKE, AUTH_FIELDS.TOKEN],
+      refreshKeys: [AUTH_FIELDS.REFRESH_TOKEN, AUTH_FIELDS.REFRESH_TOKEN_SNAKE],
+      jwtPrefix: AUTH_PREFIXES.JWT,
+      cookieAccessRegexes: [REGEX_PATTERNS.KIMI_AUTH, REGEX_PATTERNS.ACCESS_TOKEN, REGEX_PATTERNS.TOKEN],
+      cookieRefreshRegexes: [REGEX_PATTERNS.KIMI_REFRESH, REGEX_PATTERNS.REFRESH_TOKEN],
+      logger,
+      label: 'Kimi',
+    });
 
-    // cookie string — extract kimi-auth token
-    const match =
-      credential.match(REGEX_PATTERNS.KIMI_AUTH) ||
-      credential.match(REGEX_PATTERNS.ACCESS_TOKEN) ||
-      credential.match(REGEX_PATTERNS.TOKEN);
-    const accessToken = match ? match[1] : credential;
-
-    const refreshMatch =
-      credential.match(REGEX_PATTERNS.KIMI_REFRESH) ||
-      credential.match(REGEX_PATTERNS.REFRESH_TOKEN);
-    const refreshToken = refreshMatch ? refreshMatch[1] : '';
-
-    return { accessToken, refreshToken };
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken || undefined,
+    };
   }
 
   // ─── Refresh Token ──────────────────────────────────────────────────
@@ -647,29 +631,12 @@ export class KimiProvider implements Provider {
         }
       }
 
-      if (!response.ok) {
-        let detail = '';
-        try {
-          const body = (await response.json()) as any;
-          detail =
-            body?.error?.message ??
-            body?.message ??
-            body?.msg ??
-            JSON.stringify(body);
-        } catch {
-          detail = await response.text().catch(() => '');
-        }
-        const message = `Kimi API Error ${response.status}${detail ? `: ${detail.slice(0, 500)}` : ''}`;
-        if (response.status === 401 || response.status === 403) {
-          const err = new Error(
-            `Session expired or invalid. Please re-login to Kimi. (${message})`,
-          );
-          (err as any).isAuthError = true;
-          (err as any).statusCode = response.status;
-          throw err;
-        }
-        throw new Error(message);
-      }
+      await throwIfNotOk(response, {
+        label: 'Kimi',
+        maxDetailLength: 500,
+        buildMessage: (status, detail) =>
+          `Kimi API Error ${status}${detail ? `: ${detail}` : ''}`,
+      });
 
       if (!response.body) {
         throw new Error('No response body from Kimi API');
@@ -735,10 +702,6 @@ export class KimiProvider implements Provider {
   }
 
   // ─── Continue Message ───────────────────────────────────────────────
-
-  async continueMessage(options: SendMessageOptions): Promise<void> {
-    return this.handleMessage(options);
-  }
 
   // ─── Get Models ─────────────────────────────────────────────────────
 

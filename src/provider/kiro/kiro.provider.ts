@@ -29,8 +29,15 @@ import { proxyHandler } from './kiro.proxy-handler';
 import { ByteQueue, parseEventFrame } from './kiro.sse-parser';
 import { createKiroThinkingParser } from './kiro.thinking-parser';
 
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
 import {
+  PROVIDER_ID,
   PROVIDER_NAME,
+  PROVIDER_DESCRIPTION,
+  PROVIDER_COLOR,
+  WEBSITE_URL,
+  AUTH_METHOD,
+  CONNECTION_TYPE,
   MODELS,
   AWS_OIDC,
   OIDC_CLIENT,
@@ -50,6 +57,7 @@ import {
   KIRO_PROFILE_REGIONS,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
 } from './kiro.constant';
 
 import type {
@@ -80,18 +88,18 @@ export class KiroProvider implements Provider {
 
   // ─── Provider Configuration ───────────────────────────────────────────
   static config = {
-    provider_id: 'kiro',
+    ...DEFAULT_PROVIDER_CONFIG,
+    provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
-    description: 'AWS-powered AI coding assistant with OAuth authentication',
-    color: '#8B5CF6',
-    is_enabled: true,
-    website_url: 'https://kiro.dev/',
-    auth_method: ['google', 'github'],
-    connection_type: 'https',
+    description: PROVIDER_DESCRIPTION,
+    color: PROVIDER_COLOR,
+    website_url: WEBSITE_URL,
+    auth_method: AUTH_METHOD,
+    connection_type: CONNECTION_TYPE,
     models: MODELS,
-    is_pausable: false,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
     /** Device code flow: không cần CDP/proxy browser, user authorize trực tiếp trên browser thường */
     login_flow: 'device_code' as const,
   };

@@ -38,6 +38,7 @@ export const WEBSITE_URL = 'https://chat.z.ai/';
 export const AUTH_METHOD = ['google', 'basic'] as const;
 export const CONNECTION_TYPE = 'browser';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = false;
 export const PLATFORM = 'web';
 export const BROWSER_EXTENSION_FOLDER = 'zai-bridge';
@@ -88,9 +89,8 @@ export const ZAI_BROWSER_EVENTS = {
   LOGIN_EMAIL: 'zai-browser-login-email',
 } as const;
 
-export const MAX_CONTINUATIONS = 10;
-export const HISTORY_MESSAGES_COUNT = 20;
-export const SUCCESS_CODE = 0;
+import { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE } from '../_shared/constants/chat-limits.constants';
+export { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE };
 
 // ─── Auth Methods ────────────────────────────────────────────────────
 

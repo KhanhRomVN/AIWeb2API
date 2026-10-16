@@ -65,6 +65,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   REQUEST_LIMIT,
   REQUEST_LIMIT_PERIOD,
   BLOCKED_TIME_RANGES,
@@ -96,9 +97,12 @@ import {
   MODELS,
   SUPPORTS_SESSION_CLEANUP,
 } from './deepseek.constant';
+// ─── Shared Auth ────────────────────────────────────────────────────────
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('DeepSeekProvider');
-
 // ─── Provider Class ────────────────────────────────────────────────────
 
 export class DeepSeekProvider implements Provider {
@@ -121,6 +125,7 @@ export class DeepSeekProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
@@ -133,6 +138,7 @@ export class DeepSeekProvider implements Provider {
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
   };
@@ -145,30 +151,27 @@ export class DeepSeekProvider implements Provider {
    * Nếu credential cũ không có `deviceId` → trả `deviceId: null`.
    */
   private parseCredential(credential: string): DeepSeekCredential {
-    // Try parsing as JSON first
-    if (credential.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(credential);
-        const token =
-          parsed.secretKey ||
-          parsed.secret_key ||
-          parsed.accessToken ||
-          parsed.access_token ||
-          parsed.token;
-        const deviceId = parsed.deviceId || parsed.device_id || null;
-        if (token) {
-          return { token, deviceId };
-        }
-      } catch (e) {
-        logger.warn(
-          '[DeepSeek] Credential is not valid JSON, treating as raw token:',
-          e,
-        );
-      }
+    interface DSBase {
+      accessToken: string; // maps to 'token'
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
     }
 
-    // Fallback: treat as raw token
-    return { token: credential, deviceId: null };
+    const result = parseTokenCredential<DSBase>(credential, {
+      accessKeys: ['secretKey', 'secret_key', 'accessToken', 'access_token', 'token'],
+      logger,
+      label: 'DeepSeek',
+    });
+
+    const deviceId =
+      (result.jsonPayload?.deviceId as string) ||
+      (result.jsonPayload?.device_id as string) ||
+      null;
+
+    return {
+      token: result.accessToken,
+      deviceId,
+    };
   }
 
   /**

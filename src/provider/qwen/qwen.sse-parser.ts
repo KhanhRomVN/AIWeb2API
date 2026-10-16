@@ -17,6 +17,9 @@
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
 
+// ── Shared ──
+import { readTextLines } from '../_shared/sse';
+
 // ── Types ──
 import { SSEEventPayload, SSEResponseCreated } from './qwen.types';
 
@@ -203,7 +206,6 @@ export async function parseSSEStream(
     isNewChat,
   } = opts;
 
-  let buffer = '';
   let conversationIdCaptured = false;
   let parentIdCaptured = false;
   let capturedParentId: string | null = null;
@@ -212,14 +214,7 @@ export async function parseSSEStream(
   let totalChunksProcessed = 0;
   let isInThinkingPhase = false;
 
-  for await (const chunk of responseBody as any) {
-    const chunkStr = chunk.toString();
-    buffer += chunkStr;
-    if (onRaw) onRaw(chunkStr);
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
+  for await (const line of readTextLines(responseBody as any, { onRaw })) {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
@@ -342,7 +337,6 @@ export async function parseSSEStream(
       } catch (e) {
         logger.warn('[Qwen] Failed to parse SSE line:', e);
       }
-    }
   }
 
   thinkingParser.flush();

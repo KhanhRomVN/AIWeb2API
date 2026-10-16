@@ -25,6 +25,7 @@ export const WEBSITE_URL = 'https://x.ai';
 export const AUTH_METHOD = ['x'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = false;
 
 // ─── API Configuration ───────────────────────────────────────────────
@@ -135,11 +136,10 @@ export type ClientSurface = 'ui' | 'cli' | 'headless';
 
 // ─── HTTP Headers ────────────────────────────────────────────────────
 
+import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  AUTHORIZATION: 'Authorization',
-  CONTENT_TYPE: 'Content-Type',
-  ACCEPT: 'Accept',
-  USER_AGENT: 'User-Agent',
+  ...STANDARD_HTTP_HEADERS,
   X_GROK_CLIENT_VERSION: 'x-grok-client-version',
   X_GROK_CLIENT_IDENTIFIER: 'x-grok-client-identifier',
   X_GROK_CLIENT_MODE: 'x-grok-client-mode',
@@ -155,9 +155,9 @@ export const HTTP_HEADER_NAMES = {
 // ─── Content Types ───────────────────────────────────────────────────
 
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
-  EVENT_STREAM: 'text/event-stream',
-  FORM_URLENCODED: 'application/x-www-form-urlencoded',
+  JSON: SHARED_CONTENT_TYPES.JSON,
+  EVENT_STREAM: SHARED_CONTENT_TYPES.SSE,
+  FORM_URLENCODED: SHARED_CONTENT_TYPES.FORM_URLENCODED,
 } as const;
 
 // ─── Unsupported Parameters ──────────────────────────────────────────

@@ -15,6 +15,9 @@
 // ── Utils ──
 import { countTokens } from '../../utils/tokenizer';
 
+// ── Shared ──
+import { readTextLines } from '../_shared/sse';
+
 // ── Helpers ──
 import { extractTextsFromLine, cleanText } from './gemini.helpers';
 
@@ -47,7 +50,6 @@ export async function parseSSEStream(
 
   const completionTokensRef = { value: 0 };
   let prevText = '';
-  let buffer = '';
   let totalBytes = 0;
 
   const emitDelta = (text: string) => {
@@ -65,34 +67,17 @@ export async function parseSSEStream(
     prevText = text;
   };
 
-  for await (const chunk of responseBody) {
-    const chunkStr = chunk.toString();
-    totalBytes += chunkStr.length;
-    if (onRaw) onRaw(chunkStr);
-    buffer += chunkStr;
+  const lines = readTextLines(responseBody, {
+    flushRemainder: true,
+    onRaw: (chunk) => {
+      totalBytes += chunk.length;
+      if (onRaw) onRaw(chunk);
+    },
+  });
 
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      const texts = extractTextsFromLine(line);
-      for (const t of texts) {
-        emitDelta(t);
-      }
-    }
-  }
-
-  if (buffer.trim()) {
-    const texts = extractTextsFromLine(buffer);
-    for (const t of texts) {
-      if (t.length > prevText.length) {
-        const delta = cleanText(t.slice(prevText.length));
-        if (delta) {
-          completionTokensRef.value += countTokens(delta);
-          onContent(delta);
-        }
-        prevText = t;
-      }
+  for await (const line of lines) {
+    for (const t of extractTextsFromLine(line)) {
+      emitDelta(t);
     }
   }
 

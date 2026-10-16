@@ -2,43 +2,17 @@
  * ------------------------------------------------------------------
  * Mistral Proxy Handler
  * ------------------------------------------------------------------
- * Proxy handler để capture cookies từ Mistral.
- *
- * Main features:
- * - onRequest() : Capture cookies từ auth.mistral.ai và console.mistral.ai
+ * Capture cookies từ auth.mistral.ai và console.mistral.ai.
  * ------------------------------------------------------------------
  */
 
-// ─── Imports ────────────────────────────────────────────────────────────
-// ── Services ──
-import { ProxyHandler } from '../../services/proxy.service';
-import { proxyEvents } from '../../services/proxy.service';
-
-// ── Utils ──
-import { createLogger } from '../../utils/logger';
-
-// ── Constants ──
+import type { ProxyHandler } from '../../services/proxy.service';
+import { createCookieCaptureHandler } from '../_shared/proxy/cookie-capture-handler';
 import { MISTRAL_EVENTS, MISTRAL_HOSTS } from './mistral.constant';
 
-// ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('MistralProxy');
-
-// ─── Proxy Handler ────────────────────────────────────────────────────
-
 export const proxyHandler: ProxyHandler = {
-  onRequest: (ctx: any, callback: () => void) => {
-    const host = ctx.clientToProxyRequest.headers.host;
-
-    if (
-      host &&
-      (host.includes(MISTRAL_HOSTS.AUTH) ||
-        host.includes(MISTRAL_HOSTS.CONSOLE))
-    ) {
-      const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-      if (reqCookies && reqCookies.length > 0) {
-        proxyEvents.emit(MISTRAL_EVENTS.COOKIES, reqCookies);
-      }
-    }
-    callback();
-  },
+  ...createCookieCaptureHandler({
+    hosts: [MISTRAL_HOSTS.AUTH, MISTRAL_HOSTS.CONSOLE],
+    event: MISTRAL_EVENTS.COOKIES,
+  }),
 };

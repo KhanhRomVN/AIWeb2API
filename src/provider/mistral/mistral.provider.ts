@@ -44,6 +44,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   BASE_URL,
   CHAT_BASE_URL,
   AUTH_LOGIN_URL,
@@ -62,7 +63,12 @@ import {
   API_FIELDS,
   MISTRAL_IMPERSONATE_PROFILE,
 } from './mistral.constant';
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Shared 
+import { throwIfNotOk } from '../_shared/http';
+import { captureCookieLogin, CapturedLoginData, ValidateResult } from '../_shared/auth/cookie-login';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+
+// ─── Constants ─────────────────────────────────────────────────────────
 const logger = createLogger('MistralProvider');
 
 // ─── Provider Class ────────────────────────────────────────────────────
@@ -73,32 +79,28 @@ export class MistralProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
-    is_enabled: IS_ENABLED,
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
-    is_pausable: IS_PAUSABLE,
+    is_enabled: IS_ENABLED,
     can_regenerate: CAN_REGENERATE,
-    token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   // ─── Login ──────────────────────────────────────────────────────────
 
   async login() {
-    return await loginService.captureCredentialsViaCDP({
+    return captureCookieLogin({
       providerId: PROVIDER_ID,
       loginUrl: AUTH_LOGIN_URL,
-      partition: `${LOGIN_PARTITION_PREFIX}${Date.now()}`,
+      partitionPrefix: LOGIN_PARTITION_PREFIX,
       cookieEvent: MISTRAL_EVENTS.COOKIES,
-      validate: async (data: {
-        cookies: string;
-        headers?: any;
-        email?: string;
-      }) => {
+      validate: async (data: CapturedLoginData): Promise<ValidateResult> => {
         if (data.cookies && data.cookies.length > 0) {
           const profile = await this.getUserProfile(data.cookies);
           if (profile.email) {
@@ -199,10 +201,6 @@ export class MistralProvider implements Provider {
 
   // ─── Continue Message ───────────────────────────────────────────────
 
-  async continueMessage(options: SendMessageOptions): Promise<void> {
-    return this.handleMessage(options);
-  }
-
   // ─── Stream Helper ──────────────────────────────────────────────────
 
   private async streamMistral(
@@ -255,25 +253,7 @@ export class MistralProvider implements Provider {
       stream: true,
     });
 
-    if (!response.ok) {
-      let detail = '';
-      try {
-        const body = (await response.json()) as any;
-        detail = body?.error?.message ?? body?.message ?? JSON.stringify(body);
-      } catch {
-        detail = await response.text().catch(() => '');
-      }
-      const message = `Mistral API returned ${response.status}${detail ? `: ${detail}` : ''}`;
-      if (response.status === 401 || response.status === 403) {
-        const err = new Error(
-          `Session expired or invalid. Please re-login to Mistral. (${message})`,
-        );
-        (err as any).isAuthError = true;
-        (err as any).statusCode = response.status;
-        throw err;
-      }
-      throw new Error(message);
-    }
+    await throwIfNotOk(response, { label: 'Mistral' });
 
     if (response.body) {
       await parseSSEStream(response.body as AsyncIterable<any>, {

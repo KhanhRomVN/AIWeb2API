@@ -67,6 +67,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   BASE_URL,
   QWEN_EVENTS,
   API_VERSION,
@@ -104,6 +105,10 @@ import {
   PROVIDER_COLOR,
   QWEN_IMPERSONATE_PROFILE,
 } from './qwen.constant';
+// ─── Shared Auth ────────────────────────────────────────────────────────
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenProvider');
 
@@ -164,6 +169,7 @@ export class QwenProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     is_enabled: IS_ENABLED,
@@ -175,6 +181,7 @@ export class QwenProvider implements Provider {
     color: PROVIDER_COLOR,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   // ─── Token Helpers ─────────────────────────────────────────────────
@@ -186,63 +193,29 @@ export class QwenProvider implements Provider {
     bxUmidToken: string;
     userAgent: string;
   } {
-    // Try parsing as JSON first
-    if (credential.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(credential);
-
-        // New format: {accessToken, ...} or old format: {token, bxUa, ...}
-        const token =
-          parsed[AUTH_FIELDS.ACCESS_TOKEN] ||
-          parsed[AUTH_FIELDS.ACCESS_TOKEN_SNAKE] ||
-          parsed[AUTH_FIELDS.TOKEN] ||
-          null;
-
-        return {
-          token,
-          cookieValue: token ? `${TOKEN_COOKIE_KEY}=${token}` : '',
-          bxUa: parsed[AUTH_FIELDS.BX_UA] || '',
-          bxUmidToken: parsed[AUTH_FIELDS.BX_UMIDTOKEN] || '',
-          userAgent: parsed[AUTH_FIELDS.USER_AGENT] || USER_AGENT,
-        };
-      } catch {
-        logger.warn(
-          '[Qwen] Credential is not valid JSON, treating as raw token',
-        );
-      }
+    interface QwenParsedBase {
+      accessToken: string;
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
     }
 
-    // Check if raw JWT token
-    if (credential.trim().startsWith(AUTH_PREFIXES.JWT)) {
-      const token = credential.trim();
-      return {
-        token,
-        cookieValue: `${TOKEN_COOKIE_KEY}=${token}`,
-        bxUa: '',
-        bxUmidToken: '',
-        userAgent: USER_AGENT,
-      };
-    }
+    const result = parseTokenCredential<QwenParsedBase>(credential, {
+      accessKeys: [AUTH_FIELDS.ACCESS_TOKEN, AUTH_FIELDS.ACCESS_TOKEN_SNAKE, AUTH_FIELDS.TOKEN],
+      jwtPrefix: AUTH_PREFIXES.JWT,
+      cookieAccessRegexes: [REGEX_PATTERNS.COOKIE_TOKEN],
+      logger,
+      label: 'Qwen',
+    });
 
-    // Try extracting from cookie format: token=eyJ...
-    const m = credential.match(REGEX_PATTERNS.COOKIE_TOKEN);
-    if (m && m[1]) {
-      return {
-        token: m[1],
-        cookieValue: credential,
-        bxUa: '',
-        bxUmidToken: '',
-        userAgent: USER_AGENT,
-      };
-    }
+    const token = result.accessToken || null;
+    const jsonPayload = result.jsonPayload || {};
 
-    // Fallback: treat as raw token
     return {
-      token: credential,
-      cookieValue: `${TOKEN_COOKIE_KEY}=${credential}`,
-      bxUa: '',
-      bxUmidToken: '',
-      userAgent: USER_AGENT,
+      token,
+      cookieValue: token ? `${TOKEN_COOKIE_KEY}=${token}` : '',
+      bxUa: (jsonPayload[AUTH_FIELDS.BX_UA] as string) || '',
+      bxUmidToken: (jsonPayload[AUTH_FIELDS.BX_UMIDTOKEN] as string) || '',
+      userAgent: (jsonPayload[AUTH_FIELDS.USER_AGENT] as string) || USER_AGENT,
     };
   }
 
@@ -1437,10 +1410,6 @@ export class QwenProvider implements Provider {
   }
 
   // ─── Continue Message ───────────────────────────────────────────────
-
-  async continueMessage(options: SendMessageOptions): Promise<void> {
-    return this.handleMessage(options);
-  }
 
   // ─── Upload File ────────────────────────────────────────────────────
 

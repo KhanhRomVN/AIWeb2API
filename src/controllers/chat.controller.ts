@@ -25,7 +25,7 @@ import {
 } from '../services/account.service';
 
 // ── Repositories ──
-import { updateMaxInputToken } from '../repositories/model-stats.repository';
+
 
 // ── Middleware ─
 import { incrementRequestCountAndUsage } from '../middleware/request-limit.middleware';
@@ -277,26 +277,6 @@ export const sendMessage = async (
           if (streamTimeoutId) clearTimeout(streamTimeoutId);
           if (stream !== false && res.writableEnded) return;
 
-          // --- Cập nhật max_input_token (Fire-and-forget) ---
-          // Chỉ thực hiện khi có messages input hợp lệ
-          if (messages && Array.isArray(messages) && messages.length > 0) {
-            try {
-              const inputTokens = countMessagesTokens(messages);
-              if (inputTokens > 0) {
-                updateMaxInputToken(
-                  resolvedAccount.provider_id,
-                  model,
-                  inputTokens,
-                ).catch((err: any) =>
-                  logger.warn(
-                    `[ModelStats] Failed to update max_input_token for ${model}: ${err.message}`,
-                  ),
-                );
-              }
-            } catch (e: any) {
-              logger.warn(`[ModelStats] Token counting error: ${e.message}`);
-            }
-          }
 
           // Tăng request count + tính usage nếu provider có requestLimit (fire-and-forget)
           if (resolvedAccount.id && !resolvedAccount.id.startsWith('anon-')) {

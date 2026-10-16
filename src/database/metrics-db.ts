@@ -91,17 +91,12 @@ function migrateModelStats(db: Database.Database): void {
         provider_id     TEXT NOT NULL,
         model_id        TEXT NOT NULL,
         success_rate    REAL DEFAULT NULL,
-        max_input_token INTEGER DEFAULT NULL,
         updated_at      INTEGER NOT NULL,
         PRIMARY KEY (provider_id, model_id)
       )
     `);
 
-    // Add column if missing (for existing databases)
-    const cols = (db.pragma('table_info(model_stats)') as any[]).map((c) => c.name);
-    if (!cols.includes('max_input_token')) {
-      db.exec('ALTER TABLE model_stats ADD COLUMN max_input_token INTEGER DEFAULT NULL');
-    }
+
   } catch (err) {
     logger.error('Error initializing model_stats table', err);
   }

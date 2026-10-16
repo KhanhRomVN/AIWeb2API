@@ -77,6 +77,7 @@ export interface Provider {
    */
   blocked_time_ranges?: Array<{ startTime: number; endTime: number }>;
   token_count_mode?: 'incremental' | 'cumulative';
+  max_input_token?: number;
   /**
    * Provider có hỗ trợ session cleanup không (xóa toàn bộ conversation khi
    * account không còn ở chat view). Detect tự động từ deleteAllSessions().
@@ -236,6 +237,7 @@ const buildProvidersCache = async (
       ...(modelsError ? { models_error: modelsError } : {}),
       ...(p.blocked_time_ranges != null ? { blocked_time_ranges: p.blocked_time_ranges } : {}),
       ...(p.token_count_mode != null ? { token_count_mode: p.token_count_mode } : {}),
+      ...(p.max_input_token != null ? { max_input_token: p.max_input_token } : {}),
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,
@@ -249,6 +251,7 @@ const buildProvidersCache = async (
           m.is_file_upload !== undefined ? m.is_file_upload : false,
         max_context_length: m.max_context_length ?? m.context_length ?? null,
         context_length: m.max_context_length ?? m.context_length ?? null,
+        max_input_tokens: p.max_input_token ?? m.max_input_tokens ?? null,
         success_rate:
           successRateMap.get(
             `${p.provider_id.toLowerCase()}:${m.id?.toLowerCase()}`,

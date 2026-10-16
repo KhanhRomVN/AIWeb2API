@@ -43,6 +43,7 @@ export const WEBSITE_URL = 'https://gemini.google.com/';
 export const AUTH_METHOD = ['google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = false;
 
 export const GEMINI_AUTH_METHODS = {
@@ -214,26 +215,13 @@ export const MODEL_MAP: Record<
 export const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-/**
- * JA3 fingerprint khớp với Chrome 131.
- */
-export const CHROME_JA3 =
-  '771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0';
-
-/**
- * HTTP/2 fingerprint khớp với Chrome.
- */
-export const CHROME_HTTP2_FINGERPRINT =
-  '1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p';
+import { CHROME_JA3, CHROME_HTTP2_FINGERPRINT, createChromeProfile } from '../_shared/constants/chrome-fingerprint';
+export { CHROME_JA3, CHROME_HTTP2_FINGERPRINT };
 
 /**
  * Profile giả lập Chrome dùng cho mọi request tới gemini.google.com.
  */
-export const GEMINI_IMPERSONATE_PROFILE = {
-  ja3: CHROME_JA3,
-  http2Fingerprint: CHROME_HTTP2_FINGERPRINT,
-  userAgent: USER_AGENT,
-} as const;
+export const GEMINI_IMPERSONATE_PROFILE = createChromeProfile(USER_AGENT);
 
 export const GEMINI_EVENTS = {
   COOKIES: 'gemini-cookies',
@@ -246,13 +234,10 @@ export const GEMINI_EVENTS = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
+import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  USER_AGENT: 'User-Agent',
-  COOKIE: 'Cookie',
-  AUTHORIZATION: 'Authorization',
-  CONTENT_TYPE: 'Content-Type',
-  ORIGIN: 'Origin',
-  REFERER: 'Referer',
+  ...STANDARD_HTTP_HEADERS,
   X_GOOG_AUTH_USER: 'X-Goog-AuthUser',
   X_SAME_DOMAIN: 'X-Same-Domain',
 } as const;
@@ -260,7 +245,7 @@ export const HTTP_HEADER_NAMES = {
 // ─── Content Types ───────────────────────────────────────────────────
 
 export const CONTENT_TYPES = {
-  FORM_URLENCODED: 'application/x-www-form-urlencoded',
+  FORM_URLENCODED: SHARED_CONTENT_TYPES.FORM_URLENCODED,
 } as const;
 
 // ─── SAPISID / Form ──────────────────────────────────────────────────

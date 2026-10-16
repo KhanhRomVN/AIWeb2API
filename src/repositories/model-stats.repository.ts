@@ -15,12 +15,10 @@
  * - upsertModelStats()         : Tạo hoặc cập nhật row cho model
  * - updateModelSuccessRate()   : Cập nhật success rate
  * - findAllModelStats()        : Lấy tất cả rows (để build success rate map)
- * - findModelStats()           : Lấy stats của một model cụ thể
  * ------------------------------------------------------------------
  */
 
 // ─── Imports ────────────────────────────────────────────────────────────
-import { sql } from 'kysely';
 import { getMetricsDataStore } from '../database';
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -29,7 +27,6 @@ export interface ModelStatsRow {
   provider_id: string;
   model_id: string;
   success_rate: number | null;
-  max_input_token: number | null;
   updated_at: number;
 }
 
@@ -81,36 +78,6 @@ export const updateModelSuccessRate = async (
   await db
     .updateTable('model_stats')
     .set({ success_rate: successRate, updated_at: Date.now() })
-    .where('provider_id', '=', providerId)
-    .where('model_id', '=', modelId)
-    .execute();
-};
-
-/**
- * Cập nhật max_input_token nếu giá trị mới lớn hơn giá trị hiện tại.
- * Sử dụng Kysely `sql` tagged template để tạo expression CASE WHEN chuẩn ANSI SQL,
- * đảm bảo tính nguyên tử (atomicity) và tương thích cả SQLite lẫn PostgreSQL.
- */
-export const updateMaxInputToken = async (
-  providerId: string,
-  modelId: string,
-  inputTokens: number,
-): Promise<void> => {
-  const db = getMetricsDataStore().kysely;
-  
-  // Đảm bảo row tồn tại trước khi update
-  await upsertModelStats(providerId, modelId);
-
-  await db
-    .updateTable('model_stats')
-    .set({
-      max_input_token: sql`CASE 
-        WHEN max_input_token IS NULL OR max_input_token < ${inputTokens} 
-        THEN ${inputTokens} 
-        ELSE max_input_token 
-      END`,
-      updated_at: Date.now(),
-    })
     .where('provider_id', '=', providerId)
     .where('model_id', '=', modelId)
     .execute();

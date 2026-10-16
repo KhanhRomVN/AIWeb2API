@@ -2,59 +2,26 @@
  * ------------------------------------------------------------------
  * Qwen Proxy Handler
  * ------------------------------------------------------------------
- * Proxy handler để capture token, headers, và email từ Qwen.
- * Lắng nghe bx-ua, x-csrf-token, và token từ API response.
- *
- * Main features:
- * - onRequest()       : Capture bx-ua, csrf token, bx-umidtoken
- * - onRequestData()   : Capture email từ signin request
- * - onResponseBody()  : Capture token và email từ signin response
+ * Capture token, headers, và email từ Qwen.
  * ------------------------------------------------------------------
  */
 
-// ─── Imports ────────────────────────────────────────────────────────────
-// ── Services ──
-import { ProxyHandler } from '../../services/proxy.service';
+import type { ProxyHandler } from '../../services/proxy.service';
 import { proxyEvents } from '../../services/proxy.service';
-
-// ── Utils ──
 import { createLogger } from '../../utils/logger';
+import { createCookieCaptureHandler } from '../_shared/proxy/cookie-capture-handler';
+import { QWEN_EVENTS, HOSTS } from './qwen.constant';
 
-// ── Constants ──
-import { QWEN_EVENTS } from './qwen.constant';
-
-// ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('QwenProvider');
 
-// ─── Proxy Handler ────────────────────────────────────────────────────
-
 export const proxyHandler: ProxyHandler = {
-  onRequest: (ctx: any, callback: () => void) => {
-    const host = ctx.clientToProxyRequest.headers.host;
-
-    if (host && host.includes('chat.qwen.ai')) {
-      const reqCookies = ctx.clientToProxyRequest.headers.cookie;
-      if (reqCookies && reqCookies.includes('csrfToken')) {
-        proxyEvents.emit(QWEN_EVENTS.COOKIES, reqCookies);
-      }
-
-      const bxUa = ctx.clientToProxyRequest.headers['bx-ua'];
-      const xCsrfToken = ctx.clientToProxyRequest.headers['x-csrf-token'];
-      const userAgent = ctx.clientToProxyRequest.headers['user-agent'];
-      const bxUmidToken = ctx.clientToProxyRequest.headers['bx-umidtoken'];
-
-      if (bxUa || xCsrfToken || bxUmidToken) {
-        const headers: Record<string, string> = {};
-        if (bxUa) headers['bx-ua'] = bxUa;
-        if (xCsrfToken) headers['x-csrf-token'] = xCsrfToken;
-        if (userAgent) headers['User-Agent'] = userAgent;
-        if (bxUmidToken) headers['bx-umidtoken'] = bxUmidToken;
-        proxyEvents.emit(QWEN_EVENTS.HEADERS, headers);
-      }
-    }
-    callback();
-  },
-
+  ...createCookieCaptureHandler({
+    hosts: [HOSTS.CHAT_QWEN],
+    cookieMarker: 'csrfToken',
+    event: QWEN_EVENTS.COOKIES,
+    extraHeaders: ['bx-ua', 'x-csrf-token', 'bx-umidtoken'],
+    headersEvent: QWEN_EVENTS.HEADERS,
+  }),
   onRequestData: (
     ctx: any,
     chunk: Buffer,

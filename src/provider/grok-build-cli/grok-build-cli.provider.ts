@@ -31,6 +31,8 @@ import { Provider, SendMessageOptions } from '../../types';
 
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
+import { coordinateTokenRefresh } from '../../utils/jwt-helper';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
 
 // ── SSE Parser ──
 import { parseGrokBuildSSEStream } from './grok-build-cli.sse-parser';
@@ -55,6 +57,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   RESPONSES_URL,
   MODELS_URL,
   TOKEN_URL,
@@ -78,9 +81,12 @@ import {
   MODELS,
 } from './grok-build-cli.constant';
 
-// ─── Constants ──────────────────────────────────────────────────────────
-const logger = createLogger('GrokBuildCLIProvider');
+// ─── Shared 
+import { throwIfNotOk } from '../_shared/http';
+import { parseTokenCredential } from '../_shared/auth';
 
+// ─── Constants ──────────────────────────────────────────────────────
+const logger = createLogger('GrokBuildCLIProvider');
 const REASONING_EFFORT_SET = new Set(SUPPORTED_REASONING_EFFORTS);
 
 // ─── Helper Functions ───────────────────────────────────────────────────
@@ -93,17 +99,26 @@ function nonEmptyString(value: unknown): string | null {
 }
 
 function parseCredential(credential: string): GrokBuildCredentials {
-  if (credential.trim().startsWith('{')) {
-    try {
-      const parsed = JSON.parse(credential) as GrokBuildCredentials;
-      return parsed;
-    } catch (e) {
-      logger.warn('[GrokBuildCLI] Failed to parse JSON credential:', e);
-    }
+  interface GrokBase {
+    accessToken: string;
+    refreshToken: string;
+    jsonPayload?: Record<string, unknown>;
   }
 
-  // Fallback: treat as raw access token
-  return { accessToken: credential };
+  const result = parseTokenCredential<GrokBase>(credential, {
+    accessKeys: ['accessToken', 'access_token', 'token'],
+    refreshKeys: ['refreshToken', 'refresh_token'],
+    logger,
+    label: 'GrokBuildCLI',
+  });
+
+  // Nếu là JSON hợp lệ, trả về toàn bộ object đã parse (giữ các field phụ như email, userId...)
+  if (result.jsonPayload) {
+    return { ...result.jsonPayload, accessToken: result.accessToken, refreshToken: result.refreshToken || undefined } as GrokBuildCredentials;
+  }
+
+  // Fallback: chỉ có accessToken thô
+  return { accessToken: result.accessToken };
 }
 
 /**
@@ -461,6 +476,7 @@ export class GrokBuildCLIProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
@@ -470,9 +486,9 @@ export class GrokBuildCLIProvider implements Provider {
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     models: MODELS,
-    is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
     /** Device code flow: không cần CDP/proxy browser, user authorize trực tiếp trên browser thường */
     login_flow: 'device_code' as const,
   };
@@ -722,7 +738,11 @@ export class GrokBuildCLIProvider implements Provider {
     }
   }
 
-  private async refreshCredentials(
+  /**
+   * Thực hiện chu trình refresh với retry logic.
+   * Được gọi bên trong coordinateTokenRefresh để đảm bảo chỉ có một luồng refresh chạy song song cho mỗi token.
+   */
+  private async _performRefreshCycle(
     credentials: GrokBuildCredentials,
   ): Promise<Partial<GrokBuildCredentials> | null> {
     for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
@@ -736,6 +756,22 @@ export class GrokBuildCLIProvider implements Provider {
     }
 
     return null;
+  }
+
+  /**
+   * Public method để refresh credential, tích hợp race-condition protection.
+   */
+  async refreshCredentials(
+    credentials: GrokBuildCredentials,
+  ): Promise<Partial<GrokBuildCredentials> | null> {
+    if (!credentials.refreshToken) {
+      logger.warn('[GrokBuildCLI] No refresh token available');
+      return null;
+    }
+
+    return coordinateTokenRefresh('grok-build-cli', credentials.refreshToken, () =>
+      this._performRefreshCycle(credentials),
+    );
   }
 
   async refreshToken(refreshTokenStr: string): Promise<any> {
@@ -848,19 +884,10 @@ export class GrokBuildCLIProvider implements Provider {
                     (retryErrorBody as any)?.message ??
                     JSON.stringify(retryErrorBody))
                   : String(retryErrorBody ?? '');
-              const retryMsg = `Grok Build API returned ${retryResponse.status}${retryDetail ? `: ${retryDetail}` : ''}`;
-              if (
-                retryResponse.status === 401 ||
-                retryResponse.status === 403
-              ) {
-                const retryErr = new Error(
-                  `Session expired or invalid. Please re-login to Grok Build. (${retryMsg})`,
-                );
-                (retryErr as any).isAuthError = true;
-                (retryErr as any).statusCode = retryResponse.status;
-                throw retryErr;
-              }
-              throw new Error(retryMsg);
+              await throwIfNotOk(retryResponse, {
+                label: 'Grok Build',
+                preReadDetail: retryDetail,
+              });
             }
 
             await parseGrokBuildSSEStream(
@@ -876,22 +903,16 @@ export class GrokBuildCLIProvider implements Provider {
           }
         }
 
-        const errorDetail =
-          typeof errorBody === 'object' && errorBody !== null
-            ? ((errorBody as any)?.error?.message ??
-              (errorBody as any)?.message ??
-              JSON.stringify(errorBody))
-            : String(errorBody ?? '');
-        const errorMessage = `Grok Build API returned ${response.status}${errorDetail ? `: ${errorDetail}` : ''}`;
-        if (response.status === 401 || response.status === 403) {
-          const authErr = new Error(
-            `Session expired or invalid. Please re-login to Grok Build. (${errorMessage})`,
-          );
-          (authErr as any).isAuthError = true;
-          (authErr as any).statusCode = response.status;
-          throw authErr;
-        }
-        throw new Error(errorMessage);
+        await throwIfNotOk(response, {
+          label: 'Grok Build',
+          preReadDetail: typeof errorBody === 'object' && errorBody !== null
+            ? ((errorBody as any)?.error?.message ?? (errorBody as any)?.message ?? JSON.stringify(errorBody))
+            : String(errorBody ?? ''),
+          buildMessage: (status, detail) =>
+            status === 401 || status === 403
+              ? `Session expired or invalid. Please re-login to Grok Build. (Grok Build API returned ${status}: ${detail})`
+              : `Grok Build API returned ${status}${detail ? `: ${detail}` : ''}`,
+        });
       }
 
       if (!response.body) {

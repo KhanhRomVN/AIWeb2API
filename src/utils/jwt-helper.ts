@@ -26,9 +26,9 @@ export const DEFAULT_REFRESH_THRESHOLD_SEC = 5 * 60; // 5 minutes
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
-interface RefreshState {
+interface RefreshState<T = string | null> {
   isRefreshing: boolean;
-  promise: Promise<string | null> | null;
+  promise: Promise<T> | null;
   timestamp: number;
 }
 
@@ -38,7 +38,7 @@ interface RefreshState {
  * Track ongoing refresh operations to prevent duplicate refreshes
  * Key format: `${providerId}:${tokenHash}`
  */
-const refreshStates = new Map<string, RefreshState>();
+const refreshStates = new Map<string, RefreshState<any>>();
 
 /**
  * Cleanup old refresh states (older than 10 minutes)
@@ -102,13 +102,13 @@ function getRefreshStateKey(providerId: string, token: string): string {
   return `${providerId}:${hashToken(token)}`;
 }
 
-export async function coordinateTokenRefresh(
+export async function coordinateTokenRefresh<T = string | null>(
   providerId: string,
   token: string,
-  refreshFn: () => Promise<string | null>,
-): Promise<string | null> {
+  refreshFn: () => Promise<T>,
+): Promise<T> {
   const key = getRefreshStateKey(providerId, token);
-  const existingState = refreshStates.get(key);
+  const existingState = refreshStates.get(key) as RefreshState<T> | undefined;
 
   // If refresh is already in progress, wait for it
   if (existingState?.isRefreshing && existingState.promise) {
@@ -118,9 +118,9 @@ export async function coordinateTokenRefresh(
   // Start new refresh
   const refreshPromise = (async () => {
     try {
-      const newToken = await refreshFn();
+      const result = await refreshFn();
       refreshStates.delete(key); // Clean up after success
-      return newToken;
+      return result;
     } catch (error) {
       refreshStates.delete(key); // Clean up after error
       throw error;

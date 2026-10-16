@@ -61,6 +61,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   SUPPORTS_SESSION_CLEANUP,
   REQUEST_LIMIT,
   REQUEST_LIMIT_PERIOD,
@@ -74,6 +75,10 @@ import {
   WORKOS_CLIENT_ID,
   HTTP_HEADER_NAMES,
 } from './cline.constant';
+
+// ─── Shared Auth ────────────────────────────────────────────────────────
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ClineProvider');
@@ -99,36 +104,41 @@ export class ClineProvider implements Provider {
 
   // ─── Provider Configuration ───────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
-    is_enabled: IS_ENABLED,
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
     models: MODELS,
-    is_pausable: IS_PAUSABLE,
-    can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
-    blocked_time_ranges: BLOCKED_TIME_RANGES,
-    supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   // ─── Credential Helpers ──────────────────────────────────────────
 
   private parseCredential(credential: string): ClineCredential {
+    // Cline hỗ trợ multi-line credential, lấy dòng đầu tiên làm chính
     const firstLine = credential.split('\n')[0].trim();
-    if (firstLine.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(firstLine);
-        const rt = parsed.refreshToken || parsed.refresh_token || parsed.token;
-        if (rt) return { refreshToken: rt, email: parsed.email };
-      } catch {
-        /* fallthrough */
-      }
+    
+    interface ClineBase {
+      accessToken: string; // maps to refreshToken in our context
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
     }
-    return { refreshToken: firstLine };
+
+    const result = parseTokenCredential<ClineBase>(firstLine, {
+      accessKeys: ['refreshToken', 'refresh_token', 'token'],
+      logger,
+      label: 'Cline',
+    });
+
+    return {
+      refreshToken: result.accessToken,
+      email: (result.jsonPayload?.email as string) || undefined,
+    };
   }
 
   // ─── User Profile ────────────────────────────────────────────────

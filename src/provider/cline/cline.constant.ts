@@ -31,6 +31,7 @@ export const WEBSITE_URL = 'https://cline.bot';
 export const AUTH_METHOD = ['basic'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
 export const SUPPORTS_SESSION_CLEANUP = false;
 

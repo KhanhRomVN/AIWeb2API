@@ -26,6 +26,7 @@
 
 // ─── Imports ────────────────────────────────────────────────────────────
 import { createLogger } from '../../utils/logger';
+import { readTextLines } from '../_shared/sse';
 import {
   createGrokBuildThinkingParser,
   GrokBuildThinkingMetadata,
@@ -78,7 +79,6 @@ export async function parseGrokBuildSSEStream(
 ): Promise<ParseGrokBuildSSEResult> {
   const { onContent, onThinking, onMetadata, onRaw } = opts;
 
-  let buffer = '';
   let currentEventType = '';
   let accumulatedContent = '';
   let usage: Record<string, unknown> | null = null;
@@ -88,185 +88,178 @@ export async function parseGrokBuildSSEStream(
 
   const thinkingParser = createGrokBuildThinkingParser();
 
-  for await (const chunk of responseBody) {
-    const chunkStr = (chunk as Buffer).toString();
-    if (onRaw) onRaw(chunkStr);
-    buffer += chunkStr;
+  const lines = readTextLines(responseBody, { onRaw, keepEmptyLines: true });
 
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+  for await (const line of lines) {
+    const trimmed = line.trim();
 
-    for (const line of lines) {
-      const trimmed = line.trim();
+    // ── SSE event name line ──────────────────────────────────────
+    if (trimmed.startsWith('event: ')) {
+      currentEventType = trimmed.slice(7).trim();
+      continue;
+    }
 
-      // ── SSE event name line ──────────────────────────────────────
-      if (trimmed.startsWith('event: ')) {
-        currentEventType = trimmed.slice(7).trim();
-        continue;
-      }
+    // ── Empty line = SSE event boundary, reset event type ────────
+    if (!trimmed) {
+      currentEventType = '';
+      continue;
+    }
 
-      // ── Empty line = SSE event boundary, reset event type ────────
-      if (!trimmed) {
-        currentEventType = '';
-        continue;
-      }
+    // ── [DONE] sentinel ──────────────────────────────────────────
+    if (trimmed === 'data: [DONE]') {
+      currentEventType = '';
+      continue;
+    }
 
-      // ── [DONE] sentinel ──────────────────────────────────────────
-      if (trimmed === 'data: [DONE]') {
-        currentEventType = '';
-        continue;
-      }
+    if (!trimmed.startsWith('data: ')) continue;
 
-      if (!trimmed.startsWith('data: ')) continue;
-
-      // ── Parse JSON payload ───────────────────────────────────────
-      let data: Record<string, unknown>;
-      try {
-        data = JSON.parse(trimmed.slice(6)) as Record<string, unknown>;
-      } catch (e) {
-        logger.warn('[GrokBuildSSE] JSON parse error', {
-          line: trimmed.slice(0, 200),
-          error: e instanceof Error ? e.message : String(e),
-        });
-        currentEventType = '';
-        continue;
-      }
-
-      eventCount++;
-      const type = (data.type as string) || currentEventType;
-
-      // ── Thinking delta ───────────────────────────────────────────
-      if (
-        type === 'response.reasoning_summary_text.delta' ||
-        type === 'response.reasoning.delta' ||
-        type === 'response.thinking.delta'
-      ) {
-        if (typeof data.delta === 'string' && data.delta) {
-          const chunk = thinkingParser.feed(data.delta);
-          if (onThinking) {
-            onThinking(chunk);
-          }
-        }
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Thinking ended ───────────────────────────────────────────
-      if (
-        type === 'response.reasoning_summary_text.done' ||
-        type === 'response.reasoning.done' ||
-        type === 'response.thinking.done'
-      ) {
-        const closingChunk = thinkingParser.end();
-        if (closingChunk && onThinking) {
-          onThinking(closingChunk);
-        }
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Content delta ────────────────────────────────────────────
-      if (
-        type === 'response.output_text.delta' ||
-        type === 'response.text.delta'
-      ) {
-        if (typeof data.delta === 'string' && data.delta) {
-          accumulatedContent += data.delta;
-          totalContentLength += data.delta.length;
-          onContent(data.delta);
-        }
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Output item done → finish_reason ────────────────────────
-      if (type === 'response.output_item.done') {
-        finishReason = 'stop';
-        if (onMetadata) onMetadata({ finish_reason: 'stop' });
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Response completed → usage ───────────────────────────────
-      if (type === 'response.completed' || type === 'response.done') {
-        const resp = data.response as Record<string, unknown> | undefined;
-        const usageData =
-          (resp?.usage as Record<string, unknown>) ||
-          (data.usage as Record<string, unknown>);
-
-        if (usageData) {
-          usage = usageData;
-
-          // Emit thinking_tokens metadata nếu có reasoning_tokens
-          const reasoningTokens = (
-            usageData.output_tokens_details as Record<string, unknown>
-          )?.reasoning_tokens as number | undefined;
-
-          if (reasoningTokens) {
-            // Emit closing tag với reasoning_tokens nếu thinking parser
-            // chưa emit (trường hợp response.reasoning_summary_text.done
-            // không được fire trước response.completed)
-            const lateClose = thinkingParser.end({
-              reasoning_tokens: reasoningTokens,
-            });
-            if (lateClose && onThinking) {
-              onThinking(lateClose);
-            }
-          }
-
-          if (onMetadata) {
-            onMetadata({ usage: usageData });
-          }
-        }
-
-        const status = resp?.status as string | undefined;
-        if (status) {
-          finishReason = finishReason ?? status;
-          if (onMetadata) onMetadata({ finish_reason: status });
-        }
-
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Error event ──────────────────────────────────────────────
-      if (type === 'error') {
-        logger.error('[GrokBuildSSE] stream error event', { data });
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Info events (bỏ qua) ─────────────────────────────────────
-      if (INFO_EVENT_TYPES.has(type)) {
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Fallback: Chat Completions format ────────────────────────
-      // Safety net nếu Grok thay đổi format về Chat Completions SSE.
-      if (data.choices && Array.isArray(data.choices)) {
-        logger.warn('[GrokBuildSSE] unexpected chat-completions format', {
-          type,
-        });
-        for (const choice of data.choices as Record<string, unknown>[]) {
-          const delta = choice.delta as Record<string, unknown> | undefined;
-          if (typeof delta?.content === 'string' && delta.content) {
-            accumulatedContent += delta.content;
-            totalContentLength += delta.content.length;
-            onContent(delta.content);
-          }
-        }
-        currentEventType = '';
-        continue;
-      }
-
-      // ── Unknown event ────────────────────────────────────────────
-      logger.warn('[GrokBuildSSE] unknown event type', {
-        type,
-        dataKeys: Object.keys(data),
+    // ── Parse JSON payload ───────────────────────────────────────
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(trimmed.slice(6)) as Record<string, unknown>;
+    } catch (e) {
+      logger.warn('[GrokBuildSSE] JSON parse error', {
+        line: trimmed.slice(0, 200),
+        error: e instanceof Error ? e.message : String(e),
       });
       currentEventType = '';
+      continue;
     }
+
+    eventCount++;
+    const type = (data.type as string) || currentEventType;
+
+    // ── Thinking delta ───────────────────────────────────────────
+    if (
+      type === 'response.reasoning_summary_text.delta' ||
+      type === 'response.reasoning.delta' ||
+      type === 'response.thinking.delta'
+    ) {
+      if (typeof data.delta === 'string' && data.delta) {
+        const chunk = thinkingParser.feed(data.delta);
+        if (onThinking) {
+          onThinking(chunk);
+        }
+      }
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Thinking ended ───────────────────────────────────────────
+    if (
+      type === 'response.reasoning_summary_text.done' ||
+      type === 'response.reasoning.done' ||
+      type === 'response.thinking.done'
+    ) {
+      const closingChunk = thinkingParser.end();
+      if (closingChunk && onThinking) {
+        onThinking(closingChunk);
+      }
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Content delta ────────────────────────────────────────────
+    if (
+      type === 'response.output_text.delta' ||
+      type === 'response.text.delta'
+    ) {
+      if (typeof data.delta === 'string' && data.delta) {
+        accumulatedContent += data.delta;
+        totalContentLength += data.delta.length;
+        onContent(data.delta);
+      }
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Output item done → finish_reason ────────────────────────
+    if (type === 'response.output_item.done') {
+      finishReason = 'stop';
+      if (onMetadata) onMetadata({ finish_reason: 'stop' });
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Response completed → usage ───────────────────────────────
+    if (type === 'response.completed' || type === 'response.done') {
+      const resp = data.response as Record<string, unknown> | undefined;
+      const usageData =
+        (resp?.usage as Record<string, unknown>) ||
+        (data.usage as Record<string, unknown>);
+
+      if (usageData) {
+        usage = usageData;
+
+        // Emit thinking_tokens metadata nếu có reasoning_tokens
+        const reasoningTokens = (
+          usageData.output_tokens_details as Record<string, unknown>
+        )?.reasoning_tokens as number | undefined;
+
+        if (reasoningTokens) {
+          // Emit closing tag với reasoning_tokens nếu thinking parser
+          // chưa emit (trường hợp response.reasoning_summary_text.done
+          // không được fire trước response.completed)
+          const lateClose = thinkingParser.end({
+            reasoning_tokens: reasoningTokens,
+          });
+          if (lateClose && onThinking) {
+            onThinking(lateClose);
+          }
+        }
+
+        if (onMetadata) {
+          onMetadata({ usage: usageData });
+        }
+      }
+
+      const status = resp?.status as string | undefined;
+      if (status) {
+        finishReason = finishReason ?? status;
+        if (onMetadata) onMetadata({ finish_reason: status });
+      }
+
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Error event ──────────────────────────────────────────────
+    if (type === 'error') {
+      logger.error('[GrokBuildSSE] stream error event', { data });
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Info events (bỏ qua) ─────────────────────────────────────
+    if (INFO_EVENT_TYPES.has(type)) {
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Fallback: Chat Completions format ────────────────────────
+    // Safety net nếu Grok thay đổi format về Chat Completions SSE.
+    if (data.choices && Array.isArray(data.choices)) {
+      logger.warn('[GrokBuildSSE] unexpected chat-completions format', {
+        type,
+      });
+      for (const choice of data.choices as Record<string, unknown>[]) {
+        const delta = choice.delta as Record<string, unknown> | undefined;
+        if (typeof delta?.content === 'string' && delta.content) {
+          accumulatedContent += delta.content;
+          totalContentLength += delta.content.length;
+          onContent(delta.content);
+        }
+      }
+      currentEventType = '';
+      continue;
+    }
+
+    // ── Unknown event ────────────────────────────────────────────
+    logger.warn('[GrokBuildSSE] unknown event type', {
+      type,
+      dataKeys: Object.keys(data),
+    });
+    currentEventType = '';
   }
 
   if (totalContentLength === 0) {

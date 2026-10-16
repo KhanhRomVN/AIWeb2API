@@ -47,6 +47,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   GEMINI_IMPERSONATE_PROFILE,
   BASE_URL,
   USER_AGENT,
@@ -77,7 +78,12 @@ import {
   getStreamGenerateUrl,
 } from './gemini.helpers';
 
-// ─── Constants ──────────────────────────────────────────────────────────
+// ─── Shared 
+import { throwIfNotOk } from '../_shared/http';
+import { parseTokenCredential } from '../_shared/auth';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
+
+// ─── Constants ──────────────────────────────────────────────────────
 const logger = createLogger('GeminiProvider');
 
 // ─── Provider Class ────────────────────────────────────────────────────
@@ -88,6 +94,7 @@ export class GeminiProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     is_enabled: IS_ENABLED,
@@ -96,7 +103,9 @@ export class GeminiProvider implements Provider {
     connection_type: CONNECTION_TYPE,
     models: MODELS,
     is_pausable: IS_PAUSABLE,
+    can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
     description: PROVIDER_DESCRIPTION,
     color: PROVIDER_COLOR,
   };
@@ -346,16 +355,14 @@ export class GeminiProvider implements Provider {
             continue;
           }
 
-          const message = `Gemini API returned ${response.status}: ${errorText.slice(0, ERROR_SLICE_LENGTH)}`;
-          if (response.status === 401 || response.status === 403) {
-            const err = new Error(
-              `Session expired or invalid. Please re-login to Gemini. (${message})`,
-            );
-            (err as any).isAuthError = true;
-            (err as any).statusCode = response.status;
-            throw err;
-          }
-          throw new Error(message);
+          await throwIfNotOk(response, {
+            label: 'Gemini',
+            preReadDetail: errorText.slice(0, ERROR_SLICE_LENGTH),
+            buildMessage: (status, detail) =>
+              status === 401 || status === 403
+                ? `Session expired or invalid. Please re-login to Gemini. (Gemini API returned ${status}: ${detail})`
+                : `Gemini API returned ${status}: ${detail}`,
+          });
         }
 
         if (!response.body) {
@@ -382,32 +389,41 @@ export class GeminiProvider implements Provider {
 
   // ─── Continue Message ───────────────────────────────────────────────
 
-  async continueMessage(options: SendMessageOptions): Promise<void> {
-    return this.handleMessage(options);
-  }
-
   // ─── Utility Methods ─────────────────────────────────────────────────
 
   private parseCredential(credential: string): GeminiCredential {
-    try {
-      const parsed = JSON.parse(credential);
+    interface GeminiBase {
+      accessToken: string; // maps to cookies
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
+    }
+
+    // Gemini có logic đặc thù: nếu không phải JSON hợp lệ, nó fallback sang regex SAPISID
+    // Vì vậy ta chỉ dùng helper cho luồng JSON, còn fallback giữ nguyên logic cũ để an toàn tuyệt đối
+    if (credential.trim().startsWith('{')) {
+      const result = parseTokenCredential<GeminiBase>(credential, {
+        accessKeys: ['cookies', 'cookie'],
+        logger,
+        label: 'Gemini',
+      });
+      
+      const p = result.jsonPayload || {};
       return {
-        cookies: parsed.cookies || parsed.cookie || credential,
-        sapisid: parsed.sapisid || '',
-        authUser: parsed.authUser || parsed.auth_user || '',
-        xsrfToken: parsed.xsrfToken || parsed.xsrf_token || '',
-        email: parsed.email || '',
-      };
-    } catch {
-      logger.warn(
-        '[Gemini] Credential is not valid JSON, treating as raw cookie string',
-      );
-      const sapisidMatch = credential.match(REGEX_PATTERNS.SAPISID_IN_COOKIE);
-      return {
-        cookies: credential,
-        sapisid: sapisidMatch ? sapisidMatch[1] : '',
+        cookies: result.accessToken || credential,
+        sapisid: (p.sapisid as string) || '',
+        authUser: (p.authUser as string) || (p.auth_user as string) || '',
+        xsrfToken: (p.xsrfToken as string) || (p.xsrf_token as string) || '',
+        email: (p.email as string) || '',
       };
     }
+
+    // Fallback raw cookie string với regex extraction
+    logger.warn('[Gemini] Credential is not valid JSON, treating as raw cookie string');
+    const sapisidMatch = credential.match(REGEX_PATTERNS.SAPISID_IN_COOKIE);
+    return {
+      cookies: credential,
+      sapisid: sapisidMatch ? sapisidMatch[1] : '',
+    };
   }
 
   private resolveModel(modelName: string): GeminiModelConfig {

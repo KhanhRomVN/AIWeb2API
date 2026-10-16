@@ -2,75 +2,26 @@
  * ------------------------------------------------------------------
  * DeepSeek Thinking Parser
  * ------------------------------------------------------------------
- * Parse thinking content từ DeepSeek SSE stream và chuẩn hóa
- * thành format chung: <thinking>...</thinking>
- *
- * DeepSeek thinking format:
- * - Fragment type: "THINK"
- * - Content: raw thinking text
- * - Elapsed time: fragments[].elapsed_secs
+ * Kế thừa ThinkingTagParser — chỉ thêm mapping metadata riêng.
  * ------------------------------------------------------------------
  */
 
-// ─── Types ──────────────────────────────────────────────────────────────
+import { ThinkingTagParser, ThinkingEndMeta } from '../_shared/thinking';
 
 export interface DeepSeekThinkingMetadata {
   elapsed_secs?: number;
 }
 
-// ─── Thinking Parser ────────────────────────────────────────────────────
-
-export class DeepSeekThinkingParser {
-  private buffer = '';
-  private isThinkingStarted = false;
-  private isThinkingEnded = false;
-
-  /**
-   * Feed thinking content chunk
-   * Automatically wrap trong <thinking> tags
-   */
-  feed(chunk: string): string {
-    if (!chunk) return '';
-
-    // First chunk: emit opening tag
-    if (!this.isThinkingStarted) {
-      this.isThinkingStarted = true;
-      this.buffer = chunk;
-      const output = '<thinking>' + chunk;
-      return output;
-    }
-
-    // Subsequent chunks: just append
-    this.buffer += chunk;
-    return chunk;
+export class DeepSeekThinkingParser extends ThinkingTagParser {
+  constructor() {
+    super({ trackElapsed: false });
   }
 
-  /**
-   * End thinking phase
-   * Emit closing tag
-   */
-  end(metadata?: DeepSeekThinkingMetadata): string {
-    if (this.isThinkingEnded) {
-      return '';
-    }
-    this.isThinkingEnded = true;
-
-    let result = '</thinking>';
-
-    // Add metadata as XML tag with rounded value
-    if (metadata?.elapsed_secs) {
-      const roundedTime = metadata.elapsed_secs.toFixed(1);
-      result += `\n<thinking_elapsed>${roundedTime}</thinking_elapsed>`;
-    }
-
-    return result;
+  end(meta?: DeepSeekThinkingMetadata | ThinkingEndMeta): string {
+    return super.end(meta as ThinkingEndMeta);
   }
 }
 
-/**
- * Create normalized thinking parser for DeepSeek
- * Returns standardized <thinking>content</thinking> format
- */
-export function createDeepSeekThinkingParser() {
+export function createDeepSeekThinkingParser(): DeepSeekThinkingParser {
   return new DeepSeekThinkingParser();
 }

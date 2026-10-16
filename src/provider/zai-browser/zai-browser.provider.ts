@@ -38,7 +38,7 @@ import { getWebSocketServer } from '../../websocket-server';
 
 // ── Utils ──
 import { createLogger } from '../../utils/logger';
-
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
 // ── ZaiBrowser Imports ──
 import { proxyHandler } from './zai-browser.proxy-handler';
 import { parseZaiBrowserCredential } from './zai-browser.helpers';
@@ -54,6 +54,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   PLATFORM,
   BROWSER_EXTENSION_FOLDER,
   MODELS,
@@ -70,6 +71,7 @@ export class ZaiBrowserProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
@@ -78,12 +80,11 @@ export class ZaiBrowserProvider implements Provider {
     website_url: WEBSITE_URL,
     auth_method: AUTH_METHOD,
     connection_type: CONNECTION_TYPE,
-    is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
-    token_count_mode: TOKEN_COUNT_MODE,
     platform: PLATFORM,
     browser_extension_folder: BROWSER_EXTENSION_FOLDER,
     models: MODELS,
+    max_input_token: MAX_INPUT_TOKEN,
   };
 
   // ─── WebSocket Connection ──────────────────────────────────────────
@@ -267,12 +268,6 @@ export class ZaiBrowserProvider implements Provider {
       logger.error('[ZaiBrowser] Error sending message:', err);
       onError(err);
     }
-  }
-
-  // ─── Continue Message ───────────────────────────────────────────────
-
-  async continueMessage(options: SendMessageOptions): Promise<void> {
-    return this.handleMessage(options);
   }
 
   // ─── Login ──────────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ export const WEBSITE_URL = 'https://deepseek.com';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
+export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
 
 /**
@@ -123,7 +124,8 @@ export const DEEPSEEK_EVENTS = {
   USER_INFO: 'deepseek-user-info',
 } as const;
 
-export const MAX_CONTINUATIONS = 10;
+import { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE, MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR } from '../_shared/constants/chat-limits.constants';
+export { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE, MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR };
 
 export const GOOGLE_OAUTH_LOGIN_URL =
   'https://accounts.google.com/ServiceLogin?service=lso&passive=1209600&continue=https://chat.deepseek.com/login';
@@ -260,11 +262,6 @@ export const AUTH_RENEW_CONFIG = {
 export const DEEPSEEK_ERROR_CODES = {
   AUTHORIZATION_FAILED: 40003,
 } as const;
-export const HISTORY_MESSAGES_COUNT = 20;
-
-export const SUCCESS_CODE = 0;
-export const MASKED_EMAIL_INDICATOR = '***';
-export const MASKED_EMAIL_CHAR = '*';
 
 export const CONTENT_DISPOSITION = {
   FORM_DATA: 'Content-Disposition: form-data;',
@@ -272,13 +269,10 @@ export const CONTENT_DISPOSITION = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
+import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES, LOWERCASE_HEADER_NAMES } from '../_shared/constants/http.constants';
+
 export const HTTP_HEADER_NAMES = {
-  AUTHORIZATION: 'Authorization',
-  CONTENT_TYPE: 'Content-Type',
-  USER_AGENT: 'User-Agent',
-  REFERER: 'Referer',
-  ORIGIN: 'Origin',
-  COOKIE: 'Cookie',
+  ...STANDARD_HTTP_HEADERS,
   X_APP_VERSION: 'X-App-Version',
   X_CLIENT_VERSION: 'x-client-version',
   X_CLIENT_PLATFORM: 'x-client-platform',
@@ -294,14 +288,14 @@ export const HTTP_HEADER_NAMES = {
 } as const;
 
 export const HTTP_HEADER_NAMES_LOWERCASE = {
-  AUTHORIZATION: 'authorization',
+  AUTHORIZATION: LOWERCASE_HEADER_NAMES.AUTHORIZATION,
 } as const;
 
 // ─── Content Types ───────────────────────────────────────────────────
 
 export const CONTENT_TYPES = {
-  JSON: 'application/json',
-  MULTIPART_PREFIX: 'multipart/form-data; boundary=',
+  JSON: SHARED_CONTENT_TYPES.JSON,
+  MULTIPART_PREFIX: SHARED_CONTENT_TYPES.MULTIPART_PREFIX,
 } as const;
 
 // ─── Referer Paths ───────────────────────────────────────────────────

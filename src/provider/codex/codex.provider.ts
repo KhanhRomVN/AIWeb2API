@@ -35,6 +35,8 @@ import { loginService } from '../../services/login.service';
 import { HttpClient } from '../../utils/http-client';
 import { createLogger } from '../../utils/logger';
 import { countMessagesTokens } from '../../utils/tokenizer';
+import { coordinateTokenRefresh } from '../../utils/jwt-helper';
+import { DEFAULT_PROVIDER_CONFIG } from '../_shared/default-provider-config';
 
 // ── Codex Imports ──
 import {
@@ -57,6 +59,7 @@ import {
   IS_PAUSABLE,
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
+  MAX_INPUT_TOKEN,
   REQUEST_LIMIT,
   REQUEST_LIMIT_PERIOD,
   BLOCKED_TIME_RANGES,
@@ -74,6 +77,9 @@ import {
   TOKEN_REFRESH_CONFIG,
   MODEL_ALIASES,
 } from './codex.constant';
+
+// ─── Shared Auth ────────────────────────────────────────────────────────
+import { parseTokenCredential } from '../_shared/auth';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('CodexProvider');
@@ -94,6 +100,7 @@ export class CodexProvider implements Provider {
 
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
+    ...DEFAULT_PROVIDER_CONFIG,
     provider_id: PROVIDER_ID,
     provider_name: PROVIDER_NAME,
     description: PROVIDER_DESCRIPTION,
@@ -106,6 +113,7 @@ export class CodexProvider implements Provider {
     is_pausable: IS_PAUSABLE,
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
+    max_input_token: MAX_INPUT_TOKEN,
     blocked_time_ranges: BLOCKED_TIME_RANGES,
     supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
   };
@@ -117,34 +125,24 @@ export class CodexProvider implements Provider {
    * Hỗ trợ JSON mới `{"accessToken","refreshToken","email"}` và raw JWT token cũ.
    */
   private parseCredential(credential: string): CodexCredential {
-    const trimmed = credential.trim();
-
-    // Try JSON first
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        const accessToken =
-          parsed.accessToken ||
-          parsed.access_token ||
-          parsed.token ||
-          parsed.secretKey ||
-          parsed.secret_key;
-        if (accessToken) {
-          return {
-            accessToken,
-            refreshToken: parsed.refreshToken || parsed.refresh_token,
-            email: parsed.email,
-          };
-        }
-      } catch {
-        logger.warn(
-          '[CodexCLI] Credential JSON parse failed, treating as raw token',
-        );
-      }
+    interface CodexBase {
+      accessToken: string;
+      refreshToken: string;
+      jsonPayload?: Record<string, unknown>;
     }
 
-    // Raw JWT / opaque token
-    return { accessToken: trimmed };
+    const result = parseTokenCredential<CodexBase>(credential, {
+      accessKeys: ['accessToken', 'access_token', 'token', 'secretKey', 'secret_key'],
+      refreshKeys: ['refreshToken', 'refresh_token'],
+      logger,
+      label: 'Codex',
+    });
+
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken || undefined,
+      email: (result.jsonPayload?.email as string) || undefined,
+    };
   }
 
   /**
@@ -184,6 +182,9 @@ export class CodexProvider implements Provider {
    * Gọi `POST https://auth.openai.com/oauth/token` với grant_type=refresh_token.
    *
    * @returns credential mới (JSON string) hoặc null nếu thất bại.
+  /**
+   * Refresh access token bằng refresh token.
+   * Sử dụng coordinateTokenRefresh để chống race condition khi nhiều request cùng lúc.
    */
   async refreshAccessToken(
     credential: CodexCredential,
@@ -193,6 +194,20 @@ export class CodexProvider implements Provider {
       logger.warn('[CodexCLI] No refresh token available');
       return null;
     }
+
+    return coordinateTokenRefresh('codex', refreshToken, () =>
+      this._performTokenRefresh(credential),
+    );
+  }
+
+  /**
+   * Logic cốt lõi thực hiện refresh token (không có coordination).
+   */
+  private async _performTokenRefresh(
+    credential: CodexCredential,
+  ): Promise<string | null> {
+    const { refreshToken } = credential;
+    if (!refreshToken) return null;
 
     const controller = new AbortController();
     const timeout = setTimeout(
@@ -252,7 +267,6 @@ export class CodexProvider implements Provider {
       return null;
     }
   }
-
   // ─── Profile ─────────────────────────────────────────────────────────
 
   async getUserProfile(
