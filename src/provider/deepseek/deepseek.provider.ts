@@ -216,11 +216,13 @@ export class DeepSeekProvider implements Provider {
         headers: {
           [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${credential.token}`,
           [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+          'accept': '*/*',
+          'accept-language': 'en-US,en;q=0.9',
           [HTTP_HEADER_NAMES.X_DEVICE_ID]: deviceId,
           [HTTP_HEADER_NAMES.X_DEVICE_MODEL]: '',
           [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
           [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
           [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
           [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
           [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
@@ -301,9 +303,17 @@ export class DeepSeekProvider implements Provider {
         method: 'GET',
         headers: {
           [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
+          'accept': '*/*',
+          'accept-language': 'en-US,en;q=0.9',
           [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
           [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.MACOS_SAFARI,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
+          [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
+          [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
+          [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
+          [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]: HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
+          [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
+            HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
         },
       });
 
@@ -485,13 +495,14 @@ export class DeepSeekProvider implements Provider {
     let token = parsedCred.token;
 
     const baseHeaders = {
-      [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
+      // Android auth — không cần Cookie header web; Bearer là đủ với mobile client
       [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
       [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+      'accept': '*/*',
+      'accept-language': 'en-US,en;q=0.9',
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
       [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
       [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-      [HTTP_HEADER_NAMES.X_APP_VERSION]: HTTP_HEADERS.X_APP_VERSION,
       [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
       [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
       [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
@@ -689,15 +700,18 @@ export class DeepSeekProvider implements Provider {
             ];
           if (challengeData) {
             const dsHash = await this.getDsHash();
+            // solvePoW throw nếu answer=null — KHÔNG bắt ở đây để tránh gửi PoW rỗng
             const powAnswer = await solvePoW(dsHash, challengeData);
             powResponseBase64 = Buffer.from(JSON.stringify(powAnswer)).toString(
               'base64',
             );
           }
-        } catch (e) {
-          logger.warn(
-            `[DeepSeek] Failed to parse PoW challenge response | session=${sessionId}`,
+        } catch (e: any) {
+          // Re-throw lỗi từ PoW solver (answer=null / WASM lỗi) để bảo vệ account.
+          logger.error(
+            `[DeepSeek] PoW solve failed | session=${sessionId}: ${e?.message || e}`,
           );
+          throw e;
         }
       }
 
@@ -903,55 +917,44 @@ export class DeepSeekProvider implements Provider {
     return null;
   }
 
-  // ─── Delete All Sessions ────────────────────────────────────────────
+  // ─── Delete All Sessions (Tạm tắt theo yêu cầu người dùng) ──────────
 
-  /**
-   * Xóa toàn bộ chat session của account.
-   * Gọi `POST /api/v0/chat_session/delete_all` với body rỗng.
-   *
-   * @returns `true` nếu thành công, `false` nếu gặp lỗi.
-   */
-  async deleteAllSessions(credential: string): Promise<boolean> {
-    const { token } = this.parseCredential(credential);
-    try {
-      const client = new HttpClient({
-        baseURL: BASE_URL,
-        headers: {
-          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
-          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
-          [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
-          [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-          [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
-          [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
-          [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
-          [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]:
-            HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
-          [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
-            HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
-        },
-      });
-
-      const res = await client.post(API_PATHS.CHAT_SESSION_DELETE_ALL, {});
-      if (!res.ok) {
-        logger.warn(`[DeepSeek] deleteAllSessions HTTP ${res.status}`);
-        return false;
-      }
-
-      const json = (await res.json()) as DeepSeekApiEnvelope<unknown>;
-      if (json?.code !== SUCCESS_CODE) {
-        logger.warn(
-          `[DeepSeek] deleteAllSessions biz error code=${json?.code} msg=${json?.msg}`,
-        );
-        return false;
-      }
-
-      return true;
-    } catch (e: any) {
-      logger.error('[DeepSeek] deleteAllSessions error:', e?.message || e);
-      return false;
-    }
-  }
+  // async deleteAllSessions(credential: string): Promise<boolean> {
+  //   const { token } = this.parseCredential(credential);
+  //   try {
+  //     const client = new HttpClient({
+  //       baseURL: BASE_URL,
+  //       headers: {
+  //         [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
+  //         [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
+  //         'accept': '*/*',
+  //         'accept-language': 'en-US,en;q=0.9',
+  //         [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
+  //         [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
+  //         [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+  //         [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
+  //         [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
+  //         [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
+  //         [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]: HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
+  //         [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]: HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
+  //       },
+  //     });
+  //     const res = await client.post(API_PATHS.CHAT_SESSION_DELETE_ALL, {});
+  //     if (!res.ok) {
+  //       logger.warn(`[DeepSeek] deleteAllSessions HTTP ${res.status}`);
+  //       return false;
+  //     }
+  //     const json = (await res.json()) as DeepSeekApiEnvelope<unknown>;
+  //     if (json?.code !== SUCCESS_CODE) {
+  //       logger.warn(`[DeepSeek] deleteAllSessions biz error code=${json?.code} msg=${json?.msg}`);
+  //       return false;
+  //     }
+  //     return true;
+  //   } catch (e: any) {
+  //     logger.error('[DeepSeek] deleteAllSessions error:', e?.message || e);
+  //     return false;
+  //   }
+  // }
 
   // ─── Stop Stream ────────────────────────────────────────────────────
 
@@ -980,9 +983,17 @@ export class DeepSeekProvider implements Provider {
     return new HttpClient({
       baseURL: BASE_URL,
       headers: {
-        [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
         [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
-        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.MACOS_SAFARI,
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
+        [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
+        [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
+        [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
+        [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
+        [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]: HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
+        [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
+          HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
       },
     });
   }

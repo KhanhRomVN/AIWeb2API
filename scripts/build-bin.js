@@ -234,7 +234,42 @@ function buildTarget(target) {
   const readmeSrc = path.join(rootDir, 'README.md');
   if (fs.existsSync(readmeSrc)) {
     fs.copyFileSync(readmeSrc, path.join(stagingDir, 'README.md'));
-    log(`  Copied: README.md`);
+    log('  Copied: README.md');
+  }
+
+  // cycletls helper binary (cho Claude provider)
+  const cycletlsBinSrc = path.join(
+    rootDir,
+    'node_modules',
+    'cycletls',
+    'dist',
+    platform === 'win' ? 'index.exe' : 'index',
+  );
+  if (fs.existsSync(cycletlsBinSrc)) {
+    const dstCycletlsName = platform === 'win' ? 'cycletls-index.exe' : 'cycletls-index';
+    fs.copyFileSync(cycletlsBinSrc, path.join(stagingDir, dstCycletlsName));
+    log(`  Copied: ${dstCycletlsName}`);
+  }
+
+  // 5.1. Copy sang dist-bin nếu là Windows để có thể chạy trực tiếp
+  if (platform === 'win') {
+    try {
+      const distBinDir = path.join(rootDir, 'dist-bin');
+      fs.mkdirSync(distBinDir, { recursive: true });
+      fs.copyFileSync(runme, path.join(distBinDir, 'RUNME.exe'));
+      fs.copyFileSync(path.join(stagingDir, 'better_sqlite3.node'), path.join(distBinDir, 'better_sqlite3.node'));
+      if (fs.existsSync(path.join(stagingDir, 'cycletls-index.exe'))) {
+        fs.copyFileSync(path.join(stagingDir, 'cycletls-index.exe'), path.join(distBinDir, 'cycletls-index.exe'));
+      }
+      const distBinRes = path.join(distBinDir, 'resources');
+      fs.mkdirSync(distBinRes, { recursive: true });
+      if (fs.existsSync(wasmSrc)) {
+        fs.copyFileSync(wasmSrc, path.join(distBinRes, path.basename(wasmSrc)));
+      }
+      log('  ✓ Synced to dist-bin/RUNME.exe');
+    } catch (e) {
+      log(`  ⚠ Could not sync to dist-bin: ${e.message}`);
+    }
   }
 
   // 6. Zip staging → releases/<version>/
@@ -282,9 +317,23 @@ function buildTarget(target) {
 
     // ── Build each target ────────────────────────────────────────────────────
     header('Step 4/4 — Package targets');
+    const targetFilter = process.argv.slice(2).find((a) => !a.startsWith('--'));
+    const targets = targetFilter
+      ? BUILD_TARGETS.filter(
+          (t) =>
+            t.platform.includes(targetFilter) ||
+            t.pkgTarget.includes(targetFilter) ||
+            `${t.platform}-${t.arch}`.includes(targetFilter),
+        )
+      : BUILD_TARGETS;
+
     const results = [];
-    for (const target of BUILD_TARGETS) {
-      results.push(buildTarget(target));
+    for (const target of targets) {
+      try {
+        results.push(buildTarget(target));
+      } catch (err) {
+        log(`  ⚠ Skipped target ${target.pkgTarget}: ${err.message}`);
+      }
     }
 
     // ── Restore host native addon ────────────────────────────────────────────
