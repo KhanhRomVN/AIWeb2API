@@ -58,7 +58,9 @@ function createUploadClient(token: string): HttpClient {
     baseURL: BASE_URL,
     headers: {
       [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
-      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+      'accept': '*/*',
+      'accept-language': 'en-US,en;q=0.9',
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
       [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
       [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
       [HTTP_HEADER_NAMES.X_CLIENT_VERSION]:
@@ -82,7 +84,9 @@ export async function deepseekUploadFile(
 ): Promise<UploadResult> {
   const baseHeaders = {
     [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
-    [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+    'accept': '*/*',
+    'accept-language': 'en-US,en;q=0.9',
+    [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
     [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
   };
 
@@ -116,12 +120,8 @@ export async function deepseekUploadFile(
           logger.warn('[DeepSeek Upload] No challenge data in response');
         }
       } catch (e) {
-        logger.error(
-          '[DeepSeek Upload] Failed to parse PoW challenge response',
-          {
-            error: e,
-          },
-        );
+        logger.error('[DeepSeek Upload] PoW solve failed:', e);
+        throw e;
       }
     } else {
       logger.warn(

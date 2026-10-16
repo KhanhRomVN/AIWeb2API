@@ -39,7 +39,7 @@ export const WEBSITE_URL = 'https://deepseek.com';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const MAX_INPUT_TOKEN = 20000;
+export const MAX_INPUT_TOKEN = 100000;
 export const CAN_REGENERATE = true;
 
 /**
@@ -157,20 +157,38 @@ export const API_PATHS = {
 // ─── HTTP Headers / User Agents ──────────────────────────────────────
 
 export const USER_AGENTS = {
-  MACOS_SAFARI:
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  /**
+   * User-Agent thực tế của App DeepSeek Android (classes.dex v2.6.2):
+   * "DeepSeek/2.6.2 Android/" + Build.VERSION.SDK_INT
+   * Mặc định giả lập Android 14 (API 34)
+   */
+  ANDROID: 'DeepSeek/2.6.2 Android/34',
+  /**
+   * Giữ lại Web Chrome UA — dùng trong proxy handler / login flow nếu cần.
+   */
   LINUX_CHROME:
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
 } as const;
 
 export const HTTP_HEADERS = {
-  X_APP_VERSION: '2.0.0',
-  X_CLIENT_VERSION: '2.0.0',
-  X_CLIENT_VERSION_UPLOAD: '2.4.0',
-  X_CLIENT_PLATFORM: 'web',
-  X_CLIENT_LOCALE: 'en_US',
+  /**
+   * Version khớp với Android app DeepSeek v2.6.2 hiện tại.
+   * Env override: DEEPSEEK_CLIENT_VERSION
+   */
+  X_CLIENT_VERSION: process.env.DEEPSEEK_CLIENT_VERSION || '2.6.2',
+  X_CLIENT_VERSION_UPLOAD: '2.6.2',
+  /** android — key để né WAF web của DeepSeek */
+  X_CLIENT_PLATFORM: 'android',
+  X_CLIENT_LOCALE: 'vi_VN',
   X_CLIENT_BUNDLE_ID: 'com.deepseek.chat',
-  X_CLIENT_TIMEZONE_OFFSET: '25200',
+  /**
+   * Timezone offset tính bằng giây (UTC+7 = 25200).
+   * Tự tính từ runtime để tránh fingerprint cứng.
+   */
+  X_CLIENT_TIMEZONE_OFFSET: String(
+    Math.round(new Date().getTimezoneOffset() * -60)
+  ),
+  X_DEVICE_MODEL: '2510DRK44C',
   X_MODEL_TYPE_DEFAULT: 'default',
   X_THINKING_ENABLED_OFF: '0',
 } as const;
@@ -302,6 +320,7 @@ export const CONTENT_TYPES = {
 
 export const REFERER_PATHS = {
   ROOT: '/',
+  BASE: 'https://chat.deepseek.com/',
   CHAT_SESSION_PREFIX: '/a/chat/s/',
 } as const;
 

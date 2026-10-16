@@ -125,14 +125,20 @@ export async function solvePoW(
   );
 
   if (answer === null) {
-    logger.warn('[DeepSeek] PoW solver returned null answer, using 0');
+    // KHÔNG fallback về 0 — DeepSeek detect "answer=0" là bot và ban account.
+    // Throw để caller biết PoW thất bại; request sẽ không được gửi.
+    // Nếu WASM thiếu/lỗi: kiểm tra lại file sha3_wasm_bg.*.wasm tại resources/.
+    throw new Error(
+      '[DeepSeek] PoW solver returned null — WASM may be outdated or missing. ' +
+      'Request aborted to prevent account ban.'
+    );
   }
 
   return {
     algorithm: challenge.algorithm,
     challenge: challenge.challenge,
     salt: challenge.salt,
-    answer: answer !== null ? answer : 0,
+    answer,
     signature: challenge.signature,
     target_path: challenge.target_path,
   };
