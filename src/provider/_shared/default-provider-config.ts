@@ -26,8 +26,6 @@ export interface BaseProviderConfig {
   is_pausable: boolean;
   can_regenerate: boolean;
   token_count_mode: 'incremental' | 'cumulative';
-  blocked_time_ranges: Array<{ startTime: number; endTime: number }>;
-  supports_session_cleanup: boolean;
 }
 
 /**
@@ -41,6 +39,4 @@ export const DEFAULT_PROVIDER_CONFIG: BaseProviderConfig = {
   is_pausable: false,
   can_regenerate: true,
   token_count_mode: 'incremental',
-  blocked_time_ranges: [],
-  supports_session_cleanup: false,
 };

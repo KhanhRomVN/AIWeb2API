@@ -125,14 +125,16 @@ export async function solvePoW(
   );
 
   if (answer === null) {
-    logger.warn('[DeepSeek] PoW solver returned null answer, using 0');
+    throw new Error(
+      '[DeepSeek] PoW solver returned null - WASM may be outdated or missing. Request aborted to prevent account ban.',
+    );
   }
 
   return {
     algorithm: challenge.algorithm,
     challenge: challenge.challenge,
     salt: challenge.salt,
-    answer: answer !== null ? answer : 0,
+    answer,
     signature: challenge.signature,
     target_path: challenge.target_path,
   };

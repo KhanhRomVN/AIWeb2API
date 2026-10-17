@@ -32,7 +32,8 @@ const logger = createLogger('LoginController');
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { provider: providerId } = req.params;
-    const { method, profile_folder } = req.body;
+    const { method, profile_folder, serverUrl, password } =
+      req.body;
     // Chỉ nhận tên folder từ client; backend tự ghép với chromium_profile_dir
     const profile = await resolveProfileUserDataDir(profile_folder);
     if (profile.error) {
@@ -44,6 +45,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       const result = await loginWithProvider(providerId, {
         method: method || 'google',
         userDataDir: profile.dir,
+        serverUrl,
+        password,
       });
 
       const accountResponse: any = {

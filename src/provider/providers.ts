@@ -21,6 +21,7 @@ import grokBuildCli from './grok-build-cli';
 import kimi from './kimi';
 import kiro from './kiro';
 import mistral from './mistral';
+import opencode from './opencode';
 import qwen from './qwen';
 import zaiBrowser from './zai-browser';
 
@@ -41,6 +42,7 @@ export const ALL_PROVIDERS = [
   kimi,
   kiro,
   mistral,
+  opencode,
   qwen,
   zaiBrowser,
 ] as const;

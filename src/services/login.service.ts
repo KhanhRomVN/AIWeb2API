@@ -61,6 +61,10 @@ export interface ProviderLoginOptions {
   method?: 'basic' | 'google';
   /** Thư mục profile Chromium đã resolve (tuyệt đối). Undefined = profile tạm mới. */
   userDataDir?: string;
+  /** Credential nhập tay cho provider không có browser login (vd: OpenCode). */
+  serverUrl?: string;
+  password?: string;
+  zenApiKey?: string;
 }
 
 export interface ProviderLoginResult {
@@ -610,6 +614,8 @@ export async function loginWithProvider(
   const runLogin = () =>
     provider.login!({
       method: options.method || 'basic',
+      serverUrl: options.serverUrl,
+      password: options.password,
     });
 
   // Có userDataDir → chạy login trong context để CDPService lấy được profile + clearSession flag

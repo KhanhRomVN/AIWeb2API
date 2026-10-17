@@ -11,7 +11,6 @@
  * - DELETE /v1/accounts/:id            : Xóa tài khoản
  * - POST   /v1/accounts/:id/presence   : Heartbeat presence (chat view đang dùng account)
  * - DELETE /v1/accounts/:id/presence   : Giải phóng presence khi rời chat
- * - POST   /v1/accounts/:id/session-cleanup : Xóa toàn bộ conversation phía provider
  * - POST   /v1/accounts/:id/refresh-token : Refresh token từ browser
  * - GET    /v1/accounts/:id/browser/status : Trạng thái browser
  * - POST   /v1/accounts/:id/browser/start : Khởi động browser
@@ -37,7 +36,6 @@ import {
   startAccountBrowser,
   heartbeatAccountPresence,
   releaseAccountPresence,
-  deleteAllAccountSessions,
 } from '../../controllers/account.controller';
 
 // ─── Router ─────────────────────────────────────────────────────────────
@@ -54,7 +52,6 @@ router.put('/:id', updateAccountHandler);
 router.delete('/:id', deleteAccount);
 router.post('/:id/presence', heartbeatAccountPresence);
 router.delete('/:id/presence', releaseAccountPresence);
-router.post('/:id/session-cleanup', deleteAllAccountSessions);
 router.post('/:id/refresh-token', refreshAccountToken);
 router.get('/:id/browser/status', getAccountBrowserStatus);
 router.post('/:id/browser/start', startAccountBrowser);

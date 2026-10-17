@@ -16,6 +16,7 @@ import { REQUEST_COOLDOWN_MS as CLINE_CD } from './cline/cline.constant';
 import { REQUEST_COOLDOWN_MS as DEEPSEEK_CD } from './deepseek/deepseek.constant';
 import { REQUEST_COOLDOWN_MS as CLAUDE_CD } from './claude/claude.constant';
 import { REQUEST_COOLDOWN_MS as GROK_BUILD_CLI_CD } from './grok-build-cli/grok-build-cli.constant';
+import { REQUEST_COOLDOWN_MS as OPENCODE_CD } from './opencode/opencode.constant';
 
 export const PROVIDER_CONSTANTS = {
   kimi: Number(KIMI_CD),
@@ -25,6 +26,7 @@ export const PROVIDER_CONSTANTS = {
   deepseek: Number(DEEPSEEK_CD),
   claude: Number(CLAUDE_CD),
   'grok-build-cli': Number(GROK_BUILD_CLI_CD),
+  opencode: Number(OPENCODE_CD),
 } as const;
 
 export type ProviderCooldownKey = keyof typeof PROVIDER_CONSTANTS;

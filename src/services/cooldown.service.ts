@@ -3,7 +3,7 @@
  * Cooldown Service
  * ------------------------------------------------------------------
  * Quản lý thời gian chờ bắt buộc giữa các request gửi lên Upstream AI.
- * Sử dụng Dynamic Import để nạp registry constants tập trung từ 
+ * Sử dụng Dynamic Import để nạp registry constants tập trung từ
  * ../provider/constants.ts, đảm bảo tính đóng gói và dễ bảo trì.
  * ------------------------------------------------------------------
  */
@@ -24,7 +24,7 @@ async function getConstantsRegistry(): Promise<ProviderConstantsMap> {
   if (!constantsPromise) {
     // Dynamic import file constants tập trung (cần .js cho node16/nodenext resolution)
     constantsPromise = import('../provider/constants.js')
-      .then(mod => mod.PROVIDER_CONSTANTS as unknown as ProviderConstantsMap)
+      .then((mod) => mod.PROVIDER_CONSTANTS as unknown as ProviderConstantsMap)
       .catch((err) => {
         logger.error('[Cooldown] Failed to load provider constants:', err);
         return {} as ProviderConstantsMap; // Fallback empty object
@@ -36,18 +36,19 @@ async function getConstantsRegistry(): Promise<ProviderConstantsMap> {
 async function getCooldownMs(providerId: string): Promise<number> {
   const registry = await getConstantsRegistry();
   const value = registry[providerId];
-  
   if (value === undefined || value <= 0) {
-    logger.debug(`[Cooldown] No valid constant found for provider: ${providerId}`);
+    logger.debug(
+      `[Cooldown] No valid constant found for provider: ${providerId}`,
+    );
     return 0;
   }
-  
+
   return value;
 }
 
 /**
  * Chờ cho đến khi đủ thời gian cooldown kể từ lần request trước đó.
- * 
+ *
  * @param key - Khóa duy nhất để track cooldown (ví dụ: accountId).
  * @param providerId - ID của provider để tra cứu cấu hình cooldown.
  */
@@ -65,7 +66,6 @@ export async function waitForProviderCooldown(
   const now = Date.now();
   const lastTime = lastRequestTimestamps.get(key) || 0;
   const elapsed = now - lastTime;
-
   if (elapsed < cooldownMs) {
     const waitTime = cooldownMs - elapsed;
     logger.debug(`[Cooldown] Waiting ${waitTime}ms for key=${key}`);
@@ -76,3 +76,6 @@ export async function waitForProviderCooldown(
   lastRequestTimestamps.set(key, Date.now());
 }
 
+export function markProviderRequestFinished(key: string): void {
+  lastRequestTimestamps.set(key, Date.now());
+}

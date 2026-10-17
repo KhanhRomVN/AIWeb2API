@@ -52,7 +52,7 @@ import {
   releasePresence,
   countOtherWindows,
 } from '../services/presence.service';
-import { computeLiveUsageFields } from '../middleware/request-limit.middleware';
+
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -491,31 +491,11 @@ export const getAccounts = async (
         period_tokens: 0,
       };
 
-      // Tính lại usage và reset_usage_at mới nhất từ requestLimit của provider.
-      // Không cần DB write — chỉ compute từ dữ liệu đã có sẵn.
-      const provider = providerRegistry.getProvider(row.provider_id);
-      const requestLimit = provider?.usagePolicy?.requestLimit;
-      const requestLimitPeriod: 'day' | 'week' | 'month' =
-        provider?.usagePolicy?.requestLimitPeriod ?? 'day';
-
-      let computedUsage: number | null = row.usage ?? null;
-      let computedResetAt: string | null = row.reset_usage_at ?? null;
-
-      if (requestLimit != null) {
-        const live = computeLiveUsageFields(
-          row.usage ?? null,
-          row.reset_usage_at ?? null,
-          requestLimitPeriod,
-        );
-        computedUsage = live.usage;
-        computedResetAt = live.reset_usage_at;
-      }
-
       return {
         ...row,
         ...stats,
-        usage: computedUsage,
-        reset_usage_at: computedResetAt,
+        usage: row.usage ?? null,
+        reset_usage_at: row.reset_usage_at ?? null,
         last_used_at: row.last_used_at ?? null,
         used_by_windows: countOtherWindows(row.id, clientId),
       };
@@ -680,94 +660,6 @@ export const releaseAccountPresence = async (
       success: false,
       message: 'Internal server error',
       error: { code: 'INTERNAL_ERROR' },
-      meta: { timestamp: new Date().toISOString() },
-    });
-  }
-};
-
-// ─── POST /v1/accounts/:id/session-cleanup ──────────────────────────
-/**
- * Xóa toàn bộ conversation (chat session) của account phía provider.
- * Được gọi bởi Zen webview khi phát hiện account không còn ở chat view
- * (health-check interval) để dọn sạch lịch sử phía server.
- *
- * Chỉ hoạt động với provider có implement deleteAllSessions().
- * Provider hỗ trợ được đánh dấu bằng field `supports_session_cleanup: true`
- * trong response của GET /v1/providers.
- */
-export const deleteAllAccountSessions = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-
-    if (!id) {
-      res.status(400).json({
-        success: false,
-        message: 'Account ID is required',
-        error: { code: 'INVALID_INPUT' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    const account = await getAccountById(id);
-    if (!account) {
-      res.status(404).json({
-        success: false,
-        message: 'Account not found',
-        error: { code: 'NOT_FOUND' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    if (!account.credential) {
-      res.status(400).json({
-        success: false,
-        message: 'Account has no credential',
-        error: { code: 'NO_CREDENTIAL' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    const provider = providerRegistry.getProvider(account.provider_id);
-    if (!provider?.deleteAllSessions) {
-      res.status(400).json({
-        success: false,
-        message: 'Provider does not support session cleanup',
-        error: { code: 'UNSUPPORTED_PROVIDER' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    const success = await provider.deleteAllSessions(account.credential);
-
-    if (!success) {
-      res.status(500).json({
-        success: false,
-        message: 'Session cleanup failed',
-        error: { code: 'CLEANUP_FAILED' },
-        meta: { timestamp: new Date().toISOString() },
-      });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'All sessions deleted successfully',
-      data: { account_id: id },
-      meta: { timestamp: new Date().toISOString() },
-    });
-  } catch (error: any) {
-    logger.error('[SessionCleanup] Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: { code: 'INTERNAL_ERROR', details: error.message },
       meta: { timestamp: new Date().toISOString() },
     });
   }

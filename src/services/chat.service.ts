@@ -32,7 +32,10 @@ import {
 import { createLogger } from '../utils/logger';
 
 // ── Services ──
-import { waitForProviderCooldown } from './cooldown.service';
+import {
+  waitForProviderCooldown,
+  markProviderRequestFinished,
+} from './cooldown.service';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 const logger = createLogger('ChatService');
@@ -88,6 +91,7 @@ export const sendMessage = async (
       if (onSessionCreated) onSessionCreated(sessionId);
     },
     onDone: () => {
+      markProviderRequestFinished(accountId || provider_id, provider_id);
       if (!accumulatedAssistantContent) {
         logger.warn(
           `[sendMessage] Provider ${provider_id} completed with empty content`,
@@ -142,6 +146,7 @@ export const sendMessage = async (
   try {
     return await provider.handleMessage(wrappedOptions);
   } catch (error) {
+    markProviderRequestFinished(cooldownKey, provider_id);
     const errorMessage = error instanceof Error ? error.message : String(error);
     recordError(
       accountId,

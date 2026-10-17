@@ -60,10 +60,6 @@ import {
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
   MAX_INPUT_TOKEN,
-  REQUEST_LIMIT,
-  REQUEST_LIMIT_PERIOD,
-  BLOCKED_TIME_RANGES,
-  SUPPORTS_SESSION_CLEANUP,
   MODELS,
   BASE_URL,
   API_PATHS,
@@ -89,15 +85,6 @@ const logger = createLogger('CodexProvider');
 export class CodexProvider implements Provider {
   name = PROVIDER_NAME;
 
-  /**
-   * Cấu hình giới hạn & chặn giờ.
-   */
-  usagePolicy: NonNullable<Provider['usagePolicy']> = {
-    requestLimit: REQUEST_LIMIT,
-    requestLimitPeriod: REQUEST_LIMIT_PERIOD,
-    blockedTimeRanges: BLOCKED_TIME_RANGES,
-  };
-
   // ─── Provider Configuration ────────────────────────────────────────
   static config = {
     ...DEFAULT_PROVIDER_CONFIG,
@@ -114,8 +101,6 @@ export class CodexProvider implements Provider {
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
     max_input_token: MAX_INPUT_TOKEN,
-    blocked_time_ranges: BLOCKED_TIME_RANGES,
-    supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────

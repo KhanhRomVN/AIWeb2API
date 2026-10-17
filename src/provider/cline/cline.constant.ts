@@ -33,24 +33,8 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
-export const SUPPORTS_SESSION_CLEANUP = false;
 
-/**
- * Giới hạn request/account. undefined = không giới hạn.
- */
-export const REQUEST_LIMIT = undefined;
-
-export const REQUEST_LIMIT_PERIOD: 'day' | 'week' | 'month' = 'day';
-
-/**
- * Khung giờ bị chặn (UTC). Để tắt: set = [].
- */
-export const BLOCKED_TIME_RANGES: Array<{
-  startTime: number;
-  endTime: number;
-}> = [];
-
-// ─── Models ──────────────────────────────────────────────────────────
+// ─── Models ───────────────────────────────────────────────────────────
 
 export const DEFAULT_MODEL = 'cline-free/deepseek-v4.1-flash';
 
@@ -74,7 +58,8 @@ export const MODELS = [
     is_image_generator: false,
     is_video_generator: false,
     is_deep_research: false,
-    description: 'Cline official free channel — DeepSeek V4.1 Flash, no credits needed',
+    description:
+      'Cline official free channel — DeepSeek V4.1 Flash, no credits needed',
   },
   {
     id: 'deepseek/deepseek-v4-flash',
@@ -209,7 +194,7 @@ export const WORKOS_CLIENT_ID = 'client_01K3A541FN8TA3EPPHTD2325AR';
 
 // ─── Cooldown / Rate Limiting ────────────────────────────────────────
 
-export const REQUEST_COOLDOWN_MS = '2000';
+export const REQUEST_COOLDOWN_MS = '4000';
 
 // ─── Token / Account Management ─────────────────────────────────────
 

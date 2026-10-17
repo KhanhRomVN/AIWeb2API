@@ -62,10 +62,6 @@ import {
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
   MAX_INPUT_TOKEN,
-  SUPPORTS_SESSION_CLEANUP,
-  REQUEST_LIMIT,
-  REQUEST_LIMIT_PERIOD,
-  BLOCKED_TIME_RANGES,
   MODELS,
   DEFAULT_MODEL,
   API_PATHS,
@@ -95,12 +91,6 @@ interface ClinePollContext {
 
 export class ClineProvider implements Provider {
   name = PROVIDER_NAME;
-
-  usagePolicy: NonNullable<Provider['usagePolicy']> = {
-    requestLimit: REQUEST_LIMIT,
-    requestLimitPeriod: REQUEST_LIMIT_PERIOD,
-    blockedTimeRanges: BLOCKED_TIME_RANGES,
-  };
 
   // ─── Provider Configuration ───────────────────────────────────────
   static config = {

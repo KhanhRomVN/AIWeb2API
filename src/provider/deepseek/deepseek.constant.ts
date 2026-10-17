@@ -39,48 +39,8 @@ export const WEBSITE_URL = 'https://deepseek.com';
 export const AUTH_METHOD = ['basic', 'google'] as const;
 export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
-export const MAX_INPUT_TOKEN = 20000;
+export const MAX_INPUT_TOKEN = 100000;
 export const CAN_REGENERATE = true;
-
-/**
- * Provider này hỗ trợ xóa toàn bộ conversation (chat session) của account.
- * Được dùng bởi cơ chế session cleanup: khi Zen phát hiện account không còn
- * đang được dùng trong chat view, AIWeb2API sẽ gọi deleteAllSessions() để
- * dọn sạch lịch sử phía server.
- * Provider khác muốn hỗ trợ tính năng này chỉ cần: set TRUE + implement deleteAllSessions().
- */
-export const SUPPORTS_SESSION_CLEANUP = false;
-
-/**
- * Giới hạn request/account. undefined = không giới hạn.
- * Để tắt: set = undefined.
- */
-export const REQUEST_LIMIT: number | undefined = undefined;
-
-/**
- * Chu kỳ reset cho REQUEST_LIMIT.
- * 'day' = reset lúc 00:00 UTC mỗi ngày.
- * 'week' = reset đầu tuần (thứ Hai 00:00 UTC).
- * 'month' = reset ngày 1 hàng tháng 00:00 UTC.
- * undefined = tắt tính năng giới hạn.
- */
-export const REQUEST_LIMIT_PERIOD: 'day' | 'week' | 'month' | undefined = undefined;
-
-/**
- * Khung giờ bị chặn (UTC). Mỗi phần tử [startTime, endTime) exclusive.
- * Giờ tính theo UTC chuẩn (0–23). Zen webview tự đổi sang múi giờ local của user để hiển thị.
- * Để tắt hoàn toàn: set = [] hoặc xóa các phần tử.
- *
- *   UTC 03:00–04:00  ↔  GMT+7 10:00–11:00
- *   UTC 19:00–21:00  ↔  GMT+7 02:00–04:00 (ngày hôm sau)
- */
-export const BLOCKED_TIME_RANGES: Array<{
-  startTime: number;
-  endTime: number;
-}> = [
-  // { startTime: 3, endTime: 4 },
-  // { startTime: 19, endTime: 21 },
-];
 
 /**
  * Thời gian chờ tối thiểu (ms) giữa các request liên tiếp.
@@ -90,7 +50,7 @@ export const BLOCKED_TIME_RANGES: Array<{
  *
  * Ví dụ: '5000' = chờ 5 giây sau khi nhận xong response trước.
  */
-export const REQUEST_COOLDOWN_MS = '2000';
+export const REQUEST_COOLDOWN_MS = '4000';
 
 export const MODELS = [
   {
@@ -124,8 +84,20 @@ export const DEEPSEEK_EVENTS = {
   USER_INFO: 'deepseek-user-info',
 } as const;
 
-import { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE, MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR } from '../_shared/constants/chat-limits.constants';
-export { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE, MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR };
+import {
+  MAX_CONTINUATIONS,
+  HISTORY_MESSAGES_COUNT,
+  SUCCESS_CODE,
+  MASKED_EMAIL_INDICATOR,
+  MASKED_EMAIL_CHAR,
+} from '../_shared/constants/chat-limits.constants';
+export {
+  MAX_CONTINUATIONS,
+  HISTORY_MESSAGES_COUNT,
+  SUCCESS_CODE,
+  MASKED_EMAIL_INDICATOR,
+  MASKED_EMAIL_CHAR,
+};
 
 export const GOOGLE_OAUTH_LOGIN_URL =
   'https://accounts.google.com/ServiceLogin?service=lso&passive=1209600&continue=https://chat.deepseek.com/login';
@@ -145,7 +117,6 @@ export const API_PATHS = {
   USERS_AUTH_TOKEN_CHECK_DEVICE: '/api/v0/users/auth_token/check_device',
   CHAT_CONTINUE: '/api/v0/chat/continue',
   CHAT_SESSION_CREATE: '/api/v0/chat_session/create',
-  CHAT_SESSION_DELETE_ALL: '/api/v0/chat_session/delete_all',
   CHAT_CREATE_POW_CHALLENGE: '/api/v0/chat/create_pow_challenge',
   CHAT_COMPLETION: '/api/v0/chat/completion',
   CHAT_STOP_GENERATION: '/api/v0/chat/stop_generation',
@@ -157,6 +128,7 @@ export const API_PATHS = {
 // ─── HTTP Headers / User Agents ──────────────────────────────────────
 
 export const USER_AGENTS = {
+  ANDROID: 'DeepSeek/2.6.2 Android/34',
   MACOS_SAFARI:
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
   LINUX_CHROME:
@@ -165,12 +137,15 @@ export const USER_AGENTS = {
 
 export const HTTP_HEADERS = {
   X_APP_VERSION: '2.0.0',
-  X_CLIENT_VERSION: '2.0.0',
-  X_CLIENT_VERSION_UPLOAD: '2.4.0',
-  X_CLIENT_PLATFORM: 'web',
-  X_CLIENT_LOCALE: 'en_US',
+  X_CLIENT_VERSION: process.env.DEEPSEEK_CLIENT_VERSION || '2.6.2',
+  X_CLIENT_VERSION_UPLOAD: '2.6.2',
+  X_CLIENT_PLATFORM: 'android',
+  X_CLIENT_LOCALE: 'vi_VN',
   X_CLIENT_BUNDLE_ID: 'com.deepseek.chat',
-  X_CLIENT_TIMEZONE_OFFSET: '25200',
+  X_CLIENT_TIMEZONE_OFFSET: String(
+    Math.round(new Date().getTimezoneOffset() * -60),
+  ),
+  X_DEVICE_MODEL: '2510DRK44C',
   X_MODEL_TYPE_DEFAULT: 'default',
   X_THINKING_ENABLED_OFF: '0',
 } as const;
@@ -269,7 +244,11 @@ export const CONTENT_DISPOSITION = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
-import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES, LOWERCASE_HEADER_NAMES } from '../_shared/constants/http.constants';
+import {
+  STANDARD_HTTP_HEADERS,
+  CONTENT_TYPES as SHARED_CONTENT_TYPES,
+  LOWERCASE_HEADER_NAMES,
+} from '../_shared/constants/http.constants';
 
 export const HTTP_HEADER_NAMES = {
   ...STANDARD_HTTP_HEADERS,

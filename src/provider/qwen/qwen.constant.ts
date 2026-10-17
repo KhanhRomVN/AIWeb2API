@@ -55,7 +55,7 @@ export const CAN_REGENERATE = true;
  *
  * Ví dụ: '5000' = chờ 5 giây sau khi nhận xong response trước.
  */
-export const REQUEST_COOLDOWN_MS = '2000';
+export const REQUEST_COOLDOWN_MS = '4000';
 
 // Note: Models are fetched dynamically from API /api/v2/models/
 // No hardcoded models - all model info comes from the API response
@@ -71,7 +71,11 @@ export const QWEN_EVENTS = {
   LOGIN_EMAIL: 'qwen-login-email',
 } as const;
 
-import { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE } from '../_shared/constants/chat-limits.constants';
+import {
+  MAX_CONTINUATIONS,
+  HISTORY_MESSAGES_COUNT,
+  SUCCESS_CODE,
+} from '../_shared/constants/chat-limits.constants';
 export { MAX_CONTINUATIONS, HISTORY_MESSAGES_COUNT, SUCCESS_CODE };
 
 export const API_VERSION = '0.2.91';
@@ -216,7 +220,10 @@ export const TOKEN_COOKIE_KEY = COOKIE_CONFIG.TOKEN_NAME;
 /** @deprecated Use COOKIE_CONFIG.CSRF_TOKEN_NAME instead */
 export const CSRF_TOKEN_COOKIE_KEY = COOKIE_CONFIG.CSRF_TOKEN_NAME;
 
-import { MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR } from '../_shared/constants/chat-limits.constants';
+import {
+  MASKED_EMAIL_INDICATOR,
+  MASKED_EMAIL_CHAR,
+} from '../_shared/constants/chat-limits.constants';
 export { MASKED_EMAIL_INDICATOR, MASKED_EMAIL_CHAR };
 
 // ─── Regex Patterns ──────────────────────────────────────────────────

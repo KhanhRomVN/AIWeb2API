@@ -39,26 +39,8 @@ export const CONNECTION_TYPE = 'https';
 export const IS_PAUSABLE = false;
 export const MAX_INPUT_TOKEN = 20000;
 export const CAN_REGENERATE = true;
-export const SUPPORTS_SESSION_CLEANUP = false;
 
-// ─── Request Limits ──────────────────────────────────────────────────────
-
-/**
- * Giới hạn request/account/ngày. undefined = không giới hạn cứng.
- * Codex có hạn mức riêng từ upstream (wham/usage), đây chỉ là soft limit phía gateway.
- */
-export const REQUEST_LIMIT: number | undefined = undefined;
-export const REQUEST_LIMIT_PERIOD: 'day' | 'week' | 'month' = 'day';
-
-/**
- * Khung giờ bị chặn (UTC). Để tắt: set = [].
- */
-export const BLOCKED_TIME_RANGES: Array<{
-  startTime: number;
-  endTime: number;
-}> = [];
-
-// ─── Models ──────────────────────────────────────────────────────────────
+// ─── Models ───────────────────────────────────────────────────────────────
 
 export const MODELS = [
   {

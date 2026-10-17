@@ -29,7 +29,8 @@
 
 export const PROVIDER_ID = 'kimi';
 export const PROVIDER_NAME = 'Kimi';
-export const PROVIDER_DESCRIPTION = 'Long-context AI with 260K context window and multi-agent capabilities';
+export const PROVIDER_DESCRIPTION =
+  'Long-context AI with 260K context window and multi-agent capabilities';
 export const PROVIDER_COLOR = '#3B82F6';
 export const IS_ENABLED = true;
 export const TOKEN_COUNT_MODE: 'incremental' | 'cumulative' = 'incremental';
@@ -48,7 +49,7 @@ export const MODELS = [] as const;
 
 // ─── Cooldown / Rate Limiting ────────────────────────────────────────
 
-export const REQUEST_COOLDOWN_MS = '2000';
+export const REQUEST_COOLDOWN_MS = '4000';
 
 // ─── API Configuration ───────────────────────────────────────────────
 
@@ -71,7 +72,11 @@ export const KIMI_EVENTS = {
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-import { CHROME_JA3, CHROME_HTTP2_FINGERPRINT, createChromeProfile } from '../_shared/constants/chrome-fingerprint';
+import {
+  CHROME_JA3,
+  CHROME_HTTP2_FINGERPRINT,
+  createChromeProfile,
+} from '../_shared/constants/chrome-fingerprint';
 export { CHROME_JA3, CHROME_HTTP2_FINGERPRINT };
 
 /**
@@ -106,7 +111,11 @@ export const HOSTS = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
-import { STANDARD_HTTP_HEADERS, LOWERCASE_HEADER_NAMES, CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+import {
+  STANDARD_HTTP_HEADERS,
+  LOWERCASE_HEADER_NAMES,
+  CONTENT_TYPES as SHARED_CONTENT_TYPES,
+} from '../_shared/constants/http.constants';
 
 export const HTTP_HEADER_NAMES = {
   ...STANDARD_HTTP_HEADERS,

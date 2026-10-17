@@ -136,7 +136,10 @@ export type ClientSurface = 'ui' | 'cli' | 'headless';
 
 // ─── HTTP Headers ────────────────────────────────────────────────────
 
-import { STANDARD_HTTP_HEADERS, CONTENT_TYPES as SHARED_CONTENT_TYPES } from '../_shared/constants/http.constants';
+import {
+  STANDARD_HTTP_HEADERS,
+  CONTENT_TYPES as SHARED_CONTENT_TYPES,
+} from '../_shared/constants/http.constants';
 
 export const HTTP_HEADER_NAMES = {
   ...STANDARD_HTTP_HEADERS,
@@ -175,7 +178,7 @@ export const UNSUPPORTED_PARAMS = [
 
 // ─── Cooldown / Rate Limiting ────────────────────────────────────────
 
-export const REQUEST_COOLDOWN_MS = '2000';
+export const REQUEST_COOLDOWN_MS = '4000';
 
 // ─── Misc ───────────────────────────────────────────────────────────
 

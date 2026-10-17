@@ -67,7 +67,7 @@ export const ANTI_SYSTEM_PROMPT_INJECTION = false;
  *
  * Ví dụ: '5000' = chờ 5 giây sau khi nhận xong response trước.
  */
-export const REQUEST_COOLDOWN_MS = '2000';
+export const REQUEST_COOLDOWN_MS = '4000';
 
 // NOTE: Không có FALLBACK_MODELS. getModels() phải throw error khi fail,
 // không được trả về danh sách giả. Xem NO_FALLBACK_MODELS.md ở thư mục provider.
@@ -85,7 +85,10 @@ export const CLAUDE_EVENTS = {
 export const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36';
 
-import { CHROME_JA3, CHROME_HTTP2_FINGERPRINT } from '../_shared/constants/chrome-fingerprint';
+import {
+  CHROME_JA3,
+  CHROME_HTTP2_FINGERPRINT,
+} from '../_shared/constants/chrome-fingerprint';
 export { CHROME_JA3, CHROME_HTTP2_FINGERPRINT };
 
 /**
@@ -166,7 +169,10 @@ export const CLAUDE_AUTH_METHODS = {
 
 // ─── HTTP Header Names ───────────────────────────────────────────────
 
-import { STANDARD_HTTP_HEADERS, LOWERCASE_HEADER_NAMES } from '../_shared/constants/http.constants';
+import {
+  STANDARD_HTTP_HEADERS,
+  LOWERCASE_HEADER_NAMES,
+} from '../_shared/constants/http.constants';
 
 export const HTTP_HEADER_NAMES = {
   ...STANDARD_HTTP_HEADERS,

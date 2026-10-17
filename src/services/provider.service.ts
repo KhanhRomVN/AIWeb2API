@@ -22,7 +22,10 @@ import { dbContext } from '../database/connection';
 
 // ── Repositories ──
 import { findAllModelStats } from '../repositories/model-stats.repository';
-import { findFirstAccountByProvider } from '../repositories/account.repository';
+import {
+  findFirstAccountByProvider,
+  insertAccount,
+} from '../repositories/account.repository';
 
 // ── Utils ──
 import { createLogger } from '../utils/logger';
@@ -71,18 +74,8 @@ export interface Provider {
    * StyleCode chỉ cho phép "none".
    */
   anti_system_prompt_injection?: boolean;
-  /**
-   * Khung giờ bị chặn (UTC). Lấy thẳng từ provider constant để Zen webview
-   * không cần hardcode — đổi 1 chỗ là sync toàn bộ.
-   */
-  blocked_time_ranges?: Array<{ startTime: number; endTime: number }>;
   token_count_mode?: 'incremental' | 'cumulative';
   max_input_token?: number;
-  /**
-   * Provider có hỗ trợ session cleanup không (xóa toàn bộ conversation khi
-   * account không còn ở chat view). Detect tự động từ deleteAllSessions().
-   */
-  supports_session_cleanup?: boolean;
   /**
    * Loại login flow. "device_code" → không cần CDP/browser profile,
    * user authorize trên bất kỳ browser nào qua verification_url + user_code.
@@ -104,11 +97,9 @@ const fetchProviderConfig = async (): Promise<any[]> => {
       const id = cfg.provider_id.toLowerCase();
       if (!seenIds.has(id)) {
         seenIds.add(id);
-        // Tự động detect can_refresh_token dựa vào provider instance thay vì hardcode
         configs.push({
           ...cfg,
           can_refresh_token: typeof provider.refreshToken === 'function',
-          supports_session_cleanup: typeof provider.deleteAllSessions === 'function',
         });
       }
     } else {
@@ -129,13 +120,45 @@ const fetchModelsFromProvider = async (
     return { models: [] };
   }
 
-  const account = await findFirstAccountByProvider(providerId);
+  let account = await findFirstAccountByProvider(providerId);
 
   // Provider không cần auth (auth_method=[]) — gọi getModels với credential rỗng
   const ProviderClass = (dynamicProvider as any).constructor as any;
   const cfg = ProviderClass?.config || (dynamicProvider as any).config;
   const noAuthRequired =
     Array.isArray(cfg?.auth_method) && cfg.auth_method.length === 0;
+
+  // Auto-bootstrap: provider khai báo auto_bootstrap_account=true và chưa có
+  // account → tự tạo account mặc định bằng cách gọi provider.login({}).
+  if (
+    !noAuthRequired &&
+    (!account || account.credential === null) &&
+    cfg?.auto_bootstrap_account &&
+    typeof (dynamicProvider as any).login === 'function'
+  ) {
+    try {
+      const result = await (dynamicProvider as any).login({});
+      if (result?.cookies) {
+        const crypto = require('crypto');
+        const newId = crypto.randomUUID();
+        await insertAccount({
+          id: newId,
+          provider_id: providerId,
+          email: result.email || `${providerId}@local`,
+          credential: result.cookies,
+          auth_method: 'basic',
+        });
+        account = {
+          id: newId,
+          provider_id: providerId,
+          email: result.email || `${providerId}@local`,
+          credential: result.cookies,
+        } as any;
+      }
+    } catch (e: any) {
+      logger.warn(`[${providerId}] Auto-bootstrap failed: ${e?.message ?? e}`);
+    }
+  }
 
   if (!noAuthRequired && (!account || account.credential === null)) {
     const msg = `No accounts configured. Add a ${providerId} account to load models.`;
@@ -235,9 +258,12 @@ const buildProvidersCache = async (
       website_url: p.website_url || (p as any).website,
       website: p.website_url || (p as any).website,
       ...(modelsError ? { models_error: modelsError } : {}),
-      ...(p.blocked_time_ranges != null ? { blocked_time_ranges: p.blocked_time_ranges } : {}),
-      ...(p.token_count_mode != null ? { token_count_mode: p.token_count_mode } : {}),
-      ...(p.max_input_token != null ? { max_input_token: p.max_input_token } : {}),
+      ...(p.token_count_mode != null
+        ? { token_count_mode: p.token_count_mode }
+        : {}),
+      ...(p.max_input_token != null
+        ? { max_input_token: p.max_input_token }
+        : {}),
       models: models?.map((m: any) => ({
         ...m,
         is_search: m.is_search !== undefined ? m.is_search : false,
@@ -287,7 +313,10 @@ export const getAllProviders = async (): Promise<Provider[]> => {
           return result;
         })
         .catch((err) => {
-          logger.warn('Background provider cache refresh failed:', err?.message);
+          logger.warn(
+            'Background provider cache refresh failed:',
+            err?.message,
+          );
           buildingCachePromise = null;
           return staleCache;
         });

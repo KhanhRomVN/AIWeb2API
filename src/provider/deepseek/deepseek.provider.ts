@@ -66,9 +66,6 @@ import {
   CAN_REGENERATE,
   TOKEN_COUNT_MODE,
   MAX_INPUT_TOKEN,
-  REQUEST_LIMIT,
-  REQUEST_LIMIT_PERIOD,
-  BLOCKED_TIME_RANGES,
   BASE_URL,
   DEEPSEEK_EVENTS,
   MAX_CONTINUATIONS,
@@ -95,7 +92,6 @@ import {
   AUTH_RENEW_CONFIG,
   DEEPSEEK_ERROR_CODES,
   MODELS,
-  SUPPORTS_SESSION_CLEANUP,
 } from './deepseek.constant';
 // ─── Shared Auth ────────────────────────────────────────────────────────
 import { parseTokenCredential } from '../_shared/auth';
@@ -108,17 +104,6 @@ const logger = createLogger('DeepSeekProvider');
 export class DeepSeekProvider implements Provider {
   name = PROVIDER_NAME;
   proxyHandler = proxyHandler;
-
-  /**
-   * Cấu hình giới hạn & chặn giờ — đọc từ constant, middleware sẽ pick up tự động.
-   * Để tắt giới hạn request: xóa `requestLimit`.
-   * Để tắt chặn giờ: set `blockedTimeRanges: []`.
-   */
-  usagePolicy: NonNullable<Provider['usagePolicy']> = {
-    requestLimit: REQUEST_LIMIT,
-    requestLimitPeriod: REQUEST_LIMIT_PERIOD,
-    blockedTimeRanges: BLOCKED_TIME_RANGES,
-  };
 
   private wasmPath: string = '';
   private dsHash: DeepSeekHash | null = null;
@@ -139,8 +124,6 @@ export class DeepSeekProvider implements Provider {
     can_regenerate: CAN_REGENERATE,
     token_count_mode: TOKEN_COUNT_MODE,
     max_input_token: MAX_INPUT_TOKEN,
-    blocked_time_ranges: BLOCKED_TIME_RANGES,
-    supports_session_cleanup: SUPPORTS_SESSION_CLEANUP,
   };
 
   // ─── Credential Helpers ─────────────────────────────────────────────
@@ -217,10 +200,10 @@ export class DeepSeekProvider implements Provider {
           [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${credential.token}`,
           [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
           [HTTP_HEADER_NAMES.X_DEVICE_ID]: deviceId,
-          [HTTP_HEADER_NAMES.X_DEVICE_MODEL]: '',
+          [HTTP_HEADER_NAMES.X_DEVICE_MODEL]: HTTP_HEADERS.X_DEVICE_MODEL,
           [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
           [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
           [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
           [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
           [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
@@ -229,7 +212,10 @@ export class DeepSeekProvider implements Provider {
           [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
             HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
         },
-        body: JSON.stringify({ device_id: deviceId, device_model: '' }),
+        body: JSON.stringify({
+          device_id: deviceId,
+          device_model: HTTP_HEADERS.X_DEVICE_MODEL,
+        }),
       });
 
       clearTimeout(timeout);
@@ -303,7 +289,7 @@ export class DeepSeekProvider implements Provider {
           [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
           [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
           [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.MACOS_SAFARI,
+          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
         },
       });
 
@@ -488,10 +474,10 @@ export class DeepSeekProvider implements Provider {
       [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
       [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
       [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
+      [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
       [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
       [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-      [HTTP_HEADER_NAMES.X_APP_VERSION]: HTTP_HEADERS.X_APP_VERSION,
+      [HTTP_HEADER_NAMES.X_DEVICE_MODEL]: HTTP_HEADERS.X_DEVICE_MODEL,
       [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
       [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
       [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
@@ -903,56 +889,6 @@ export class DeepSeekProvider implements Provider {
     return null;
   }
 
-  // ─── Delete All Sessions ────────────────────────────────────────────
-
-  /**
-   * Xóa toàn bộ chat session của account.
-   * Gọi `POST /api/v0/chat_session/delete_all` với body rỗng.
-   *
-   * @returns `true` nếu thành công, `false` nếu gặp lỗi.
-   */
-  async deleteAllSessions(credential: string): Promise<boolean> {
-    const { token } = this.parseCredential(credential);
-    try {
-      const client = new HttpClient({
-        baseURL: BASE_URL,
-        headers: {
-          [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
-          [HTTP_HEADER_NAMES.CONTENT_TYPE]: CONTENT_TYPES.JSON,
-          [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.LINUX_CHROME,
-          [HTTP_HEADER_NAMES.ORIGIN]: BASE_URL,
-          [HTTP_HEADER_NAMES.REFERER]: `${BASE_URL}${REFERER_PATHS.ROOT}`,
-          [HTTP_HEADER_NAMES.X_CLIENT_VERSION]: HTTP_HEADERS.X_CLIENT_VERSION,
-          [HTTP_HEADER_NAMES.X_CLIENT_PLATFORM]: HTTP_HEADERS.X_CLIENT_PLATFORM,
-          [HTTP_HEADER_NAMES.X_CLIENT_LOCALE]: HTTP_HEADERS.X_CLIENT_LOCALE,
-          [HTTP_HEADER_NAMES.X_CLIENT_BUNDLE_ID]:
-            HTTP_HEADERS.X_CLIENT_BUNDLE_ID,
-          [HTTP_HEADER_NAMES.X_CLIENT_TIMEZONE_OFFSET]:
-            HTTP_HEADERS.X_CLIENT_TIMEZONE_OFFSET,
-        },
-      });
-
-      const res = await client.post(API_PATHS.CHAT_SESSION_DELETE_ALL, {});
-      if (!res.ok) {
-        logger.warn(`[DeepSeek] deleteAllSessions HTTP ${res.status}`);
-        return false;
-      }
-
-      const json = (await res.json()) as DeepSeekApiEnvelope<unknown>;
-      if (json?.code !== SUCCESS_CODE) {
-        logger.warn(
-          `[DeepSeek] deleteAllSessions biz error code=${json?.code} msg=${json?.msg}`,
-        );
-        return false;
-      }
-
-      return true;
-    } catch (e: any) {
-      logger.error('[DeepSeek] deleteAllSessions error:', e?.message || e);
-      return false;
-    }
-  }
-
   // ─── Stop Stream ────────────────────────────────────────────────────
 
   async stopStream(credential: string, chatId: string, messageId: string) {
@@ -982,7 +918,7 @@ export class DeepSeekProvider implements Provider {
       headers: {
         [HTTP_HEADER_NAMES.COOKIE]: `${COOKIE_CONFIG.AUTH_TOKEN_NAME}=${token}`,
         [HTTP_HEADER_NAMES.AUTHORIZATION]: `${COOKIE_CONFIG.BEARER_PREFIX}${token}`,
-        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.MACOS_SAFARI,
+        [HTTP_HEADER_NAMES.USER_AGENT]: USER_AGENTS.ANDROID,
       },
     });
   }
